@@ -1,0 +1,7 @@
+[wrap-file]
+source_url = https://cache.ruby-lang.org/pub/ruby/4.0/ruby-4.0.9.tar.gz
+source_filename = ruby-4.0.9.tar.gz
+source_hash = c35350682ff050b79702d57ade4516e7336063f510155d19fb2fb5b3f3909511
+directory = ruby-4.0.9
+patch_directory = ruby-4.0
+diff_files = ruby-4.0-build.patch, ruby-4.0-rgss.patch

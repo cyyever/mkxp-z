@@ -1,0 +1,212 @@
+diff --git a/common.mk b/common.mk
+index d09571d..0729d3b 100644
+--- a/common.mk
++++ b/common.mk
+@@ -9,7 +9,7 @@ dll: $(LIBRUBY_SO)
+ .SUFFIXES: .rbinc .rbbin .rb .inc .h .c .y .i .$(ASMEXT) .$(DTRACE_EXT)
+ 
+ # V=0 quiet, V=1 verbose.  other values don't work.
+-V = 0
++V = 1
+ V0 = $(V:0=)
+ Q1 = $(V:1=)
+ Q = $(Q1:0=@)
+@@ -229,7 +229,7 @@ GOLFPRELUDES  = golf_prelude.rbbin
+ SCRIPT_ARGS   =	--dest-dir="$(DESTDIR)" \
+ 		--extout="$(EXTOUT)" \
+ 		--ext-build-dir="./ext" \
+-		--mflags="$(MFLAGS)" \
++		--mflags="$(MFLAGS) V=$(V)" \
+ 		--make-flags="$(MAKEFLAGS)"
+ EXTMK_ARGS    =	$(SCRIPT_ARGS) --extension $(EXTS) --extstatic $(EXTSTATIC) \
+ 		--make-flags="V=$(V) MINIRUBY='$(MINIRUBY)'" \
+diff --git a/configure.ac b/configure.ac
+index b4dc31c..eae9eb2 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -435,7 +435,7 @@ AS_IF([test "$GCC" = yes], [
+ 
+ RUBY_PROG_GNU_LD
+ RUBY_CPPOUTFILE
+-
++AC_SUBST(MKXP_DISABLE_LTO_FOR_LINK_TESTS)
+ : ${OUTFLAG='-o '}
+ : ${COUTFLAG=${OUTFLAG}}
+ : ${CSRCFLAG=''}
+@@ -1250,7 +1250,7 @@ main()
+ 		AC_CHECK_FUNCS(cygwin_conv_path)
+ 		AC_LIBOBJ([langinfo])
+ 		],
+-[mingw*], [	LIBS="-lshell32 -lws2_32 -liphlpapi -limagehlp -lshlwapi -lbcrypt $LIBS"
++[mingw*], [	LIBS="-lshell32 -lws2_32 -liphlpapi -limagehlp -lshlwapi -lbcrypt -Wl,-Bstatic $MKXP_LIBGCC -lpthread -Wl,-Bdynamic $LIBS"
+ 		ac_cv_header_pwd_h=no
+ 		ac_cv_header_utime_h=no
+ 		ac_cv_header_sys_ioctl_h=no
+@@ -1377,7 +1377,7 @@ AS_IF([test -n "${rb_there_is_in_fact_no_gplusplus_but_autoconf_is_cheating_us}"
+     ])
+ ])
+ 
+-AC_CHECK_LIB(crypt, crypt)      # glibc (GNU/Linux, GNU/Hurd, GNU/kFreeBSD)
++
+ AC_CHECK_LIB(dl, dlopen)	# Dynamic linking for SunOS/Solaris and SYSV
+ AC_CHECK_LIB(socket, shutdown)  # SunOS/Solaris
+ 
+@@ -3063,7 +3063,7 @@ AS_IF([test "$rb_cv_binary_elf" = yes], [
+   AC_CHECK_HEADERS([elf.h elf_abi.h])
+   AS_IF([test $ac_cv_header_elf_h = yes -o $ac_cv_header_elf_abi_h = yes], [
+     AC_LIBOBJ([addr2line])
+-    AC_CHECK_LIB([z], [uncompress])
++
+   ])
+ ])
+ 
+@@ -4233,7 +4233,7 @@ enum {
+ 	], [
+ 	    LIBRUBY_SO=dummy
+ 	    LIBRUBY='lib$(RUBY_SO_NAME).a'
+-	    LIBRUBYARG='-l$(RUBY_SO_NAME)'
++	    LIBRUBYARG='$(MISSING) $(LIBRUBYARG_STATIC)'
+ 	])
+ 	],
+     [wasi*], [
+@@ -4313,6 +4313,7 @@ AS_IF([test "${universal_binary-no}" = yes ], [
+ 
+ [end]_group
+ 
++AC_CHECK_LIB(z, uncompress)
+ MAINLIBS="$LIBS"
+ LIBS=$ORIG_LIBS
+ AS_IF([test -n "${LIBS}"], [
+diff --git a/cygwin/GNUmakefile.in b/cygwin/GNUmakefile.in
+index 8e83d73..2c6899b 100644
+--- a/cygwin/GNUmakefile.in
++++ b/cygwin/GNUmakefile.in
+@@ -28,7 +28,7 @@ else
+   endif
+ endif
+ 
+-ifneq ($(ENABLE_SHARED),yes)
++ifneq (yes,yes)
+   RUBY_EXP = $(RUBY_INSTALL_NAME).exp
+   EXTOBJS = $(RUBY_EXP)
+   LIBRUBYARG = $(LIBRUBY_A)
+@@ -106,8 +106,8 @@ endif
+ $(LIBRUBY_SO): $(RUBYDEF)
+ 
+ $(RUBYDEF): $(LIBRUBY_A) $(PREP) $(BOOTSTRAPRUBY_FAKE) $(RBCONFIG)
+-	$(ECHO) generating $@
+-	$(Q) $(BOOTSTRAPRUBY_COMMAND) $(srcdir)/win32/mkexports.rb -output=$@ $(LIBRUBY_A)
++	touch $@
++
+ 
+ clean-local::
+ 	@$(RM) $(RUBYDEF)
+diff --git a/include/ruby/internal/dllexport.h b/include/ruby/internal/dllexport.h
+index 71026e7..5457d49 100644
+--- a/include/ruby/internal/dllexport.h
++++ b/include/ruby/internal/dllexport.h
+@@ -40,7 +40,7 @@
+ #if defined(RUBY_EXPORT)
+ # define RUBY_EXTERN extern
+ #elif defined(_WIN32)
+-# define RUBY_EXTERN extern __declspec(dllimport)
++# define RUBY_EXTERN extern
+ #else
+ # define RUBY_EXTERN extern
+ #endif
+diff --git a/include/ruby/onigmo.h b/include/ruby/onigmo.h
+index f673579..729c1d3 100644
+--- a/include/ruby/onigmo.h
++++ b/include/ruby/onigmo.h
+@@ -47,9 +47,9 @@ extern "C" {
+ # else
+ #  if defined(_WIN32) && !defined(__GNUC__)
+ #   if defined(EXPORT) || defined(RUBY_EXPORT)
+-#    define ONIG_EXTERN   extern __declspec(dllexport)
++#    define ONIG_EXTERN   extern
+ #   else
+-#    define ONIG_EXTERN   extern __declspec(dllimport)
++#    define ONIG_EXTERN   extern
+ #   endif
+ #  endif
+ # endif
+diff --git a/lib/mkmf.rb b/lib/mkmf.rb
+index 38a5a15..a08d64d 100644
+--- a/lib/mkmf.rb
++++ b/lib/mkmf.rb
+@@ -606,7 +606,7 @@ MSG
+ 
+   def try_link0(src, opt = "", ldflags: "", **opts, &b) # :nodoc:
+     exe = CONFTEST+$EXEEXT
+-    cmd = link_command(ldflags, opt)
++    cmd = link_command([ldflags, ("-fno-lto" if CONFIG["MKXP_DISABLE_LTO_FOR_LINK_TESTS"] == "yes")].compact.join(" "), opt)
+     if $universal
+       require 'tmpdir'
+       Dir.mktmpdir("mkmf_", oldtmpdir = ENV["TMPDIR"]) do |tmpdir|
+diff --git a/template/Makefile.in b/template/Makefile.in
+index 443c394..9cd6113 100644
+--- a/template/Makefile.in
++++ b/template/Makefile.in
+@@ -315,7 +315,7 @@ $(PROGRAM):
+ 		$(ECHO) linking $@
+ 		$(Q) $(PURIFY) $(CC) $(EXE_LDFLAGS) $(XLDFLAGS) $(MAINOBJ) $(EXTOBJS) $(LIBRUBYARG) $(MAINLIBS) $(EXTLIBS) $(OUTFLAG)$@
+ 		$(Q) $(POSTLINK)
+-
++		rm -f ext/extinit.$(LIBEXT) && $(AR) $(ARFLAGS) ext/extinit.$(LIBEXT) ruby.$(OBJEXT) ext/extinit.$(OBJEXT) && ($(RANLIB) ext/extinit.$(LIBEXT) || true) && rm -f enc/encinit.$(LIBEXT) && $(AR) $(ARFLAGS) enc/encinit.$(LIBEXT) ruby.$(OBJEXT) enc/encinit.$(OBJEXT) && ($(RANLIB) enc/encinit.$(LIBEXT) || true)
+ $(PROGRAM): @XRUBY_LIBPATHENV_WRAPPER@
+ 
+ PRE_LIBRUBY_UPDATE = [ -n "$(LIBRUBY_SO_UPDATE)" ] || $(gnumake:yes=exec) $(RM) $(LIBRUBY_EXTS)
+@@ -432,17 +432,7 @@ $(MKFILES): config.status $(srcdir)/version.h $(ABI_VERSION_HDR)
+ uncommon.mk: $(srcdir)/tool/prereq.status
+ 	sed -f $(srcdir)/tool/prereq.status $(srcdir)/common.mk $(common_mk_includes) > $@
+ 
+-.PHONY: reconfig
+-reconfig-args = $(srcdir)/$(CONFIGURE) $(yes_silence:yes=--silent) $(configure_args)
+-config.status-args = ./config.status $(yes_silence:yes=--silent) --recheck
+-reconfig-exec-0 = test -t 1 && { : $${CONFIGURE_TTY=yes}; export CONFIGURE_TTY; }; exec 3>&1; exit `exec 4>&1; { "$$@" 3>&- 4>&-; echo $$? 1>&4; } | grep -F -v '(cached)' 1>&3 3>&- 4>&-`
+-reconfig-exec-1 = set -x; exec "$$@"
+-reconfig-exec-yes = $(reconfig-exec-1)
+-
+-reconfig config.status:	$(srcdir)/$(CONFIGURE) $(srcdir)/enc/Makefile.in \
+-			$(hdrdir)/ruby/version.h $(ABI_VERSION_HDR)
+-	@PWD= MINIRUBY="$(MINIRUBY)"; export MINIRUBY; \
+-	set $(SHELL) $($@-args); $(reconfig-exec-$(silence:no=$(V)))
++# Reconfigure through Meson to preserve its toolchain environment.
+ 
+ $(srcdir)/$(CONFIGURE): $(srcdir)/configure.ac
+ 	$(CHDIR) $(srcdir) && exec $(AUTOCONF) -o $(@F)
+diff --git a/template/fake.rb.in b/template/fake.rb.in
+index fed640a..e9acda4 100644
+--- a/template/fake.rb.in
++++ b/template/fake.rb.in
+@@ -61,7 +61,7 @@ libpathenv = libpathenv = "<%=arg['LIBPATHENV']%>"
+ preloadenv = preloadenv = "<%=arg['PRELOADENV']%>"
+ libruby_so = libruby_so = "<%=arg['LIBRUBY_SO']%>"
+ srcdir = "<%=arg['srcdir']%>"
+-top_srcdir = File.realpath(srcdir, builddir)
++top_srcdir = File.realpath(srcdir)
+ fake = File.join(top_srcdir, "tool/fake.rb")
+ eval(File.binread(fake), nil, fake)
+ ropt = "-r#{__FILE__}"
+diff --git a/tool/rbinstall.rb b/tool/rbinstall.rb
+index 874c3ef..52dd5a5 100644
+--- a/tool/rbinstall.rb
++++ b/tool/rbinstall.rb
+@@ -899,7 +899,7 @@ def load_gemspec(file, base = nil, files: nil)
+ end
+ 
+ def install_default_gem(dir, srcdir, bindir)
+-  gem_dir = Gem.default_dir
++  gem_dir = File.join(CONFIG['rubylibdir', true], 'gems', CONFIG['ruby_version', true])
+   install_dir = with_destdir(gem_dir)
+   prepare "default gems from #{dir}", gem_dir
+   RbInstall.no_write do
+@@ -1193,7 +1193,7 @@ install?(:ext, :arch, :gem, :'default-gems', :'default-gems-arch') do
+ end
+ 
+ install?(:ext, :comm, :gem, :'bundled-gems') do
+-  gem_dir = Gem.default_dir
++  gem_dir = File.join(CONFIG['rubylibdir', true], 'gems', CONFIG['ruby_version', true])
+   install_dir = with_destdir(gem_dir)
+   prepare "bundled gems", gem_dir
+   RbInstall.no_write do

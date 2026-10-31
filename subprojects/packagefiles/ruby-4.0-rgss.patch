@@ -1,0 +1,127 @@
+diff --git a/class.c b/class.c
+index 788a671..a1d9b89 100644
+--- a/class.c
++++ b/class.c
+@@ -1499,13 +1499,15 @@ rb_define_class(const char *name, VALUE super)
+                      name, rb_obj_class(klass));
+         }
+         if (rb_class_real(RCLASS_SUPER(klass)) != super) {
+-            rb_raise(rb_eTypeError, "superclass mismatch for class %s", name);
++            /* RGSS permits replacing a native class with a different superclass. */
++            goto override_class;
+         }
+ 
+         /* Class may have been defined in Ruby and not pin-rooted */
+         rb_vm_register_global_object(klass);
+         return klass;
+     }
++override_class:
+     if (!super) {
+         rb_raise(rb_eArgError, "no super class for '%s'", name);
+     }
+diff --git a/include/ruby/win32.h b/include/ruby/win32.h
+index ae11a61..d0a6d1f 100644
+--- a/include/ruby/win32.h
++++ b/include/ruby/win32.h
+@@ -168,7 +168,8 @@ typedef int clockid_t;
+ #define HAVE_GETPPID 1
+ #define getppid()		rb_w32_getppid()
+ #define sleep(x)		rb_w32_Sleep((x)*1000)
+-#define Sleep(msec)		(void)rb_w32_Sleep(msec)
++
++/* Do not replace the Win32 Sleep API in embedding applications. */
+ 
+ #undef HAVE_EXECV
+ #define HAVE_EXECV 1
+diff --git a/sprintf.c b/sprintf.c
+index cb266a9..8f97915 100644
+--- a/sprintf.c
++++ b/sprintf.c
+@@ -937,7 +937,8 @@ rb_str_format(int argc, const VALUE *argv, VALUE fmt)
+     rb_str_tmp_frozen_release(orig, fmt);
+     /* XXX - We cannot validate the number of arguments if (digit)$ style used.
+      */
+-    if (posarg >= 0 && nextarg < argc && !(argc == 2 && RB_TYPE_P(argv[1], T_HASH))) {
++    /* RGSS ignores surplus format arguments even with $DEBUG enabled. */
++    if (0) {
+         const char *mesg = "too many arguments for format string";
+         if (RTEST(ruby_debug)) rb_raise(rb_eArgError, "%s", mesg);
+         if (RTEST(ruby_verbose)) rb_warn("%s", mesg);
+diff --git a/vm_eval.c b/vm_eval.c
+index 34560d7..25f0a6f 100644
+--- a/vm_eval.c
++++ b/vm_eval.c
+@@ -843,7 +843,9 @@ rb_method_call_status(rb_execution_context_t *ec, const rb_callable_method_entry
+     rb_method_visibility_t visi = METHOD_ENTRY_VISI(me);
+ 
+     /* receiver specified form for private method */
+-    if (UNLIKELY(visi != METHOD_VISI_PUBLIC)) {
++
++    /* RGSS scripts may call private/protected methods directly. */
++    if (0) {
+         if (me->def->original_id == idMethodMissing) {
+             return MISSING_NONE;
+         }
+diff --git a/vm_insnhelper.c b/vm_insnhelper.c
+index 35f3097..d88fc54 100644
+--- a/vm_insnhelper.c
++++ b/vm_insnhelper.c
+@@ -5018,36 +5018,10 @@ vm_call_method(rb_execution_context_t *ec, rb_control_frame_t *cfp, struct rb_ca
+ 
+     if (vm_cc_cme(cc) != NULL) {
+         switch (METHOD_ENTRY_VISI(vm_cc_cme(cc))) {
+-          case METHOD_VISI_PUBLIC: /* likely */
+-            return vm_call_method_each_type(ec, cfp, calling);
+-
++          /* RGSS scripts historically call private/protected methods directly. */
++          case METHOD_VISI_PUBLIC:
+           case METHOD_VISI_PRIVATE:
+-            if (!(vm_ci_flag(ci) & VM_CALL_FCALL)) {
+-                enum method_missing_reason stat = MISSING_PRIVATE;
+-                if (vm_ci_flag(ci) & VM_CALL_VCALL) stat |= MISSING_VCALL;
+-
+-                vm_cc_method_missing_reason_set(cc, stat);
+-                CC_SET_FASTPATH(cc, vm_call_method_missing, TRUE);
+-                return vm_call_method_missing(ec, cfp, calling);
+-            }
+-            return vm_call_method_each_type(ec, cfp, calling);
+-
+           case METHOD_VISI_PROTECTED:
+-            if (!(vm_ci_flag(ci) & (VM_CALL_OPT_SEND | VM_CALL_FCALL))) {
+-                VALUE defined_class = vm_defined_class_for_protected_call(vm_cc_cme(cc));
+-                if (!rb_obj_is_kind_of(cfp->self, defined_class)) {
+-                    vm_cc_method_missing_reason_set(cc, MISSING_PROTECTED);
+-                    return vm_call_method_missing(ec, cfp, calling);
+-                }
+-                else {
+-                    /* caching method info to dummy cc */
+-                    VM_ASSERT(vm_cc_cme(cc) != NULL);
+-                    struct rb_callcache cc_on_stack = *cc;
+-                    FL_SET_RAW((VALUE)&cc_on_stack, VM_CALLCACHE_UNMARKABLE);
+-                    calling->cc = &cc_on_stack;
+-                    return vm_call_method_each_type(ec, cfp, calling);
+-                }
+-            }
+             return vm_call_method_each_type(ec, cfp, calling);
+ 
+           default:
+@@ -5858,18 +5832,7 @@ vm_check_if_class(ID id, rb_num_t flags, VALUE super, VALUE klass)
+     if (!RB_TYPE_P(klass, T_CLASS)) {
+         return 0;
+     }
+-    else if (VM_DEFINECLASS_HAS_SUPERCLASS_P(flags)) {
+-        VALUE tmp = rb_class_real(RCLASS_SUPER(klass));
+-
+-        if (tmp != super) {
+-            rb_raise(rb_eTypeError,
+-                     "superclass mismatch for class %"PRIsVALUE"",
+-                     rb_id2str(id));
+-        }
+-        else {
+-            return klass;
+-        }
+-    }
++    /* RGSS allows reopening a class with a different superclass. */
+     else {
+         return klass;
+     }
