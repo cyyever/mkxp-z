@@ -223,9 +223,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch_mkxpz: arm64
-            clang: true
-            cache: true
           - arch_mkxpz: i686
             clang: true
             cache: false
@@ -332,38 +329,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch_mkxpz: armv6
-            arch_debian: armhf
-            cpu-family: arm
-            cpu: armv6zk
-            endian: little
-            distro: raspbian
-            suite: bullseye
-            cache: false
-          - arch_mkxpz: armv7
-            arch_debian: armhf
-            cpu-family: arm
-            cpu: armv7
-            endian: little
-            distro: ubuntu
-            suite: xenial
-            cache: false
-          - arch_mkxpz: armv7-neon
-            arch_debian: armhf
-            cpu-family: arm
-            cpu: armv7
-            endian: little
-            distro: ubuntu
-            suite: xenial
-            cache: false
-          - arch_mkxpz: arm64
-            arch_debian: arm64
-            cpu-family: aarch64
-            cpu: aarch64
-            endian: little
-            distro: ubuntu
-            suite: xenial
-            cache: true
           - arch_mkxpz: i386
             arch_debian: i386
             cpu-family: x86
@@ -403,14 +368,6 @@ jobs:
             endian: little
             distro: ubuntu
             suite: jammy
-            cache: false
-          - arch_mkxpz: s390x
-            arch_debian: s390x
-            cpu-family: s390x
-            cpu: s390x
-            endian: big
-            distro: ubuntu
-            suite: xenial
             cache: false
           - arch_mkxpz: x86_64
             arch_debian: amd64
@@ -680,25 +637,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch_mkxpz: armv7
-            arch_debian: armhf
-            arch_gcc: arm-linux-gnueabihf
-            cache: false
-          - arch_mkxpz: armv7-neon
-            arch_debian: armhf
-            arch_gcc: arm-linux-gnueabihf
-            cache: false
-          - arch_mkxpz: arm64
-            arch_debian: arm64
-            arch_gcc: aarch64-linux-gnu
-            cache: false
           - arch_mkxpz: power8le
             arch_debian: ppc64el
             arch_gcc: powerpc64le-linux-gnu
-            cache: false
-          - arch_mkxpz: s390x
-            arch_debian: s390x
-            arch_gcc: s390x-linux-gnu
             cache: false
           - arch_mkxpz: riscv64
             arch_debian: riscv64
