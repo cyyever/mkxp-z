@@ -49,7 +49,7 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
-#include <SDL_Mutex.h>
+#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_thread.h>
 
 #ifdef MKXPZ_STEAM
