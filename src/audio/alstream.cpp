@@ -31,7 +31,7 @@
 #include "sdl-util.h"
 #include "debugwriter.h"
 
-#include <SDL_Mutex.h>
+#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_timer.h>
 
