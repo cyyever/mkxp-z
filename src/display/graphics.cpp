@@ -1486,15 +1486,13 @@ int Graphics::displayContentHeight() const {
 }
 
 int Graphics::displayWidth() const {
-    SDL_DisplayMode dm{};
-    SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(shState->sdlWindow()), &dm);
-    return dm.w / p->backingScaleFactor;
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(shState->sdlWindow()));
+    return mode ? mode->w / p->backingScaleFactor : 0;
 }
 
 int Graphics::displayHeight() const {
-    SDL_DisplayMode dm{};
-    SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(shState->sdlWindow()), &dm);
-    return dm.h / p->backingScaleFactor;
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(shState->sdlWindow()));
+    return mode ? mode->h / p->backingScaleFactor : 0;
 }
 
 void Graphics::resizeScreen(int width, int height) {
