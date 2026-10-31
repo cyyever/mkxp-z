@@ -4,9 +4,13 @@ python = import('python').find_installation(required: true)
 
 install_directory = [python, files('install-directory.py')[0]]
 
-ar = meson.version().version_compare('>=1.10.0') ? find_program('ar').cmd_array() : [find_program('ar')]
+# MSVC builds use lib.exe/rc.exe through Meson itself; the GNU tools are only needed by autoconf-based external projects.
+is_msvc = meson.get_compiler('c').get_argument_syntax() == 'msvc'
+ar = meson.version().version_compare('>=1.10.0') ? find_program('ar', required: not is_msvc).cmd_array() : [find_program('ar', required: not is_msvc)]
 ranlib = ar + 's'
-if host_machine.system() in ['windows', 'cygwin']
+if host_machine.system() in ['windows', 'cygwin'] and is_msvc
+    windres = [find_program('rc', required: false).full_path()]
+elif host_machine.system() in ['windows', 'cygwin']
     windres = meson.version().version_compare('>=1.10.0') ? find_program('windres').cmd_array() : [find_program('windres')]
 else
     windres = [python, files('windres-dummy.py')[0]]
@@ -47,7 +51,7 @@ base_ldflags = []
 
 c_std = []
 foreach std : get_option('c_std').split(',')
-    c_std += '-std=' + std
+    c_std += (is_msvc ? '/std:' : '-std=') + std
 endforeach
 c_std = meson.get_compiler('c').first_supported_argument(c_std)
 if c_std.length() == 0
@@ -58,7 +62,7 @@ base_cflags += c_std
 
 cpp_std = []
 foreach std : get_option('cpp_std').split(',')
-    cpp_std += '-std=' + std
+    cpp_std += (is_msvc ? '/std:' : '-std=') + std
 endforeach
 cpp_std = meson.get_compiler('cpp').first_supported_argument(cpp_std)
 if cpp_std.length() == 0
