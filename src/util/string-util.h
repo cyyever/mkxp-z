@@ -35,13 +35,6 @@ static std::string copyWithNewlines(const char *input, const unsigned limit)
     return output;
 }
 
-/*
-static std::string copyWithNewlines(const std::string& input, const unsigned limit)
-{
-	return copyWithNewlines(input.c_str(), limit);
-}
- */
-
 #endif
 
 #endif // STRING_UTIL_H

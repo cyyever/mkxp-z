@@ -20,7 +20,6 @@
 */
 
 #include "shader.h"
-#include "util/paths.h"
 #include "config.h"
 #include "graphics.h"
 #include "sharedstate.h"
@@ -223,17 +222,6 @@ void Shader::init(const unsigned char *vert, int vertSize,
 	}
 
 	initialized = true;
-}
-
-void Shader::initFromFile(const char *_vertFile, const char *_fragFile,
-                          const char *programName)
-{
-	const auto vertContents = paths::readFile(paths::fromUtf8(_vertFile));
-	const auto fragContents = paths::readFile(paths::fromUtf8(_fragFile));
-
-	init((const unsigned char*) vertContents.c_str(), vertContents.size(),
-	     (const unsigned char*) fragContents.c_str(), fragContents.size(),
-	     _vertFile, _fragFile, programName);
 }
 
 void Shader::setVec2Uniform(GLint location, const Vec2 &vec)

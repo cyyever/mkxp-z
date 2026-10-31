@@ -49,11 +49,8 @@
 
 #include "etc-internal.h"
 
-// TODO: Replace M_PI with std::numbers::pi once we upgrade to C++20.
 #include <math.h>
-#ifndef M_PI
-# define M_PI 3.14159265358979323846
-#endif
+#include <numbers>
 
 #include <string.h>
 
@@ -207,7 +204,7 @@ static FloatRect rotate_rect(const Vec2i &origin, float rotation, const IntRect 
 {
 	// We use a "left-handed" coordinate system, with positive y values being below the x-axis,
 	// so we need to use the negative of the angle to get the proper y values.
-	float angle  = -rotation * M_PI / 180.0f;
+	float angle  = -rotation * std::numbers::pi / 180.0f;
 
 	Vec2i pos = sourceRect.pos();
 	Vec2i size = sourceRect.size();
