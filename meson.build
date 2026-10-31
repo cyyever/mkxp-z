@@ -318,7 +318,6 @@ summary('Extra shaders', have_extra_shaders, bool_yn: true)
 if openal.type_name() == 'internal'
     summary('JACK Audio Connection Kit', have_jack, bool_yn: true)
 endif
-summary('OpenSSL', have_openssl, bool_yn: true)
 if openal.type_name() == 'internal'
     summary('OSS', have_oss, bool_yn: true)
 endif

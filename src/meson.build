@@ -128,33 +128,6 @@ else
 endif
 global_dependencies += zlib
 
-require_system_openssl = get_option('openssl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled)
-if get_option('openssl').disabled() or (get_option('openssl').auto() and require_system_openssl.enabled())
-    require_system_openssl = get_option('openssl')
-endif
-openssl = dependency('openssl', allow_fallback: false, required: require_system_openssl)
-if not openssl.found() and not get_option('openssl').disabled() and not get_option('openssl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled).enabled()
-    openssl_options = meson_base_options + {
-        'asm': 'disabled',
-    }
-    openssl = subproject('openssl', default_options: openssl_options).get_variable('openssl_dep')
-    meson.override_dependency('openssl', openssl, static: true)
-    if host_system not in ['windows', 'cygwin', 'darwin']
-        atomic = meson.get_compiler('c').find_library('atomic', required: false)
-        if atomic.found()
-            global_dependencies += atomic
-        endif
-    endif
-endif
-have_openssl = openssl.found()
-if have_openssl
-    gplv3_features += 'OpenSSL'
-    global_dependencies += openssl
-    global_args += '-DMKXPZ_SSL'
-else
-    meson.override_dependency('openssl', null_dep, static: true)
-endif
-
 physfs = dependency('physfs', allow_fallback: false, required: get_option('physfs_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not physfs.found()
     physfs_options = cmake.subproject_options()
@@ -799,8 +772,6 @@ main_source = files(
     'input/input.cpp',
     'input/keybindings.cpp',
 
-    'net/LUrlParser.cpp',
-    'net/net.cpp',
 
     host_system == 'darwin' ? 'system/systemImplApple.mm' : 'system/systemImpl.cpp',
 )
