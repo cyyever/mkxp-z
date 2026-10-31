@@ -156,7 +156,6 @@ void Config::read(int argc, char *argv[]) {
         {"frameSkip", false},
         {"syncToRefreshrate", false},
         {"solidFonts", json::array({})},
-        {"renderer", 0},
         {"subImageFix", false},
 #ifdef SDL_PLATFORM_WIN32
         {"enableBlitting", false},
@@ -301,7 +300,6 @@ try { exp } catch (...) {}
     for (std::string & solidFont : solidFonts)
         std::transform(solidFont.begin(), solidFont.end(), solidFont.begin(),
             [](unsigned char c) { return std::tolower(c); });
-    SET_OPT(renderer, integer);
     SET_OPT(subImageFix, boolean);
     SET_OPT(enableBlitting, boolean);
     SET_OPT_CUSTOMKEY(integerScaling.active, integerScalingActive, boolean);

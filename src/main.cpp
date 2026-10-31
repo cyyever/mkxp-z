@@ -82,14 +82,6 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #  define MKXPZ_CHECK_FOR_WAYLAND_SUPPORT
 #endif
 
-#if defined(MKXPZ_HAVE_ANGLE) && defined(MKXPZ_HAVE_ANGLE_VULKAN)
-#  define MKXPZ_CHECK_FOR_LAVAPIPE
-#  include <volk.h>
-#endif
-
-#ifdef MKXPZ_HAVE_ANGLE
-bool mkxp_use_angle = true;
-#endif // MKXPZ_HAVE_ANGLE
 
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg);
 static void showInitError(const std::string &msg);
@@ -294,135 +286,8 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    SDL_Window *win = nullptr;
-
-
-#ifdef MKXPZ_HAVE_ANGLE
-    bool angle_allow_fallback = false;
-    {
-      const char *angle_default_platform = getenv("ANGLE_DEFAULT_PLATFORM");
-      switch (conf.renderer) {
-        default:
-          angle_allow_fallback = true;
-          if (angle_default_platform == nullptr || angle_default_platform[0] == 0) {
-#  ifdef MKXPZ_HAVE_ANGLE_METAL
-            mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "metal");
-#  elif !defined(MKXPZ_HAVE_ANGLE_DIRECT3D9) && !defined(MKXPZ_HAVE_ANGLE_DIRECT3D11)
-#    ifdef MKXPZ_HAVE_ANGLE_VULKAN
-#      ifdef MKXPZ_CHECK_FOR_LAVAPIPE
-            /* Check if ANGLE's Vulkan backend would use LLVMpipe. If so, use OpenGL instead. */
-            mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "gl");
-            VkResult result = volkInitialize();
-            VkInstance instance;
-            uint32_t physicalDeviceCount;
-            std::vector<VkPhysicalDevice> physicalDevices;
-            if (result == VK_SUCCESS) {
-              static const VkApplicationInfo applicationInfo {
-                /*sType=*/VK_STRUCTURE_TYPE_APPLICATION_INFO,
-                /*pNext=*/nullptr,
-                /*pApplicationName=*/"",
-                /*applicationVersion=*/0,
-                /*pEngineName=*/"",
-                /*engineVersion=*/0,
-                /*apiVersion=*/VK_API_VERSION_1_0,
-              };
-              static const VkInstanceCreateInfo instanceCreateInfo {
-                /*sType=*/VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-                /*pNext=*/nullptr,
-                /*flags=*/0,
-                /*pApplicationInfo=*/&applicationInfo,
-                /*enabledLayerCount=*/0,
-                /*ppEnabledLayerNames=*/nullptr,
-                /*enabledExtensionCount=*/0,
-                /*ppEnabledExtensionNames=*/nullptr,
-              };
-              result = vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
-            }
-            if (result == VK_SUCCESS) {
-              volkLoadInstance(instance);
-              result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, nullptr);
-              if (result == VK_SUCCESS) {
-                physicalDevices.resize(physicalDeviceCount);
-                result = vkEnumeratePhysicalDevices(instance, &physicalDeviceCount, physicalDevices.data());
-              }
-              if (result == VK_SUCCESS && !physicalDevices.empty()) {
-                VkPhysicalDeviceProperties physicalDeviceProperties;
-                VkPhysicalDevice preferredPhysicalDevice = physicalDevices[0];
-                const char *anglePreferredDevice = getenv("ANGLE_PREFERRED_DEVICE");
-                if (anglePreferredDevice == nullptr) {
-                  anglePreferredDevice = "";
-                }
-                for (VkPhysicalDevice physicalDevice : physicalDevices) {
-                  vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
-                  if (std::strcmp(physicalDeviceProperties.deviceName, anglePreferredDevice) == 0) {
-                    preferredPhysicalDevice = physicalDevice;
-                    break;
-                  }
-                }
-                vkGetPhysicalDeviceProperties(preferredPhysicalDevice, &physicalDeviceProperties);
-                if (std::strncmp(physicalDeviceProperties.deviceName, "llvmpipe ", sizeof "llvmpipe " - 1) != 0) {
-                  mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "vulkan");
-                }
-              }
-              vkDestroyInstance(instance, nullptr);
-            }
-#      else
-            mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "vulkan");
-#      endif // MKXPZ_CHECK_FOR_LAVAPIPE
-#    else
-            mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "gl");
-#    endif // MKXPZ_HAVE_ANGLE_VULKAN
-#  endif
-          }
-          break;
-#ifdef MKXPZ_HAVE_ANGLE_NULL
-        case 1:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "null");
-          break;
-#endif // MKXPZ_HAVE_ANGLE_NULL
-        case 2:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "gl");
-          break;
-#ifdef MKXPZ_HAVE_ANGLE_VULKAN
-        case 3:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "vulkan");
-          break;
-#endif // MKXPZ_HAVE_ANGLE_VULKAN
-#ifdef MKXPZ_HAVE_ANGLE_METAL
-        case 4:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "metal");
-          break;
-#elif defined(MKXPZ_HAVE_ANGLE_DIRECT3D9) || defined(MKXPZ_HAVE_ANGLE_DIRECT3D11)
-        case 4:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", nullptr);
-          break;
-#elif defined(MKXPZ_HAVE_ANGLE_VULKAN)
-        case 4:
-          mkxp_setenv("ANGLE_DEFAULT_PLATFORM", "vulkan");
-          break;
-#endif // MKXPZ_HAVE_ANGLE_METAL
-      }
-      angle_default_platform = getenv("ANGLE_DEFAULT_PLATFORM");
-      if (angle_default_platform != nullptr && std::strcmp(angle_default_platform, "gl") == 0) {
-        mkxp_use_angle = false;
-      }
-    }
-
-    if (mkxp_use_angle) {
-      bool sdl_hint_opengl_es_driver = SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, false);
-      bool sdl_hint_video_x11_force_egl = SDL_GetHintBoolean(SDL_HINT_VIDEO_X11_FORCE_EGL, false);
-      SDL_SetHintWithPriority(SDL_HINT_OPENGL_ES_DRIVER, "1", SDL_HINT_OVERRIDE);
-      SDL_SetHintWithPriority(SDL_HINT_VIDEO_X11_FORCE_EGL, "1", SDL_HINT_OVERRIDE);
-      if (angle_allow_fallback && (win = initVideo(conf)) == nullptr) {
-        // Try again without ANGLE
-        mkxp_use_angle = false;
-        SDL_SetHintWithPriority(SDL_HINT_OPENGL_ES_DRIVER, sdl_hint_opengl_es_driver ? "1" : "0", SDL_HINT_OVERRIDE);
-        SDL_SetHintWithPriority(SDL_HINT_VIDEO_X11_FORCE_EGL, sdl_hint_video_x11_force_egl ? "1" : "0", SDL_HINT_OVERRIDE);
-      }
-    }
-#endif // MKXPZ_HAVE_ANGLE
-
-    if (win == nullptr && (win = initVideo(conf)) == nullptr) {
+    SDL_Window *win = initVideo(conf);
+    if (win == nullptr) {
       showInitError(std::string("Error creating window: ") + SDL_GetError());
       return 0;
     }

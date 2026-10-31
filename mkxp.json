@@ -223,17 +223,6 @@
     // ],
 
 
-    // Choose the graphics backend to use.
-    // 0: Automatically choose
-    // 1: ANGLE null (disables video output)
-    // 2: OpenGL
-    // 3: Vulkan
-    // 4: Direct3D if using Windows, Metal if using macOS, or Vulkan otherwise
-    // (default: 0)
-    //
-    // "renderer": 0,
-
-
     // Work around buggy graphics drivers which don't
     // properly synchronize texture access, most
     // apparent when text doesn't show up or the map
