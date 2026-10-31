@@ -188,7 +188,15 @@ global_dependencies += physfs
 sdl3 = dependency('sdl3', version: '>=3.4', allow_fallback: false,
     required: get_option('sdl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3.found()
-    sdl3 = subproject('sdl3', default_options: meson_base_options).get_variable('sdl3_dep')
+    sdl3_options = cmake.subproject_options()
+    sdl3_options.add_cmake_defines(cmake_base_options + {
+        'SDL_SHARED': false,
+        'SDL_STATIC': true,
+        'SDL_TEST_LIBRARY': false,
+        'SDL_TESTS': false,
+        'SDL_INSTALL': false,
+    })
+    sdl3 = cmake.subproject('sdl3', options: sdl3_options).dependency('SDL3-static')
     sdl3_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('SDL3-' + sdl3.version()) / 'include']
 else
     sdl3_includes = ['-I' + sdl3.get_variable(pkgconfig: 'includedir')]
@@ -477,6 +485,7 @@ endif
 global_dependencies += sdl3_sound
 
 freetype = dependency('freetype2', allow_fallback: false, method: 'pkg-config', required: get_option('freetype_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+freetype_system = freetype.found()
 if not freetype.found()
     freetype_options = meson_base_options + {
         'brotli': 'disabled',
@@ -498,7 +507,9 @@ sdl3_ttf = dependency('sdl3_ttf', allow_fallback: false,
     required: get_option('sdl_ttf_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_ttf.found()
     # Share the same FreeType dependency with SDL_ttf and our font metrics code.
-    meson.override_dependency('freetype2', freetype, static: true)
+    if freetype_system
+        meson.override_dependency('freetype2', freetype, static: true)
+    endif
     sdl3_ttf = subproject('sdl3_ttf', default_options: meson_base_options).get_variable('sdl3_ttf_dep')
 endif
 global_dependencies += sdl3_ttf
