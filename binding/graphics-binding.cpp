@@ -323,51 +323,6 @@ RB_METHOD(graphicsCenter)
     return Qnil;
 }
 
-typedef struct {
-    const char *filename;
-    int volume;
-    bool skippable;
-} PlayMovieArgs;
-
-void *playMovieInternal(void *args) {
-    PlayMovieArgs *a = (PlayMovieArgs*)args;
-    GFX_GUARD_EXC( shState->graphics().playMovie(a->filename, a->volume, a->skippable); );
-    
-    // Signals for shutdown or reset only make playMovie quit early,
-    // so check again
-    shState->checkShutdown();
-    shState->checkReset();
-    
-    return 0;
-}
-
-RB_METHOD_GUARD(graphicsPlayMovie)
-{
-    RB_UNUSED_PARAM;
-    
-    VALUE filename, volumeArg, skippable;
-    rb_scan_args(argc, argv, "12", &filename, &volumeArg, &skippable);
-    SafeStringValue(filename);
-    
-    bool skip;
-    rb_bool_arg(skippable, &skip);
-
-    // TODO: Video control inputs (e.g. skip, pause)
-
-    PlayMovieArgs args{};
-    args.filename = RSTRING_PTR(filename);
-    args.volume = (volumeArg == Qnil) ? 100 : NUM2INT(volumeArg);;
-    args.skippable = skip;
-#if RAPI_MAJOR >= 2
-    drop_gvl_guard(playMovieInternal, &args, 0, 0);
-#else
-    playMovieInternal(&args);
-#endif
-    
-    return Qnil;
-}
-RB_METHOD_GUARD_END
-
 void graphicsScreenshotInternal(const char *filename)
 {
     GFX_GUARD_EXC(shState->graphics().screenshot(filename););
@@ -448,7 +403,6 @@ void graphicsBindingInit()
     
     //if (rgssVer >= 3)
     //{
-    _rb_define_module_function(module, "play_movie", graphicsPlayMovie);
     //}
     
     INIT_GRA_PROP_BIND( Fullscreen,       "fullscreen"         );

@@ -684,20 +684,6 @@ if not uchardet.found()
 endif
 global_dependencies += uchardet
 
-theora = dependency('theora', allow_fallback: false, required: get_option('theora_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not theora.found()
-    theora_options = meson_base_options
-    theora = subproject('theora', default_options: theora_options).get_variable('theoradec')
-endif
-global_dependencies += theora
-
-theoraplay_options = meson_base_options
-theoraplay = subproject('theoraplay', default_options: theoraplay_options).get_variable('theoraplay')
-if not subproject('theoraplay', default_options: theoraplay_options).get_variable('have_thread')
-    global_args += '-DMKXPZ_THEORAPLAY_NO_THREAD'
-endif
-global_dependencies += theoraplay
-
 sdl3_image = dependency('sdl3_image', allow_fallback: false,
     required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_image.found()
