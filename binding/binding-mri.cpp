@@ -1202,6 +1202,13 @@ static void mriBindingExecute() {
     std::vector<const char*> rubyArgsC{"mkxp-z"};
     rubyArgsC.push_back("-e ");
     void *node;
+#if RAPI_FULL >= 400
+    // The bundled Ruby 4 interpreter carries RGSS visibility patches. Its JITs
+    // have separate dispatch implementations and are deliberately disabled.
+    if (conf.jit.enabled || conf.yjit.enabled)
+        Debug() << "JIT settings are ignored by the Ruby 4 RGSS runtime.";
+    node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
+#else
     if (conf.jit.enabled) {
 #if RAPI_FULL >= 310
         // Ruby v3.1.0 renamed the --jit options to --mjit.
@@ -1230,6 +1237,7 @@ static void mriBindingExecute() {
     } else {
         node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
     }
+#endif
     
     int state;
     bool valid = ruby_executable_node(node, &state);

@@ -50,6 +50,11 @@ embedtool = common.get_variable('embedtool')
 quotetool = common.get_variable('quotetool')
 sonametool = common.get_variable('sonametool')
 
+if get_option('ruby_tests_only')
+    subdir('tests/ruby')
+    subdir_done()
+endif
+
 sizeof = {'void*': compilers['cpp'].sizeof('void*'),
           'long': compilers['cpp'].sizeof('long')
          }

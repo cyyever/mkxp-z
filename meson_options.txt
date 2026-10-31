@@ -1,4 +1,5 @@
-option('mri_version', type: 'string', value: '3.1', description: 'Version of MRI to link with')
+option('mri_version', type: 'string', value: '4.0', description: 'Version of MRI to link with')
+option('ruby_tests_only', type: 'boolean', value: false, description: 'Build the embedded Ruby and RGSS compatibility tests without engine dependencies')
 option('force32', type: 'boolean', value: false, description: 'Force compiler to build a 32-bit executable')
 
 option('core_tests_only', type: 'boolean', value: false, description: 'Build only portable core tests, without engine dependencies')
