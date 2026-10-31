@@ -19,6 +19,8 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iterator>
+
 #include "input.h"
 #include "config.h"
 #include "sharedstate.h"
@@ -620,7 +622,7 @@ static const KbBindingData staticKbBindings[] =
     { SDL_SCANCODE_F9,     Input::F9    }
 };
 
-static elementsN(staticKbBindings);
+static constexpr auto staticKbBindingsN = std::size(staticKbBindings);
 
 /* Maps ButtonCode enum values to indices
  * in the button state array */
@@ -638,7 +640,7 @@ static const int mapToIndex[] =
     21, 22, 23, 24, 25
 };
 
-static elementsN(mapToIndex);
+static constexpr auto mapToIndexN = std::size(mapToIndex);
 
 static const Input::ButtonCode dirs[] =
 { Input::Down, Input::Left, Input::Right, Input::Up };

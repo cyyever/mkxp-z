@@ -20,7 +20,8 @@
 */
 
 #include "rgssad.h"
-#include "boost-hash.h"
+#include <map>
+#include <set>
 
 #include <stdint.h>
 #include <string.h>
@@ -87,11 +88,11 @@ struct RGSS_archiveData
 
 	/* Maps: file path
 	 * to:   entry data */
-	BoostHash<std::string, RGSS_entryData> entryHash;
+	std::map<std::string, RGSS_entryData> entryHash;
 
 	/* Maps: directory path,
 	 * to:   list of contained entries */
-	BoostHash<std::string, BoostSet<std::string> > dirHash;
+	std::map<std::string, std::set<std::string> > dirHash;
 };
 
 static bool
@@ -323,7 +324,7 @@ static const PHYSFS_Io RGSS_IoTemplate =
 };
 
 static void
-processDirectories(RGSS_archiveData *data, BoostSet<std::string> &topLevel,
+processDirectories(RGSS_archiveData *data, std::set<std::string> &topLevel,
                    char *nameBuf, uint32_t nameLen)
 {
 	/* Check for top level entries */
@@ -353,7 +354,7 @@ processDirectories(RGSS_archiveData *data, BoostSet<std::string> &topLevel,
 			const char *dir = nameBuf;
 			const char *entry = &nameBuf[i+1];
 
-			BoostSet<std::string> &entryList = data->dirHash[dir];
+			std::set<std::string> &entryList = data->dirHash[dir];
 			entryList.insert(entry);
 		}
 }
@@ -393,7 +394,7 @@ RGSS_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 	uint32_t magic = RGSS_MAGIC;
 
 	/* Top level entry list */
-	BoostSet<std::string> &topLevel = data->dirHash[""];
+	std::set<std::string> &topLevel = data->dirHash[""];
 
 	while (true)
 	{
@@ -427,7 +428,7 @@ RGSS_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 		entry.size = entrySize;
 		entry.startMagic = magic;
 
-		data->entryHash.insert(nameBuf, entry);
+		data->entryHash.insert_or_assign(nameBuf, entry);
 		processDirectories(data, topLevel, nameBuf, nameLen);
 
 		io->seek(io, entry.offset + entry.size);
@@ -448,9 +449,9 @@ RGSS_enumerateFiles(void *opaque, const char *dirname,
 	if (!data->dirHash.contains(_dirname))
 		return PHYSFS_ENUM_STOP;
 
-	const BoostSet<std::string> &entries = data->dirHash[_dirname];
+	const std::set<std::string> &entries = data->dirHash[_dirname];
 
-	BoostSet<std::string>::const_iterator iter;
+	std::set<std::string>::const_iterator iter;
 	for (iter = entries.cbegin(); iter != entries.cend(); ++iter)
 		cb(callbackdata, origdir, iter->c_str());
 
@@ -607,7 +608,7 @@ RGSS3_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 	data->archiveIo = io;
 
 	/* Top level entry list */
-	BoostSet<std::string> &topLevel = data->dirHash[""];
+	std::set<std::string> &topLevel = data->dirHash[""];
 
 	while (true)
 	{
@@ -649,7 +650,7 @@ RGSS3_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 		entry.size = size;
 		entry.startMagic = magic;
 
-		data->entryHash.insert(nameBuf, entry);
+		data->entryHash.insert_or_assign(nameBuf, entry);
 		processDirectories(data, topLevel, nameBuf, nameLen);
 
 		continue;

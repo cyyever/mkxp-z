@@ -24,7 +24,7 @@
 #include "sharedstate.h"
 #include "filesystem.h"
 #include "exception.h"
-#include "boost-hash.h"
+#include <map>
 #include "util.h"
 #include "config.h"
 #include "encoding.h"
@@ -111,18 +111,18 @@ struct SharedFontStatePrivate
 {
 	/* Maps: font family name, To: substituted family name,
 	 * as specified via configuration file / arguments */
-	BoostHash<std::string, std::string> subs;
+	std::map<std::string, std::string> subs;
 
 	/* Maps: font family name, To: set of physical
 	 * font filenames located in "Fonts/" */
-	BoostHash<std::string, FontSet> sets;
+	std::map<std::string, FontSet> sets;
 
 	/* Pool of font size to ppem values */
-	BoostHash<FontSizeKey, int> size_to_ppem;
+	std::map<FontSizeKey, int> size_to_ppem;
 
 	/* Pool of already opened fonts; once opened, they are reused
 	 * and never closed until the termination of the program */
-	BoostHash<FontPPEMKey, std::array<TTF_Font*, 2>> ppem_to_font;
+	std::map<FontPPEMKey, std::array<TTF_Font*, 2>> ppem_to_font;
     
     /* Internal default font family that is used anytime an
      * empty/invalid family is requested */
@@ -149,7 +149,7 @@ SharedFontState::SharedFontState(const Config &conf)
 		std::string from = raw.substr(0, sepPos);
 		std::string to   = raw.substr(sepPos+1);
 
-		p->subs.insert(from, to);
+		p->subs.insert_or_assign(from, to);
 	}
 	
 	p->fontScale = conf.fontScale;
@@ -163,7 +163,7 @@ SharedFontState::SharedFontState(const Config &conf)
 
 SharedFontState::~SharedFontState()
 {
-	BoostHash<FontPPEMKey, std::array<TTF_Font*, 2>>::const_iterator iter;
+	std::map<FontPPEMKey, std::array<TTF_Font*, 2>>::const_iterator iter;
 	for (iter = p->ppem_to_font.cbegin(); iter != p->ppem_to_font.cend(); ++iter)
 	{
 		for (int i=0; i < iter->second.size(); i++)
@@ -581,7 +581,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 			shState->fileSystem().openReadRaw(*ops, path, true);
 		} catch (const Exception &e) {
 			SDL_FreeRW(ops);
-			p->size_to_ppem.remove(key);
+			p->size_to_ppem.erase(key);
 			throw e;
 		}
 	}
@@ -635,7 +635,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 	
 	if (!font)
 	{
-		p->size_to_ppem.remove(key);
+		p->size_to_ppem.erase(key);
 		throw Exception(Exception::SDLError, "%s", SDL_GetError());
 	}
 	

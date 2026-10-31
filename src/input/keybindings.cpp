@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "keybindings.h"
 
 #include "config.h"
@@ -98,9 +100,9 @@ static const KbBindingData defaultKbBindings2[] =
 	{ SDL_SCANCODE_Z,      Input::C     }
 };
 
-static elementsN(defaultKbBindings);
-static elementsN(defaultKbBindings1);
-static elementsN(defaultKbBindings2);
+static constexpr auto defaultKbBindingsN = std::size(defaultKbBindings);
+static constexpr auto defaultKbBindings1N = std::size(defaultKbBindings1);
+static constexpr auto defaultKbBindings2N = std::size(defaultKbBindings2);
 
 static const CtrlBindingData defaultCtrlBindings[] =
 {
@@ -119,7 +121,7 @@ static const CtrlBindingData defaultCtrlBindings[] =
     { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, Input::Right }
 };
 
-static elementsN(defaultCtrlBindings);
+static constexpr auto defaultCtrlBindingsN = std::size(defaultCtrlBindings);
 
 static void addAxisBinding(BDescVec &d, SDL_GameControllerAxis axis, AxisDir dir, Input::ButtonCode target)
 {
@@ -230,7 +232,7 @@ static bool verifyDesc(const BindingDesc &desc)
 	    Input::F5, Input::F6, Input::F7, Input::F8, Input::F9
 	};
 
-	elementsN(codes);
+	constexpr auto codesN = std::size(codes);
 	size_t i;
 
 	for (i = 0; i < codesN; ++i)

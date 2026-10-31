@@ -19,6 +19,10 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iterator>
+
+#include "util/paths.h"
+
 #include "audio/audio.h"
 #include "filesystem/filesystem.h"
 #include "display/graphics.h"
@@ -28,7 +32,7 @@
 #include "util/util.h"
 #include "util/sdl-util.h"
 #include "util/debugwriter.h"
-#include "util/boost-hash.h"
+#include <map>
 #include "util/exception.h"
 #include "util/encoding.h"
 
@@ -356,7 +360,7 @@ RB_METHOD(mkxpDataDirectory) {
     const std::string &path = shState->config().customDataPath;
     const char *s = path.empty() ? "." : path.c_str();
     
-    std::string s_nml = shState->fileSystem().normalize(s, 1, 1);
+    std::string s_nml = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(s)).lexically_normal().make_preferred().u8string());
     VALUE ret = rb_utf8_str_new_cstr(s_nml.c_str());
     
     return ret;
@@ -837,7 +841,7 @@ struct evalArg {
 
 static VALUE evalHelper(evalArg *arg) {
     VALUE argv[] = {arg->string, Qnil, arg->filename};
-    return rb_funcall2(topSelf, rb_intern("eval"), ARRAY_SIZE(argv), argv);
+    return rb_funcall2(topSelf, rb_intern("eval"), std::size(argv), argv);
 }
 
 static VALUE evalString(VALUE string, VALUE filename, int *state) {
@@ -940,7 +944,7 @@ VALUE kernelLoadDataInt(const char *filename, bool rubyExc, bool raw);
 
 struct BacktraceData {
     /* Maps: Ruby visible filename, To: Actual script name */
-    BoostHash<std::string, std::string> scriptNames;
+    std::map<std::string, std::string> scriptNames;
 };
 
 bool evalScript(VALUE string, const char *filename)
@@ -1069,7 +1073,7 @@ static void runRMXPScripts(BacktraceData &btData) {
                 len = snprintf(buf, sizeof(buf), SCRIPT_SECTION_FMT, i);
             
             fname = newStringUTF8(buf, len);
-            btData.scriptNames.insert(buf, scriptName);
+            btData.scriptNames.insert_or_assign(buf, scriptName);
             
             
             // if the script name starts with |s|, only execute
@@ -1171,7 +1175,8 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     
     /* Shrink to fit */
     file.resize(strlen(file.c_str()));
-    file = btData.scriptNames.value(file, file);
+    if (const auto it = btData.scriptNames.find(file); it != btData.scriptNames.end())
+        file = it->second;
     
     std::string ms(640, '\0');
     snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s",
@@ -1284,7 +1289,7 @@ static void mriBindingExecute() {
     }
 #ifndef WORKDIR_CURRENT
     else {
-        rb_ary_push(lpaths, rb_utf8_str_new_cstr(mkxp_fs::getCurrentDirectory().c_str()));
+        rb_ary_push(lpaths, rb_utf8_str_new_cstr(paths::toUtf8(std::filesystem::current_path().u8string()).c_str()));
     }
 #endif
     

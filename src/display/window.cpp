@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "window.h"
 
 #include "viewport.h"
@@ -95,7 +97,7 @@ static const uint8_t cursorAniAlpha[] =
 	0xBF, 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7
 };
 
-static elementsN(cursorAniAlpha);
+static constexpr auto cursorAniAlphaN = std::size(cursorAniAlpha);
 
 /* Cycling */
 static const uint8_t pauseAniQuad[] =
@@ -106,7 +108,7 @@ static const uint8_t pauseAniQuad[] =
 	3, 3, 3, 3, 3, 3, 3, 3
 };
 
-static elementsN(pauseAniQuad);
+static constexpr auto pauseAniQuadN = std::size(pauseAniQuad);
 
 /* No cycle */
 static const uint8_t pauseAniAlpha[] =
@@ -116,7 +118,7 @@ static const uint8_t pauseAniAlpha[] =
 	0xFF
 };
 
-static elementsN(pauseAniAlpha);
+static constexpr auto pauseAniAlphaN = std::size(pauseAniAlpha);
 
 /* Points to an array of quads which it doesn't own.
  * Useful for setting alpha of quads stored inside

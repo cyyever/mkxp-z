@@ -1,6 +1,8 @@
 // Most of the MiniFFI class was taken from Ruby 1.8's Win32API.c,
 // it's just as basic but should work fine for the moment
 
+#include "util/paths.h"
+
 #include <SDL.h>
 #include <cstdint>
 
@@ -52,7 +54,7 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
     SafeStringValue(libname);
     SafeStringValue(func);
 #ifdef __APPLE__
-    void *hlib = SDL_LoadObject(mkxp_fs::normalizePath(RSTRING_PTR(libname), 1, 1).c_str());
+    void *hlib = SDL_LoadObject(paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(RSTRING_PTR(libname))).lexically_normal().make_preferred().u8string()).c_str());
 #else
     void *hlib = SDL_LoadObject(RSTRING_PTR(libname));
 #endif

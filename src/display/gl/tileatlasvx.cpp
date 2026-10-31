@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "tileatlasvx.h"
 
 #include "tilemap-common.h"
@@ -62,7 +64,7 @@ static const StaticRect autotileVXRectsC[] =
 	{ 48, 0, 16, 32 }
 };
 
-static elementsN(autotileVXRectsC);
+static constexpr auto autotileVXRectsCN = std::size(autotileVXRectsC);
 
 namespace TileAtlasVX
 {
@@ -178,15 +180,15 @@ static const Blit blitsE[] =
 	Blit(0, 0, bmSizes[BM_E], blitsD[0].dst.x, blitsD[0].dst.y+blitsD[0].src.h)
 };
 
-static elementsN(blitsA1);
-static elementsN(blitsA2);
-static elementsN(blitsA3);
-static elementsN(blitsA4);
-static elementsN(blitsA5);
-static elementsN(blitsB);
-static elementsN(blitsC);
-static elementsN(blitsD);
-static elementsN(blitsE);
+static constexpr auto blitsA1N = std::size(blitsA1);
+static constexpr auto blitsA2N = std::size(blitsA2);
+static constexpr auto blitsA3N = std::size(blitsA3);
+static constexpr auto blitsA4N = std::size(blitsA4);
+static constexpr auto blitsA5N = std::size(blitsA5);
+static constexpr auto blitsBN = std::size(blitsB);
+static constexpr auto blitsCN = std::size(blitsC);
+static constexpr auto blitsDN = std::size(blitsD);
+static constexpr auto blitsEN = std::size(blitsE);
 
 /* 'Waterfall' autotiles atlas origin */
 static const Vec2i AEPartsDst[] =
@@ -252,7 +254,7 @@ createShadowSet()
 
 	/* Fill rects with half opacity black */
 	uint32_t color = (0x80808080 & am);
-	SDL_FillRects(surf, dataPtr(rects), rects.size(), color);
+	SDL_FillRects(surf, rects.data(), rects.size(), color);
 
 	return surf;
 }

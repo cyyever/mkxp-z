@@ -9,6 +9,10 @@ and [Clang implementation status](https://clang.llvm.org/cxx_status.html).
 
 Portable filesystem operations use `std::filesystem` with UTF-8 paths on all
 platforms. macOS retains its native app-bundle lookup and folder picker.
+Filesystem calls use the STL directly; `util/paths.h` only handles UTF-8
+boundaries, RGSS separator normalization and reading file contents. The RGSS
+archive/search-path layer remains because STL filesystem operations do not
+replace archive mounting or case-insensitive game asset lookup.
 RGSS serialization uses `std::endian`, `std::byteswap` and `std::bit_cast`,
 preserving the existing little-endian format. Third-party libraries retain
 their own language requirements.

@@ -256,7 +256,7 @@ private:
 			VBO::allocEmpty(sizeof(CVertex) * vertices.size());
 		}
 
-		VBO::uploadSubData(0, sizeof(CVertex) * vertices.size(), dataPtr(vertices));
+		VBO::uploadSubData(0, sizeof(CVertex) * vertices.size(), vertices.data());
 
 		VBO::unbind();
 

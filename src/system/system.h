@@ -10,6 +10,8 @@
 
 #include <string>
 
+struct SDL_Window;
+
 #define MKXPZ_PLATFORM_WINDOWS 0
 #define MKXPZ_PLATFORM_MACOS 1
 #define MKXPZ_PLATFORM_LINUX 2
@@ -36,6 +38,10 @@ enum WineHostType {
 };
 std::string getSystemLanguage();
 std::string getUserName();
+std::string getDefaultGameRoot();
+#ifdef __APPLE__
+std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);
+#endif
 int getScalingFactor();
 
 bool isWine();

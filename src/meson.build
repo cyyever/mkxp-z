@@ -1278,8 +1278,6 @@ main_source = files(
     'etc/table.cpp',
 
     'filesystem/filesystem.cpp',
-    'filesystem/filesystemImpl.cpp',
-    host_system == 'darwin' ? 'filesystem/filesystemImplApple.mm' : 'filesystem/filesystemImplSDL.cpp',
 
     'input/input.cpp',
     'input/keybindings.cpp',

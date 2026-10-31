@@ -1,7 +1,6 @@
 core_tests = executable(
     'portable-core-tests',
     'portable-core.cpp',
-    '../../src/filesystem/filesystemImpl.cpp',
     include_directories: include_directories('../../src'),
     override_options: engine_standards + {'warning_level': '3', 'werror': true},
 )
@@ -12,7 +11,6 @@ if host_machine.system() == 'darwin'
     objcpp_tests = executable(
         'portable-core-objcpp-tests',
         'portable-core.mm',
-        '../../src/filesystem/filesystemImpl.cpp',
         include_directories: include_directories('../../src'),
         override_options: engine_standards + {'warning_level': '3', 'werror': true},
     )

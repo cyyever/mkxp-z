@@ -20,8 +20,9 @@
 */
 
 #include "filesystem.h"
+#include "util/paths.h"
 
-#include "util/boost-hash.h"
+#include <map>
 #include "util/debugwriter.h"
 #include "util/exception.h"
 #include "util/util.h"
@@ -270,10 +271,10 @@ const Uint32 SDL_RWOPS_PHYSFS = SDL_RWOPS_UNKNOWN + 10;
 struct FileSystemPrivate {
   /* Maps: lower case full filepath,
    * To:   mixed case full filepath */
-  BoostHash<std::string, std::string> pathCache;
+  std::map<std::string, std::string> pathCache;
   /* Maps: lower case directory path,
    * To:   list of lower case filenames */
-  BoostHash<std::string, std::vector<std::string>> fileLists;
+  std::map<std::string, std::vector<std::string>> fileLists;
 
   /* This is for compatibility with games that take Windows'
    * case insensitivity for granted */
@@ -435,7 +436,7 @@ static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
     list.push_back(lowerFilename);
 
     /* Add the lower -> mixed mapping of the file's full path */
-    data.p->pathCache.insert(lowerCase, mixedCase);
+    data.p->pathCache.insert_or_assign(lowerCase, mixedCase);
   }
 
   return PHYSFS_ENUM_OK;
@@ -539,7 +540,7 @@ struct OpenReadEnumData {
 
   /* Optional hash to translate full filepaths
    * (used with path cache) */
-  BoostHash<std::string, std::string> *pathTrans;
+  std::map<std::string, std::string> *pathTrans;
 
   /* Number of files we've attempted to read and parse */
   size_t matchCount;
@@ -551,7 +552,7 @@ struct OpenReadEnumData {
 
   OpenReadEnumData(FileSystem::OpenHandler &handler, const char *filename,
                    size_t filenameN,
-                   BoostHash<std::string, std::string> *pathTrans)
+                   std::map<std::string, std::string> *pathTrans)
       : handler(handler), filename(filename), filenameN(filenameN),
         pathTrans(pathTrans), matchCount(0), stopSearching(false),
         physfsError(0) {}
@@ -612,7 +613,7 @@ openReadEnumCB(void *d, const char *dirpath, const char *filename) {
 }
 
 void FileSystem::openRead(OpenHandler &handler, const char *filename) {
-  std::string filename_nm = normalize(filename, false, false);
+  std::string filename_nm = paths::toUtf8(paths::fromRgss(filename).generic_u8string());
   char buffer[512];
   size_t len = strcpySafe(buffer, filename_nm.c_str(), sizeof(buffer), -1);
   char *delim;
@@ -662,7 +663,7 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
 void FileSystem::openReadRaw(SDL_RWops &ops, const char *filename,
                              bool freeOnClose) {
 
-  PHYSFS_File *handle = PHYSFS_openRead(normalize(filename, 0, 0).c_str());
+  PHYSFS_File *handle = PHYSFS_openRead(paths::toUtf8(paths::fromRgss(filename).generic_u8string()).c_str());
 
   if (!handle)
     throw Exception(Exception::NoFileError, "%s", filename);
@@ -671,13 +672,8 @@ void FileSystem::openReadRaw(SDL_RWops &ops, const char *filename,
     return;
 }
 
-std::string FileSystem::normalize(const char *pathname, bool preferred,
-                            bool absolute) {
-    return filesystemImpl::normalizePath(pathname, preferred, absolute);
-}
-
 bool FileSystem::exists(const char *filename) {
-  return PHYSFS_exists(normalize(filename, false, false).c_str());
+  return PHYSFS_exists(paths::toUtf8(paths::fromRgss(filename).generic_u8string()).c_str());
 }
 
 const char *FileSystem::desensitize(const char *filename) {

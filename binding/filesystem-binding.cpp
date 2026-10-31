@@ -19,6 +19,8 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iterator>
+
 #include "src/config.h"
 
 #include "binding-util.h"
@@ -207,7 +209,7 @@ RB_METHOD(kernelSaveData) {
     VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
     
     VALUE v[] = {obj, file};
-    rb_funcall2(marsh, rb_intern("dump"), ARRAY_SIZE(v), v);
+    rb_funcall2(marsh, rb_intern("dump"), std::size(v), v);
     
     rb_io_close(file);
     
@@ -259,7 +261,7 @@ RB_METHOD(_marshalLoad) {
     VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
     
     VALUE v[] = {port, utf8Proc};
-    return rb_funcall2(marsh, rb_intern("_mkxp_load_alias"), ARRAY_SIZE(v), v);
+    return rb_funcall2(marsh, rb_intern("_mkxp_load_alias"), std::size(v), v);
 }
 #endif
 
