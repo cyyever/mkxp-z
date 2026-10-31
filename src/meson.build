@@ -1130,7 +1130,6 @@ if not fluidsynth.found()
 endif
 global_dependencies += fluidsynth
 
-global_args += '-DMKXPZ_FLUIDSYNTH_SONAME="' + run_command(sonametool, 'fluidsynth', check: true).stdout().strip() + '"'
 
 ruby = dependency('ruby-' + get_option('mri_version'), allow_fallback: false, required: get_option('ruby_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not ruby.found()
@@ -1204,7 +1203,6 @@ else
     global_link_args += ['-static-libstdc++']
 endif
 
-global_args += '-DMKXPZ_ALCDEVICE=ALCdevice'
 
 
 global_include_dirs += include_directories('.',
@@ -1219,7 +1217,6 @@ global_include_dirs += include_directories('.',
     'util', 'util/sigslot', 'util/sigslot/adapter'
 )
 
-global_cpp_args += '-DSHARED_FLUID'
 
 if get_option('cjk_fallback_font') == true
     global_cpp_args += '-DMKXPZ_CJK_FONT'

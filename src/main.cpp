@@ -86,12 +86,6 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #  include <volk.h>
 #endif
 
-#ifndef MKXPZ_INIT_GL_LATER
-#define GLINIT_SHOWERROR(s) showInitError(s)
-#else
-#define GLINIT_SHOWERROR(s) rgssThreadError(threadData, s)
-#endif
-
 #ifdef MKXPZ_HAVE_ANGLE
 bool mkxp_use_angle = true;
 #endif // MKXPZ_HAVE_ANGLE
@@ -131,14 +125,10 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
-#ifdef MKXPZ_INIT_GL_LATER
   threadData->glContext =
       initGL(threadData->window, threadData->config, threadData);
   if (!threadData->glContext)
     return 0;
-#else
-  SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
-#endif
 
   /* Setup AL context */
   static const ALCint attrs[] = {
@@ -689,11 +679,8 @@ int main(int argc, char *argv[]) {
 
     EventThread eventThread;
 
-#ifndef MKXPZ_INIT_GL_LATER
-    SDL_GLContext glCtx = initGL(win, conf, 0);
-#else
-    SDL_GLContext glCtx = NULL;
-#endif
+    // The RGSS thread creates and owns the OpenGL context.
+    SDL_GLContext glCtx = nullptr;
 
     RGSSThreadData rtData(&eventThread, argv[0], win, alcDev, mode.refresh_rate,
                           mkxp_sys::getScalingFactor(), conf, glCtx);
@@ -790,14 +777,14 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
   glCtx = SDL_GL_CreateContext(win);
 
   if (!glCtx) {
-    GLINIT_SHOWERROR(std::string("Could not create OpenGL context: ") + SDL_GetError());
+    rgssThreadError(threadData, std::string("Could not create OpenGL context: ") + SDL_GetError());
     return 0;
   }
 
   try {
     initGLFunctions();
   } catch (const Exception &exc) {
-    GLINIT_SHOWERROR(exc.msg);
+    rgssThreadError(threadData, exc.msg);
     SDL_GL_DeleteContext(glCtx);
 
     return 0;

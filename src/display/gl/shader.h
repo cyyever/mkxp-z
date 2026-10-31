@@ -51,8 +51,6 @@ protected:
               const unsigned char *frag, int fragSize,
 	          const char *vertName, const char *fragName,
 	          const char *programName);
-	void initFromFile(const char *vertFile, const char *fragFile,
-	                  const char *programName);
 
 	static void setVec4Uniform(GLint location, const Vec4 &vec);
     static void setVec2Uniform(GLint location, const Vec2 &vec);

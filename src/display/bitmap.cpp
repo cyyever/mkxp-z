@@ -568,8 +568,7 @@ Bitmap::Bitmap(const char *filename)
     std::string hiresPrefix = "Hires/";
     std::string filenameStd = filename;
     Bitmap *hiresBitmap = nullptr;
-    // TODO: once C++20 is required, switch to filenameStd.starts_with(hiresPrefix)
-    if (shState->config().enableHires && filenameStd.compare(0, hiresPrefix.size(), hiresPrefix) != 0) {
+    if (shState->config().enableHires && !filenameStd.starts_with(hiresPrefix)) {
         // Look for a high-res version of the file.
         std::string hiresFilename = hiresPrefix + filenameStd;
         try {
