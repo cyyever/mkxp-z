@@ -767,33 +767,37 @@ global_dependencies += fluidsynth
 
 ruby = dependency('ruby-' + get_option('mri_version'), allow_fallback: false, required: get_option('ruby_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not ruby.found()
-    libffi = dependency('libffi', allow_fallback: false, method: 'pkg-config', required: get_option('libffi_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libffi.found()
-        libffi_options = meson_base_options
-        libffi = subproject('libffi', default_options: libffi_options).get_variable('libffi')
-        libffi_includes = subproject('libffi', default_options: libffi_options).get_variable('libffi_includes')
-        libffi_libs = subproject('libffi', default_options: libffi_options).get_variable('libffi_libs')
-    else
-        libffi_includes = ['-I' + libffi.get_variable(pkgconfig: 'includedir')]
-        libffi_libs = ['-L' + libffi.get_variable(pkgconfig: 'libdir')]
-    endif
+    # Ruby 3.4 is built with only the zlib extension; libffi (fiddle) and libYAML (psych) are legacy 3.1 dependencies.
+    legacy_ruby_deps = get_option('mri_version') == '3.1'
+    if legacy_ruby_deps
+        libffi = dependency('libffi', allow_fallback: false, method: 'pkg-config', required: get_option('libffi_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+        if not libffi.found()
+            libffi_options = meson_base_options
+            libffi = subproject('libffi', default_options: libffi_options).get_variable('libffi')
+            libffi_includes = subproject('libffi', default_options: libffi_options).get_variable('libffi_includes')
+            libffi_libs = subproject('libffi', default_options: libffi_options).get_variable('libffi_libs')
+        else
+            libffi_includes = ['-I' + libffi.get_variable(pkgconfig: 'includedir')]
+            libffi_libs = ['-L' + libffi.get_variable(pkgconfig: 'libdir')]
+        endif
 
-    libyaml = dependency('yaml-0.1', allow_fallback: false, method: 'pkg-config', required: get_option('libyaml_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libyaml.found()
-        libyaml_options = cmake.subproject_options()
-        libyaml_options.add_cmake_defines(cmake_base_options + {
-            'BUILD_SHARED_LIBS': false,
-        })
-        foreach opt, val : cmake_override_options
-            libyaml_options.set_override_option(opt, val)
-        endforeach
-        libyaml = cmake.subproject('libyaml', options: libyaml_options).dependency('yaml')
-        libyaml_includes = ['-I' + meson.project_source_root() / 'subprojects' / 'libyaml' / 'include', '-I' + meson.project_build_root() / 'subprojects' / 'libyaml' / '__CMake_build' / 'include']
-        libyaml_libs = ['-L' + meson.project_build_root() / 'subprojects' / 'libyaml']
-        meson.override_dependency('yaml-0.1', libyaml, static: true)
-    else
-        libyaml_includes = ['-I' + libyaml.get_variable(pkgconfig: 'includedir')]
-        libyaml_libs = ['-L' + libyaml.get_variable(pkgconfig: 'libdir')]
+        libyaml = dependency('yaml-0.1', allow_fallback: false, method: 'pkg-config', required: get_option('libyaml_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+        if not libyaml.found()
+            libyaml_options = cmake.subproject_options()
+            libyaml_options.add_cmake_defines(cmake_base_options + {
+                'BUILD_SHARED_LIBS': false,
+            })
+            foreach opt, val : cmake_override_options
+                libyaml_options.set_override_option(opt, val)
+            endforeach
+            libyaml = cmake.subproject('libyaml', options: libyaml_options).dependency('yaml')
+            libyaml_includes = ['-I' + meson.project_source_root() / 'subprojects' / 'libyaml' / 'include', '-I' + meson.project_build_root() / 'subprojects' / 'libyaml' / '__CMake_build' / 'include']
+            libyaml_libs = ['-L' + meson.project_build_root() / 'subprojects' / 'libyaml']
+            meson.override_dependency('yaml-0.1', libyaml, static: true)
+        else
+            libyaml_includes = ['-I' + libyaml.get_variable(pkgconfig: 'includedir')]
+            libyaml_libs = ['-L' + libyaml.get_variable(pkgconfig: 'libdir')]
+        endif
     endif
 
     ruby_internal_cflags = []
@@ -807,19 +811,21 @@ if not ruby.found()
         ruby_external_cflags += zlib_includes
         ruby_external_ldflags += zlib_libs
     endif
-    if libyaml.type_name() == 'internal'
-        ruby_internal_cflags += libyaml_includes
-        ruby_internal_ldflags += libyaml_libs
-    else
-        ruby_external_cflags += libyaml_includes
-        ruby_external_ldflags += libyaml_libs
-    endif
-    if libffi.type_name() == 'internal'
-        ruby_internal_cflags += libffi_includes
-        ruby_internal_ldflags += libffi_libs
-    else
-        ruby_external_cflags += libffi_includes
-        ruby_external_ldflags += libffi_libs
+    if legacy_ruby_deps
+        if libyaml.type_name() == 'internal'
+            ruby_internal_cflags += libyaml_includes
+            ruby_internal_ldflags += libyaml_libs
+        else
+            ruby_external_cflags += libyaml_includes
+            ruby_external_ldflags += libyaml_libs
+        endif
+        if libffi.type_name() == 'internal'
+            ruby_internal_cflags += libffi_includes
+            ruby_internal_ldflags += libffi_libs
+        else
+            ruby_external_cflags += libffi_includes
+            ruby_external_ldflags += libffi_libs
+        endif
     endif
     ruby_options = meson_base_options + {
         'cflags': run_command(quotetool, ruby_internal_cflags + ruby_external_cflags, check: true).stdout().strip(),

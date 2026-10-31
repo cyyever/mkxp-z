@@ -33,8 +33,6 @@ endif
 baseruby = run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('ruby').cmd_array() : find_program('ruby')), check: true).stdout().strip()
 
 ruby_deps = [
-    dependency('libffi', required: true),
-    dependency('yaml-0.1', required: true),
     dependency('zlib', required: true),
 ]
 
@@ -61,7 +59,8 @@ ruby = declare_dependency(
                 '--disable-shared',
                 '--disable-yjit',
                 '--disable-install-doc',
-                '--with-out-ext=openssl,readline,dbm,gdbm,-test-',
+                # mkxp-z only needs zlib (auto-required by the binding); the supported games load no other extension.
+                '--with-ext=zlib',
                 '--with-static-linked-ext',
                 '--disable-rubygems',
                 '--without-gmp',
@@ -163,47 +162,7 @@ ruby = declare_dependency(
             ]
             : [],
         meson.project_build_root() / 'build' / 'ext' / 'extinit.a',
-        meson.project_build_root() / 'build' / 'ext' / 'bigdecimal' / 'bigdecimal.a',
-        meson.project_build_root() / 'build' / 'ext' / 'cgi' / 'escape' / 'escape.a',
-        meson.project_build_root() / 'build' / 'ext' / 'continuation' / 'continuation.a',
-        meson.project_build_root() / 'build' / 'ext' / 'coverage' / 'coverage.a',
-        meson.project_build_root() / 'build' / 'ext' / 'date' / 'date_core.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'digest.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'bubblebabble' / 'bubblebabble.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'md5' / 'md5.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'rmd160' / 'rmd160.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'sha1' / 'sha1.a',
-        meson.project_build_root() / 'build' / 'ext' / 'digest' / 'sha2' / 'sha2.a',
-        meson.project_build_root() / 'build' / 'ext' / 'erb' / 'escape' / 'escape.a',
-        meson.project_build_root() / 'build' / 'ext' / 'etc' / 'etc.a',
-        meson.project_build_root() / 'build' / 'ext' / 'fcntl' / 'fcntl.a',
-        meson.project_build_root() / 'build' / 'ext' / 'fiddle' / 'fiddle.a',
-        meson.project_build_root() / 'build' / 'ext' / 'io' / 'console' / 'console.a',
-        meson.project_build_root() / 'build' / 'ext' / 'io' / 'nonblock' / 'nonblock.a',
-        meson.project_build_root() / 'build' / 'ext' / 'io' / 'wait' / 'wait.a',
-        meson.project_build_root() / 'build' / 'ext' / 'json' / 'generator' / 'generator.a',
-        meson.project_build_root() / 'build' / 'ext' / 'json' / 'parser' / 'parser.a',
-        meson.project_build_root() / 'build' / 'ext' / 'monitor' / 'monitor.a',
-        meson.project_build_root() / 'build' / 'ext' / 'nkf' / 'nkf.a',
-        meson.project_build_root() / 'build' / 'ext' / 'objspace' / 'objspace.a',
-        meson.project_build_root() / 'build' / 'ext' / 'pathname' / 'pathname.a',
-        meson.project_build_root() / 'build' / 'ext' / 'psych' / 'psych.a',
-        meson.project_build_root() / 'build' / 'ext' / 'racc' / 'cparse' / 'cparse.a',
-        meson.project_build_root() / 'build' / 'ext' / 'rbconfig' / 'sizeof' / 'sizeof.a',
-        meson.project_build_root() / 'build' / 'ext' / 'ripper' / 'ripper.a',
-        meson.project_build_root() / 'build' / 'ext' / 'socket' / 'socket.a',
-        meson.project_build_root() / 'build' / 'ext' / 'stringio' / 'stringio.a',
-        meson.project_build_root() / 'build' / 'ext' / 'strscan' / 'strscan.a',
         meson.project_build_root() / 'build' / 'ext' / 'zlib' / 'zlib.a',
-        host_machine.system() in ['windows', 'cygwin']
-            ? [
-                meson.project_build_root() / 'build' / 'ext' / 'win32' / 'resolv' / 'resolv.a',
-                meson.project_build_root() / 'build' / 'ext' / 'win32ole' / 'win32ole.a',
-            ]
-            : [
-                meson.project_build_root() / 'build' / 'ext' / 'pty' / 'pty.a',
-                meson.project_build_root() / 'build' / 'ext' / 'syslog' / 'syslog_ext.a',
-            ],
         meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
         meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
         meson.project_build_root() / 'build' / 'enc' / 'libtrans.a',

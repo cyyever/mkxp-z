@@ -40,19 +40,8 @@ ensure
   $DEBUG, $VERBOSE = debug, verbose
 end
 
-# These must load from the packaged runtime with RubyGems disabled.
-%w[zlib json psych bigdecimal fiddle nkf racc/cparse digest/md5 digest/sha2
-   date stringio strscan socket pathname erb/escape csv base64 logger].each do |name|
-  require name
-end
-require 'win32ole' if RUBY_PLATFORM.include?('mingw')
-require 'syslog' unless RUBY_PLATFORM.include?('mingw')
-require 'bigdecimal/util'
-check(BigDecimal('1.25') * 2 == BigDecimal('2.5'), 'BigDecimal')
-check(Fiddle::SIZEOF_VOIDP > 0, 'Fiddle')
-check(NKF.nkf('-w', "RGSS") == 'RGSS', 'NKF')
-check(JSON.parse('{"rgss":3}')['rgss'] == 3, 'JSON')
-check(Psych.safe_load('rgss: 3')['rgss'] == 3, 'YAML')
+# zlib is the only extension built into the packaged runtime.
+require 'zlib'
 
 payload = [1, -1, 2**80, "\x00\xff".b, ["日本語", {rgss: 3}]]
 check(Marshal.load(Zlib::Inflate.inflate(Zlib::Deflate.deflate(Marshal.dump(payload)))) == payload,
