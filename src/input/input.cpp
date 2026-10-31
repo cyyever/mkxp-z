@@ -29,10 +29,10 @@
 #include "util/exception.h"
 #include "util/util.h"
 
-#include <SDL_scancode.h>
-#include <SDL_keyboard.h>
-#include <SDL_mouse.h>
-#include <SDL_clipboard.h>
+#include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_clipboard.h>
 
 #include <vector>
 #include <cmath>
@@ -426,7 +426,7 @@ std::unordered_map<std::string, int> strToScancode{
 #undef m
 #define m(ctrl) {#ctrl, SDL_CONTROLLER_BUTTON_##ctrl}
 
-std::unordered_map<std::string, SDL_GameControllerButton> strToGCButton {
+std::unordered_map<std::string, SDL_GamepadButton> strToGCButton {
     m(A), m(B), m(X), m(Y),
     m(BACK), m(GUIDE), m(START),
     m(LEFTSTICK), m(RIGHTSTICK),
@@ -554,7 +554,7 @@ struct CtrlButtonBinding : public Binding
         return true;
     }
     
-    SDL_GameControllerButton source;
+    SDL_GamepadButton source;
 };
 
 struct CtrlAxisBinding : public Binding
@@ -690,19 +690,19 @@ struct InputPrivate
     ButtonState *statesOld;
     
     // Raw keystates
-    uint8_t rawStateArray[SDL_NUM_SCANCODES*2];
+    uint8_t rawStateArray[SDL_SCANCODE_COUNT*2];
     
     uint8_t *rawStates;
     uint8_t *rawStatesOld;
     
     // Gamepad button states
-    uint8_t rawButtonStateArray[SDL_CONTROLLER_BUTTON_MAX*2];
+    uint8_t rawButtonStateArray[SDL_GAMEPAD_BUTTON_COUNT*2];
     
     uint8_t *rawButtonStates;
     uint8_t *rawButtonStatesOld;
     
     // Gamepad axes & mouse coordinates
-    int16_t axisStateArray[SDL_CONTROLLER_AXIS_MAX];
+    int16_t axisStateArray[SDL_GAMEPAD_AXIS_COUNT];
     int mousePos[2];
     bool mouseInWindow;
     
@@ -770,10 +770,10 @@ struct InputPrivate
         statesOld = stateArray + BUTTON_CODE_COUNT;
         
         rawStates = rawStateArray;
-        rawStatesOld = rawStateArray + SDL_NUM_SCANCODES;
+        rawStatesOld = rawStateArray + SDL_SCANCODE_COUNT;
         
         rawButtonStates = rawButtonStateArray;
-        rawButtonStatesOld = rawButtonStateArray + SDL_CONTROLLER_BUTTON_MAX;
+        rawButtonStatesOld = rawButtonStateArray + SDL_GAMEPAD_BUTTON_COUNT;
         
         /* Clear buffers */
         clearBuffer();
@@ -898,9 +898,9 @@ struct InputPrivate
         const size_t size = sizeof(ButtonState) * BUTTON_CODE_COUNT;
         memset(states, 0, size);
         
-        memset(rawStates, 0, SDL_NUM_SCANCODES);
+        memset(rawStates, 0, SDL_SCANCODE_COUNT);
         
-        memset(rawButtonStates, 0, SDL_CONTROLLER_BUTTON_MAX);
+        memset(rawButtonStates, 0, SDL_GAMEPAD_BUTTON_COUNT);
     }
     
     void checkBindingChange(const RGSSThreadData &rtData)
@@ -929,7 +929,7 @@ struct InputPrivate
         for (size_t i = 0; i < d.size(); ++i)
         {
             const BindingDesc &desc = d[i];
-            const SourceDesc &src = desc.src;
+            const SourceDesc src = desc.src;
             
             if (desc.target == Input::None)
                 continue;
@@ -1057,9 +1057,9 @@ struct InputPrivate
     void updateRaw()
     {
         
-        memcpy(rawStates, shState->eThread().keyStates, SDL_NUM_SCANCODES);
+        memcpy(rawStates, shState->eThread().keyStates, SDL_SCANCODE_COUNT);
         
-        for (int i = 0; i < SDL_NUM_SCANCODES; i++)
+        for (int i = 0; i < SDL_SCANCODE_COUNT; i++)
         {
             if (rawStates[i] && rawStatesOld[i])
             {
@@ -1084,12 +1084,12 @@ struct InputPrivate
     
     void updateControllerRaw()
     {
-        for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++)
+        for (int i = 0; i < SDL_GAMEPAD_AXIS_COUNT; i++)
             axisStateArray[i] = shState->eThread().controllerState.axes[i];
         
-        memcpy(rawButtonStates, shState->eThread().controllerState.buttons, SDL_CONTROLLER_BUTTON_MAX);
+        memcpy(rawButtonStates, shState->eThread().controllerState.buttons, SDL_GAMEPAD_BUTTON_COUNT);
         
-        for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+        for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT; i++)
         {
             if (rawButtonStates[i] && rawButtonStatesOld[i])
             {
@@ -1228,7 +1228,7 @@ void Input::update()
     p->mouseInWindow = shState->eThread().mouseState.inWindow;
     
     /* Fetch new cumulative scroll distance and reset counter */
-    p->vScrollDistance = SDL_AtomicSet(&EventThread::verticalScrollDistance, 0);
+    p->vScrollDistance = SDL_SetAtomicInt(&EventThread::verticalScrollDistance, 0);
     
     /* Check for new repeating key */
     if (repeatCand != None && repeatCand != p->repeating)
@@ -1422,7 +1422,7 @@ unsigned int Input::rawAxesLength() {
     return sizeof(p->axisStateArray) / sizeof(int16_t);
 }
 
-short Input::getControllerAxisValue(SDL_GameControllerAxis axis) {
+short Input::getControllerAxisValue(SDL_GamepadAxis axis) {
     if (axis < 0 || (uint32_t)axis >= rawAxesLength())
         return 0;
     
@@ -1484,22 +1484,22 @@ bool Input::getControllerConnected()
 const char *Input::getControllerName()
 {
     return (getControllerConnected()) ?
-    SDL_GameControllerName(shState->eThread().controller()) :
+    SDL_GetGamepadName(shState->eThread().controller()) :
     0;
 }
 
 int Input::getControllerPowerLevel()
 {
     if (!getControllerConnected())
-        return SDL_JOYSTICK_POWER_UNKNOWN;
+        return SDL_POWERSTATE_UNKNOWN;
     
-    SDL_Joystick *js = SDL_GameControllerGetJoystick(shState->eThread().controller());
-    return SDL_JoystickCurrentPowerLevel(js);
+    SDL_Joystick *js = SDL_GetGamepadJoystick(shState->eThread().controller());
+    return SDL_GetJoystickPowerInfo(js, nullptr);
 }
 
 bool Input::getTextInputMode()
 {
-    return (SDL_IsTextInputActive() == SDL_TRUE);
+    return (SDL_TextInputActive(shState->sdlWindow()) == true);
 }
 
 void Input::setTextInputMode(bool mode)
@@ -1527,19 +1527,19 @@ char *Input::getClipboardText()
 
 void Input::setClipboardText(char *text)
 {
-    if (SDL_SetClipboardText(text) < 0)
+    if (!SDL_SetClipboardText(text))
         throw Exception(Exception::SDLError, "Failed to set clipboard text: %s", SDL_GetError());
 }
 
-const char *Input::getAxisName(SDL_GameControllerAxis axis) {
-    if (axis < 0 || axis >= SDL_CONTROLLER_AXIS_MAX)
+const char *Input::getAxisName(SDL_GamepadAxis axis) {
+    if (axis < 0 || axis >= SDL_GAMEPAD_AXIS_COUNT)
         return "Invalid";
     
     return axisNames[axis];
 }
 
-const char *Input::getButtonName(SDL_GameControllerButton button) {
-    if (button < 0 || button >= SDL_CONTROLLER_BUTTON_MAX)
+const char *Input::getButtonName(SDL_GamepadButton button) {
+    if (button < 0 || button >= SDL_GAMEPAD_BUTTON_COUNT)
         return "Invalid";
     
     return buttonNames[button];

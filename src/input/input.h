@@ -23,13 +23,13 @@
 #define INPUT_H
 
 #include <unordered_map>
-#include <SDL_gamecontroller.h>
+#include <SDL3/SDL_gamepad.h>
 #include <string>
 #include <vector>
 
 extern std::unordered_map<int, int> vKeyToScancode;
 extern std::unordered_map<std::string, int> strToScancode;
-extern std::unordered_map<std::string, SDL_GameControllerButton> strToGCButton;
+extern std::unordered_map<std::string, SDL_GamepadButton> strToGCButton;
 
 struct InputPrivate;
 struct RGSSThreadData;
@@ -91,7 +91,7 @@ public:
     int16_t *rawAxes();
     unsigned int rawAxesLength();
     
-    short getControllerAxisValue(SDL_GameControllerAxis axis);
+    short getControllerAxisValue(SDL_GamepadAxis axis);
 
 	int dir4Value();
 	int dir8Value();
@@ -113,8 +113,8 @@ public:
     char *getClipboardText();
     void setClipboardText(char *text);
     
-    const char *getAxisName(SDL_GameControllerAxis axis);
-    const char *getButtonName(SDL_GameControllerButton button);
+    const char *getAxisName(SDL_GamepadAxis axis);
+    const char *getButtonName(SDL_GamepadButton button);
 
 private:
 	Input(const RGSSThreadData &rtData);

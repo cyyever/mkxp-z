@@ -25,7 +25,7 @@
 #include <al.h>
 #include <alext.h>
 
-#include <SDL_audio.h>
+#include <SDL3/SDL_audio.h>
 #include <assert.h>
 #include <cmath>
 
@@ -227,20 +227,20 @@ inline uint8_t formatSampleSize(int sdlFormat)
 {
 	switch (sdlFormat)
 	{
-	case AUDIO_U8 :
-	case AUDIO_S8 :
+	case SDL_AUDIO_U8 :
+	case SDL_AUDIO_S8 :
 		return 1;
 
 	case AUDIO_U16LSB :
 	case AUDIO_U16MSB :
-	case AUDIO_S16LSB :
-	case AUDIO_S16MSB :
+	case SDL_AUDIO_S16LE :
+	case SDL_AUDIO_S16BE :
 		return 2;
 
-    case AUDIO_S32LSB :
-    case AUDIO_S32MSB :
-    case AUDIO_F32LSB :
-    case AUDIO_F32MSB :
+    case SDL_AUDIO_S32LE :
+    case SDL_AUDIO_S32BE :
+    case SDL_AUDIO_F32LE :
+    case SDL_AUDIO_F32BE :
         return 4;
 
 	default :

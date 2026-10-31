@@ -1,0 +1,11 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -44,7 +44,7 @@
+     add_compile_options(-xldscope=hidden)
+ endif()
+ 
+-find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
++add_library(SDL3::Headers INTERFACE IMPORTED)
+ 
+ # Decoders ...
+ # These are (mostly) on by default now, so these options are only useful for

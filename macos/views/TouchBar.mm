@@ -6,10 +6,10 @@
 //
 
 #import <AppKit/AppKit.h>
-#import <SDL_syswm.h>
-#import <SDL_events.h>
-#import <SDL_timer.h>
-#import <SDL_scancode.h>
+#import <SDL3/SDL.h>
+#import <SDL3/SDL_events.h>
+#import <SDL3/SDL_timer.h>
+#import <SDL3/SDL_scancode.h>
 
 #import "TouchBar.h"
 #import "sharedstate.h"
@@ -149,22 +149,22 @@ MKXPZTouchBar *_sharedTouchBar;
 
 -(void)simulateKeyDown:(SDL_Scancode)scancode {
     SDL_Event e;
-    e.key.type = SDL_KEYDOWN;
+    e.key.type = SDL_EVENT_KEY_DOWN;
     e.key.state = SDL_PRESSED;
     e.key.timestamp = SDL_GetTicks();
-    e.key.keysym.scancode = scancode;
-    e.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+    e.key.scancode = scancode;
+    e.key.key = SDL_GetKeyFromScancode(scancode);
     e.key.windowID = 1;
     SDL_PushEvent(&e);
 }
 
 -(void)simulateKeyUp:(SDL_Scancode)scancode {
     SDL_Event e;
-    e.key.type = SDL_KEYUP;
+    e.key.type = SDL_EVENT_KEY_UP;
     e.key.state = SDL_RELEASED;
     e.key.timestamp = SDL_GetTicks();
-    e.key.keysym.scancode = scancode;
-    e.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+    e.key.scancode = scancode;
+    e.key.key = SDL_GetKeyFromScancode(scancode);
     e.key.windowID = 1;
     SDL_PushEvent(&e);
 }
@@ -176,12 +176,12 @@ MKXPZTouchBar *_sharedTouchBar;
 @end
 
 void initTouchBar(SDL_Window *win, Config &conf) {
-    SDL_SysWMinfo windowinfo{};
-    SDL_GetWindowWMInfo(win, &windowinfo);
+    NSWindow *nativeWindow = (__bridge NSWindow *)SDL_GetPointerProperty(
+            SDL_GetWindowProperties(win), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr);
     
     MKXPZTouchBar *tb = MKXPZTouchBar.sharedTouchBar;
-    windowinfo.info.cocoa.window.touchBar = tb;
-    tb.parent = windowinfo.info.cocoa.window;
+    nativeWindow.touchBar = tb;
+    tb.parent = nativeWindow;
     tb.gameTitle = @(conf.game.title.c_str());
     [tb setBarLayoutWithSettingsButton:conf.enableSettings andResetButton:conf.enableReset];
 }

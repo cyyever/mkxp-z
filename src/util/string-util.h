@@ -1,7 +1,7 @@
 #ifndef STRING_UTIL_H
 #define STRING_UTIL_H
 
-#ifndef __APPLE__
+#ifndef SDL_PLATFORM_APPLE
 
 #include <string>
 

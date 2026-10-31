@@ -23,11 +23,11 @@
 
 #include "bitmap.h"
 
-#include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_ttf.h>
-#include <SDL_rect.h>
-#include <SDL_surface.h>
+#include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
+#include <SDL3_ttf/SDL_ttf.h>
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_surface.h>
 
 #include <pixman.h>
 
@@ -235,7 +235,7 @@ struct BitmapPrivate
      * getPixel calls. Is invalidated any time the bitmap
      * is modified */
     SDL_Surface *surface;
-    SDL_PixelFormat *format;
+    const SDL_PixelFormatDetails *format;
     
     /* The 'tainted' area describes which parts of the
      * bitmap are not cleared, ie. don't have 0 opacity.
@@ -270,7 +270,7 @@ struct BitmapPrivate
     assumingRubyGC(false),
     pixmanUseRegion32(false)
     {
-        format = SDL_AllocFormat(SDL_PIXELFORMAT_ABGR8888);
+        format = SDL_GetPixelFormatDetails(SDL_PIXELFORMAT_ABGR8888);
         
         animation.width = 0;
         animation.height = 0;
@@ -291,7 +291,6 @@ struct BitmapPrivate
     ~BitmapPrivate()
     {
         prepareCon.disconnect();
-        SDL_FreeFormat(format);
         if (pixmanUseRegion32)
             pixman_region32_fini(&tainted32);
         else
@@ -311,9 +310,7 @@ struct BitmapPrivate
     
     void allocSurface()
     {
-        surface = SDL_CreateRGBSurface(0, getGLTypes().width, getGLTypes().height, format->BitsPerPixel,
-                                       format->Rmask, format->Gmask,
-                                       format->Bmask, format->Amask);
+        surface = SDL_CreateSurface(getGLTypes().width, getGLTypes().height, SDL_GetPixelFormatForMasks(format->bits_per_pixel, format->Rmask, format->Gmask, format->Bmask, format->Amask));
     }
     
     void clearTaintedArea()
@@ -456,7 +453,7 @@ struct BitmapPrivate
             g = clamp<float>(color.y, 0, 1) * 255.0f;
             b = clamp<float>(color.z, 0, 1) * 255.0f;
             a = clamp<float>(color.w, 0, 1) * 255.0f;
-            SDL_FillRect(megaSurface, &rect, SDL_MapRGBA(format, r, g, b, a));
+            SDL_FillSurfaceRect(megaSurface, &rect, SDL_MapRGBA(format, nullptr, r, g, b, a));
         }
         else
         {
@@ -476,11 +473,11 @@ struct BitmapPrivate
     
     static void ensureFormat(SDL_Surface *&surf, Uint32 format)
     {
-        if (surf->format->format == format)
+        if (SDL_GetPixelFormatDetails(surf->format)->format == format)
             return;
         
-        SDL_Surface *surfConv = SDL_ConvertSurfaceFormat(surf, format, 0);
-        SDL_FreeSurface(surf);
+        SDL_Surface *surfConv = SDL_ConvertSurface(surf, format->format);
+        SDL_DestroySurface(surf);
         surf = surfConv;
     }
     
@@ -488,7 +485,7 @@ struct BitmapPrivate
     {
         if (surface && freeSurface)
         {
-            SDL_FreeSurface(surface);
+            SDL_DestroySurface(surface);
             surface = 0;
         }
         
@@ -512,9 +509,9 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
     : surface(0), gif(0), gif_data(0), gif_data_size(0)
     {}
     
-    bool tryRead(SDL_RWops &ops, const char *ext)
+    bool tryRead(SDL_IOStream *ops, const char *ext)
     {
-        if (IMG_isGIF(&ops)) {
+        if (IMG_isGIF(ops)) {
             // Use libnsgif to initialise the gif data
             gif = new gif_animation;
             
@@ -529,11 +526,11 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
             
             gif_create(gif, &gif_bitmap_callbacks);
             
-            gif_data_size = ops.size(&ops);
+            gif_data_size = SDL_GetIOSize(ops);
             
             gif_data = new unsigned char[gif_data_size];
-            ops.seek(&ops, 0, RW_SEEK_SET);
-            ops.read(&ops, gif_data, gif_data_size, 1);
+            SDL_SeekIO(ops, 0, SDL_IO_SEEK_SET);
+            SDL_ReadIO(ops, gif_data, gif_data_size);
             
             int status;
             do {
@@ -557,7 +554,7 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
                 return false;
             }
         } else {
-            surface = IMG_LoadTyped_RW(&ops, 1, ext);
+            surface = IMG_LoadTyped_IO(ops, 1, ext);
         }
         return (surface || gif);
     }
@@ -733,11 +730,7 @@ Bitmap::Bitmap(int width, int height, bool isHires)
     if (width > glState.caps.maxTexSize || height > glState.caps.maxTexSize || (hiresBitmap && hiresBitmap->isMega()))
     {
         p = new BitmapPrivate(this);
-        SDL_Surface *surface = SDL_CreateRGBSurface(0, width, height, p->format->BitsPerPixel,
-                                                    p->format->Rmask,
-                                                    p->format->Gmask,
-                                                    p->format->Bmask,
-                                                    p->format->Amask);
+        SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
         if (!surface)
             throw Exception(Exception::SDLError, "Error creating Bitmap: %s",
                             SDL_GetError());
@@ -774,17 +767,13 @@ Bitmap::Bitmap(int width, int height, bool isHires)
 
 Bitmap::Bitmap(void *pixeldata, int width, int height)
 {
-    SDL_Surface *surface = SDL_CreateRGBSurface(0, width, height, p->format->BitsPerPixel,
-                                                p->format->Rmask,
-                                                p->format->Gmask,
-                                                p->format->Bmask,
-                                                p->format->Amask);
+    SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
     
     if (!surface)
         throw Exception(Exception::SDLError, "Error creating Bitmap: %s",
                         SDL_GetError());
     
-    memcpy(surface->pixels, pixeldata, width*height*(p->format->BitsPerPixel/8));
+    memcpy(surface->pixels, pixeldata, width*height*(p->format->bits_per_pixel/8));
     
     if (surface->w > glState.caps.maxTexSize || surface->h > glState.caps.maxTexSize)
     {
@@ -802,7 +791,7 @@ Bitmap::Bitmap(void *pixeldata, int width, int height)
         }
         catch (const Exception &e)
         {
-            SDL_FreeSurface(surface);
+            SDL_DestroySurface(surface);
             throw e;
         }
         
@@ -812,7 +801,7 @@ Bitmap::Bitmap(void *pixeldata, int width, int height)
         TEX::bind(p->gl.tex);
         TEX::uploadImage(p->gl.width, p->gl.height, surface->pixels, GL_RGBA);
         
-        SDL_FreeSurface(surface);
+        SDL_DestroySurface(surface);
     }
     
     if (width > INT16_MAX || height > INT16_MAX)
@@ -838,7 +827,7 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
 
     if (other.isMega())
     {
-        p->megaSurface = SDL_ConvertSurfaceFormat(other.p->megaSurface, p->format->format, 0);
+        p->megaSurface = SDL_ConvertSurface(other.p->megaSurface, p->format->format);
     }
     // TODO: Clean me up
     else if (!other.isAnimated() || frame >= -1) {
@@ -989,7 +978,7 @@ void Bitmap::initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool for
         {
             if (hiresBitmap)
                 delete hiresBitmap;
-            SDL_FreeSurface(imgSurf);
+            SDL_DestroySurface(imgSurf);
             throw e;
         }
         
@@ -1003,7 +992,7 @@ void Bitmap::initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool for
         TEX::bind(p->gl.tex);
         TEX::uploadImage(p->gl.width, p->gl.height, imgSurf->pixels, GL_RGBA);
         
-        SDL_FreeSurface(imgSurf);
+        SDL_DestroySurface(imgSurf);
     }
     
     if (width() > INT16_MAX || height() > INT16_MAX)
@@ -1143,7 +1132,7 @@ void Bitmap::childUpdate()
     
     IntRect viewportRect(0, 0, shState->graphics().width(), shState->graphics().height());
     
-    if (!SDL_IntersectRect(&viewportRect, pChild->shared.sceneRect, &viewportRect))
+    if (!SDL_GetRectIntersection(&viewportRect, pChild->shared.sceneRect, &viewportRect))
     {
         pChild->shared.zoom.x = pChild->shared.realZoom.x;
         pChild->shared.zoom.y = pChild->shared.realZoom.y;
@@ -1158,7 +1147,7 @@ void Bitmap::childUpdate()
         IntRect window(pChild->shared.x + viewportRect.x - pChild->shared.sceneOrig->x,
                        pChild->shared.y + viewportRect.y - pChild->shared.sceneOrig->y,
                        pChild->shared.width, pChild->shared.height);
-        if (!SDL_IntersectRect(&viewportRect, &window, &viewportRect))
+        if (!SDL_GetRectIntersection(&viewportRect, &window, &viewportRect))
         {
             pChild->shared.isVisible = false;
             return;
@@ -1286,7 +1275,7 @@ void Bitmap::childUpdate()
         // zeroed out position for the visibleRect but doing this is easier
         IntRect tmpSourceRect(visibleRect.pos() * 2 - Vec2i(realOX, realOY),
                               adjustedSrcRect.size());
-        if (!SDL_HasIntersection(&visibleRect, &tmpSourceRect))
+        if (!SDL_HasRectIntersection(&visibleRect, &tmpSourceRect))
         {
             pChild->shared.isVisible = false;
             return;
@@ -1307,7 +1296,7 @@ void Bitmap::childUpdate()
             tmpRect.y = floor(tmpRect.y) + origin.y;
             tmpSourceRect = tmpRect;
             
-            if (!SDL_HasIntersection(&viewportRect, &tmpSourceRect))
+            if (!SDL_HasRectIntersection(&viewportRect, &tmpSourceRect))
             {
                 pChild->shared.isVisible = false;
                 return;
@@ -1722,9 +1711,9 @@ static void bltFilter(enum Bitmap::BitmapBltMode mode, uint32_t &dst_pixel, uint
     }
 }
 
-static uint32_t &getPixelAt(SDL_Surface *surf, SDL_PixelFormat *form, int x, int y)
+static uint32_t &getPixelAt(SDL_Surface *surf, const SDL_PixelFormatDetails *form, int x, int y)
 {
-    size_t offset = x*form->BytesPerPixel + y*surf->pitch;
+    size_t offset = x*form->bytes_per_pixel + y*surf->pitch;
     uint8_t *bytes = (uint8_t*) surf->pixels + offset;
     
     return *((uint32_t*) bytes);
@@ -1800,9 +1789,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         if (destRect.w < 0 || destRect.h < 0)
         {
             // SDL can't handle negative dimensions when blitting, so we have to do it manually
-            blitTemp = SDL_CreateRGBSurface(0, sourceRect.w, sourceRect.h, p->format->BitsPerPixel,
-                                                        p->format->Rmask, p->format->Gmask,
-                                                        p->format->Bmask, p->format->Amask);
+            blitTemp = SDL_CreateSurface(sourceRect.w, sourceRect.h, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
             
             bool flipW = destRect.w < 0;
             bool flipH = destRect.y < 0;
@@ -1835,7 +1822,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         if(scaleIsOne)
             SDL_BlitSurface(srcSurf, &sourceRect, p->megaSurface, &destRect);
         else
-            SDL_BlitScaled(srcSurf, &sourceRect, p->megaSurface, &destRect);
+            SDL_BlitSurfaceScaled(srcSurf, &sourceRect, p->megaSurface, &destRect);
         
         SDL_SetSurfaceBlendMode(srcSurf, SDL_BLENDMODE_NONE);
         SDL_SetSurfaceAlphaMod(srcSurf, tempAlpha);
@@ -1843,7 +1830,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         // Delete the source surface if the source is an animation
         if (source.p->animation.enabled && source.p->surface)
         {
-            SDL_FreeSurface(source.p->surface);
+            SDL_DestroySurface(source.p->surface);
             source.p->surface = 0;
         }
     }
@@ -1876,9 +1863,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                 {
                     /* We have to resize it here anyway, so use software resizing */
                     blitTemp =
-                        SDL_CreateRGBSurface(0, abs(destRect.w), abs(destRect.h), p->format->BitsPerPixel,
-                                             p->format->Rmask, p->format->Gmask,
-                                             p->format->Bmask, p->format->Amask);
+                        SDL_CreateSurface(abs(destRect.w), abs(destRect.h), SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
                     if (!blitTemp)
                         throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s",
                                         SDL_GetError());
@@ -1928,7 +1913,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                         if (mode == NORMAL)
                         {
                             SDL_Rect tmpRect = {0, 0, blitTemp->w, blitTemp->h};
-                            error = SDL_LowerBlitScaled(srcSurf, &srcRect, blitTemp, &tmpRect);
+                            error = SDL_BlitSurfaceUncheckedScaled(srcSurf, &srcRect, blitTemp, &tmpRect);
                         }
                         else
                         {
@@ -1949,20 +1934,18 @@ void Bitmap::stretchBlt(IntRect destRect,
                 {
                     /* Just crop it, let the shader resize it later */
                     blitTemp =
-                        SDL_CreateRGBSurface(0, sourceRect.w, sourceRect.h, p->format->BitsPerPixel,
-                                             p->format->Rmask, p->format->Gmask,
-                                             p->format->Bmask, p->format->Amask);
+                        SDL_CreateSurface(sourceRect.w, sourceRect.h, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
                     if (!blitTemp)
                         throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s",
                                         SDL_GetError());
                     
                     SDL_Rect tmpRect = {0, 0, blitTemp->w, blitTemp->h};
-                    error = SDL_LowerBlit(srcSurf, &srcRect, blitTemp, &tmpRect);
+                    error = SDL_BlitSurfaceUnchecked(srcSurf, &srcRect, blitTemp, &tmpRect);
                 }
                 
                 if (error)
                 {
-                    SDL_FreeSurface(blitTemp);
+                    SDL_DestroySurface(blitTemp);
                     throw Exception(Exception::SDLError, "Failed to blit surface: %s", SDL_GetError());
                 }
                 
@@ -2120,7 +2103,7 @@ void Bitmap::stretchBlt(IntRect destRect,
     }
     
     if (blitTemp)
-        SDL_FreeSurface(blitTemp);
+        SDL_DestroySurface(blitTemp);
     
     p->addTaintedArea(destRect);
     p->onModified();
@@ -2231,9 +2214,9 @@ void Bitmap::gradientFillRect(const IntRect &rect,
             g = round((c1.green * invProgress) + (c2.green * progress));
             b = round((c1.blue * invProgress) + (c2.blue * progress));
             a = round((c1.alpha * invProgress) + (c2.alpha * progress));
-            Uint32 color = SDL_MapRGBA(p->format, r, g, b, a);
+            Uint32 color = SDL_MapRGBA(p->format, nullptr, r, g, b, a);
             
-            SDL_FillRect(p->megaSurface, &destRect, color);
+            SDL_FillSurfaceRect(p->megaSurface, &destRect, color);
             
             (*current)++;
         }
@@ -2556,7 +2539,7 @@ void Bitmap::clear()
     if (p->megaSurface)
     {
         SDL_Rect fRect = rect();
-        SDL_FillRect(p->megaSurface, &fRect, 0);
+        SDL_FillSurfaceRect(p->megaSurface, &fRect, 0);
     }
     else
     {
@@ -2715,7 +2698,7 @@ void Bitmap::setPixel(int x, int y, const Color &color)
     if (surf)
     {
         uint32_t &surfPixel = getPixelAt(surf, p->format, x, y);
-        surfPixel = SDL_MapRGBA(p->format, pixel[0], pixel[1], pixel[2], pixel[3]);
+        surfPixel = SDL_MapRGBA(p->format, nullptr, pixel[0], pixel[1], pixel[2], pixel[3]);
     }
     
     p->onModified(false);
@@ -2760,7 +2743,7 @@ void Bitmap::replaceRaw(void *pixel_data, int size)
     if (p->megaSurface)
     {
         // This should always be true
-        if (p->megaSurface->format->BitsPerPixel == 32)
+        if (p->SDL_GetPixelFormatDetails(megaSurface->format)->bits_per_pixel == 32)
             memcpy(p->megaSurface->pixels, pixel_data, w*h*4);
     }
     else
@@ -2787,7 +2770,7 @@ void Bitmap::saveToFile(const char *filename)
         surf = (p->surface) ? p->surface : p->megaSurface;
     }
     else {
-        surf = SDL_CreateRGBSurface(0, width(), height(),p->format->BitsPerPixel, p->format->Rmask,p->format->Gmask,p->format->Bmask,p->format->Amask);
+        surf = SDL_CreateSurface(width(), height(), SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
         
         if (!surf)
             throw Exception(Exception::SDLError, "Failed to prepare bitmap for saving: %s", SDL_GetError());
@@ -2828,7 +2811,7 @@ void Bitmap::saveToFile(const char *filename)
     }
     
     if (!p->surface && !p->megaSurface)
-        SDL_FreeSurface(surf);
+        SDL_DestroySurface(surf);
     
     if (rc) throw Exception(Exception::SDLError, "%s", SDL_GetError());
 }
@@ -2949,10 +2932,9 @@ static std::string fixupString(const char *str)
     return s;
 }
 
-static void applyShadow(SDL_Surface *&in, const SDL_PixelFormat &fm, const SDL_Color &c, int offset)
+static void applyShadow(SDL_Surface *&in, const SDL_PixelFormatDetails &fm, const SDL_Color &c, int offset)
 {
-    SDL_Surface *out = SDL_CreateRGBSurface
-    (0, in->w+offset, in->h+offset, fm.BitsPerPixel, fm.Rmask, fm.Gmask, fm.Bmask, fm.Amask);
+    SDL_Surface *out = SDL_CreateSurface(in->w+offset, in->h+offset, SDL_GetPixelFormatForMasks(fm.bits_per_pixel, fm.Rmask, fm.Gmask, fm.Bmask, fm.Amask));
     
     float fr = c.r / 255.0f;
     float fg = c.g / 255.0f;
@@ -3028,11 +3010,11 @@ static void applyShadow(SDL_Surface *&in, const SDL_PixelFormat &fm, const SDL_C
             b = clamp<float>(fb * co3, 0, 1) * 255.0f;
             a = clamp<float>(fa, 0, 1) * 255.0f;
             
-            *outP = SDL_MapRGBA(&fm, r, g, b, a);
+            *outP = SDL_MapRGBA(&fm, nullptr, r, g, b, a);
         }
     
     /* Store new surface in the input pointer */
-    SDL_FreeSurface(in);
+    SDL_DestroySurface(in);
     in = out;
 }
 
@@ -3041,9 +3023,9 @@ static void applyShadow(SDL_Surface *&in, const SDL_PixelFormat &fm, const SDL_C
 static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const SDL_Color &inColor,
                            SDL_Surface *outSrf, const SDL_Rect &outRect, const SDL_Color &outColor, bool hasShadow)
 {
-    size_t offset = (inRect.x * txtSrf->format->BytesPerPixel) + (inRect.y * txtSrf->pitch);
+    size_t offset = (inRect.x * SDL_GetPixelFormatDetails(txtSrf->format)->bytes_per_pixel) + (inRect.y * txtSrf->pitch);
     uint8_t *txtStart = (uint8_t*)txtSrf->pixels + offset;
-    offset = (outRect.x * outSrf->format->BytesPerPixel) + (outRect.y * outSrf->pitch);
+    offset = (outRect.x * SDL_GetPixelFormatDetails(outSrf->format)->bytes_per_pixel) + (outRect.y * outSrf->pitch);
     uint8_t *outStart = (uint8_t*)outSrf->pixels + offset;
     
     // SDL_TTF sets every pixel to the same RGB value and just adjusts the alpha
@@ -3061,8 +3043,8 @@ static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const 
      * I don't know if it can actually happen for non-outline text,
      * but we'll handle it, too, just in case.
      * We don't do it for non-outline text if there's a shadow, because I'm not sure how to do this workaround with shadows. */
-    uint32_t fullTxtPixel = SDL_MapRGBA(outSrf->format, inColor.r, inColor.g, inColor.b, inColor.a);
-    uint32_t fullOutPixel = SDL_MapRGBA(outSrf->format, outColor.r, outColor.g, outColor.b, outColor.a);
+    uint32_t fullTxtPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, inColor.r, inColor.g, inColor.b, inColor.a);
+    uint32_t fullOutPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, outColor.r, outColor.g, outColor.b, outColor.a);
     
     for (int i=0; i < inRect.h; ++i)
     {
@@ -3070,8 +3052,8 @@ static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const 
         uint32_t *outPixel = (uint32_t*)(outStart + i*outSrf->pitch);
         for (int j=0; j < inRect.w; ++j)
         {
-            uint8_t txtA = (*txtPixel >> txtSrf->format->Ashift) & 0xFF;
-            uint8_t outA = (*outPixel >> outSrf->format->Ashift) & 0xFF;
+            uint8_t txtA = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Ashift) & 0xFF;
+            uint8_t outA = (*outPixel >> SDL_GetPixelFormatDetails(outSrf->format)->Ashift) & 0xFF;
             
             if (txtA >= inColor.a)
             {
@@ -3102,9 +3084,9 @@ static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const 
 
                 if (hasShadow)
                 {
-                    txtR = (*txtPixel >> txtSrf->format->Rshift) & 0xFF;
-                    txtG = (*txtPixel >> txtSrf->format->Gshift) & 0xFF;
-                    txtB = (*txtPixel >> txtSrf->format->Bshift) & 0xFF;
+                    txtR = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Rshift) & 0xFF;
+                    txtG = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Gshift) & 0xFF;
+                    txtB = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Bshift) & 0xFF;
                 }
 
                 // Adding a small number to combat floating point errors.
@@ -3115,7 +3097,7 @@ static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const 
                 /* RGSS seems to not round, but our blit shader seemingly does. */
                 a = fa / inColor.a;
                 
-                *outPixel = SDL_MapRGBA(outSrf->format, r, g, b, a);
+                *outPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, r, g, b, a);
             } else if (outA > outColor.a) {
                 /* SDL_ttf blends the glyphs together, which causes overlapping
                  * transparent pixels to get too opaque. */
@@ -3289,9 +3271,9 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
     SDL_Surface *txtSurf;
     
     if (p->font->isSolid())
-        txtSurf = TTF_RenderUTF8_Solid(sdlFont, str, c);
+        txtSurf = TTF_RenderText_Solid(sdlFont, str, 0, c);
     else
-        txtSurf = TTF_RenderUTF8_Blended(sdlFont, str, c);
+        txtSurf = TTF_RenderText_Blended(sdlFont, str, 0, c);
     
     if (!txtSurf)
         throw Exception(Exception::SDLError, "Error creating text: %s",
@@ -3349,16 +3331,16 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
         try {
             sdlOutline = p->font->getSdlFont(scaledOutlineSize);
         } catch (const Exception &e) {
-            SDL_FreeSurface(txtSurf);
+            SDL_DestroySurface(txtSurf);
             throw e;
         }
         if (p->font->isSolid())
-            outline = TTF_RenderUTF8_Solid(sdlOutline, str, co);
+            outline = TTF_RenderText_Solid(sdlOutline, str, 0, co);
         else
-            outline = TTF_RenderUTF8_Blended(sdlOutline, str, co);
+            outline = TTF_RenderText_Blended(sdlOutline, str, 0, co);
         
         if (!outline) {
-            SDL_FreeSurface(txtSurf);
+            SDL_DestroySurface(txtSurf);
             throw Exception(Exception::SDLError, "Error creating text outline: %s",
                             SDL_GetError());
         }
@@ -3384,7 +3366,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
         SDL_Rect outRect = {doubleOutlineSize - outlineCropUndo, doubleOutlineSize - outlineCropUndo, 0, 0};
         
         blendText(txtSurf, inRect, c, outline, outRect, co, p->font->getShadow());
-        SDL_FreeSurface(txtSurf);
+        SDL_DestroySurface(txtSurf);
         txtSurf = outline;
     }
     
@@ -3464,10 +3446,10 @@ IntRect Bitmap::textSize(const char *str)
     std::string fixed = fixupString(str) + " ";
     
     int w, h;
-    TTF_SizeUTF8(sdlFont, fixed.c_str(), &w, &h);
+    TTF_GetStringSize(sdlFont, fixed.c_str(), 0, &w, &h);
     
     int ws;
-    TTF_SizeUTF8(sdlFont, " ", &ws, 0);
+    TTF_GetStringSize(sdlFont, " ", 0, &ws, nullptr);
     w -= ws;
     
     /* If str is one character long, *endPtr == 0 */
@@ -3693,7 +3675,7 @@ int Bitmap::addFrame(Bitmap &source, int position)
         
         if (p->surface)
         {
-            SDL_FreeSurface(p->surface);
+            SDL_DestroySurface(p->surface);
             p->surface = 0;
         }
         p->gl = TEXFBO();
@@ -3702,7 +3684,7 @@ int Bitmap::addFrame(Bitmap &source, int position)
     if (source.surface()) {
         TEX::bind(newframe.tex);
         TEX::uploadImage(source.width(), source.height(), source.surface()->pixels, GL_RGBA);
-        SDL_FreeSurface(p->surface);
+        SDL_DestroySurface(p->surface);
         p->surface = 0;
     }
     else {
@@ -4229,9 +4211,9 @@ void Bitmap::releaseResources()
     }
 
     if (p->megaSurface)
-        SDL_FreeSurface(p->megaSurface);
+        SDL_DestroySurface(p->megaSurface);
     if (p->surface)
-        SDL_FreeSurface(p->surface);
+        SDL_DestroySurface(p->surface);
     else if (p->animation.enabled) {
         p->animation.enabled = false;
         p->animation.playing = false;

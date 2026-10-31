@@ -6,7 +6,7 @@
 //
 
 #import <AppKit/AppKit.h>
-#import <SDL_syswm.h>
+#import <SDL3/SDL.h>
 
 #import <sys/sysctl.h>
 #import "system.h"
@@ -93,17 +93,17 @@ std::string systemImpl::selectPath(SDL_Window *win, const char *msg, const char 
         if (prompt) panel.prompt = @(prompt);
         //panel.directoryURL = [NSURL fileURLWithPath:NSFileManager.defaultManager.currentDirectoryPath];
 
-        SDL_SysWMinfo windowinfo{};
-        SDL_GetWindowWMInfo(win, &windowinfo);
+        NSWindow *nativeWindow = (__bridge NSWindow *)SDL_GetPointerProperty(
+            SDL_GetWindowProperties(win), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr);
 
-        [panel beginSheetModalForWindow:windowinfo.info.cocoa.window completionHandler:^(NSModalResponse res){
+        [panel beginSheetModalForWindow:nativeWindow completionHandler:^(NSModalResponse res){
             [NSApp stopModalWithCode:res];
         }];
 
-        [NSApp runModalForWindow:windowinfo.info.cocoa.window];
+        [NSApp runModalForWindow:nativeWindow];
 
         // The window needs to be brought to the front again after the OpenPanel closes
-        [windowinfo.info.cocoa.window makeKeyAndOrderFront:nil];
+        [nativeWindow makeKeyAndOrderFront:nil];
         if (panel.URLs.count > 0)
             return std::string(NSTOPATH(panel.URLs[0].path));
 

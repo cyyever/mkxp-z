@@ -15,9 +15,9 @@
 #import <GameController/GameController.h>
 #include <Availability.h>
 
-#import <SDL_scancode.h>
-#import <SDL_keyboard.h>
-#import <SDL_video.h>
+#import <SDL3/SDL_scancode.h>
+#import <SDL3/SDL_keyboard.h>
+#import <SDL3/SDL_video.h>
 
 #import "sdl_codes.h"
 
@@ -199,54 +199,54 @@ s.d.ca.dir = (axis.value >= 0) ? AxisDir::Positive : AxisDir::Negative;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunguarded-availability-new"
     checkButtonStart
-    checkButton(A, SDL_CONTROLLER_BUTTON_A, 12)
-    checkButton(B, SDL_CONTROLLER_BUTTON_B, 12)
-    checkButton(X, SDL_CONTROLLER_BUTTON_X, 12)
-    checkButton(Y, SDL_CONTROLLER_BUTTON_Y, 12)
-    checkButtonElement(dpad, dpad.up, SDL_CONTROLLER_BUTTON_DPAD_UP, 12)
-    checkButtonElement(dpad, dpad.down, SDL_CONTROLLER_BUTTON_DPAD_DOWN, 12)
-    checkButtonElement(dpad, dpad.left, SDL_CONTROLLER_BUTTON_DPAD_LEFT, 12)
-    checkButtonElement(dpad, dpad.right, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, 12)
-    checkButtonAlt(leftShoulder, SDL_CONTROLLER_BUTTON_LEFTSHOULDER, 12)
-    checkButtonAlt(rightShoulder, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, 12)
+    checkButton(A, SDL_GAMEPAD_BUTTON_SOUTH, 12)
+    checkButton(B, SDL_GAMEPAD_BUTTON_EAST, 12)
+    checkButton(X, SDL_GAMEPAD_BUTTON_WEST, 12)
+    checkButton(Y, SDL_GAMEPAD_BUTTON_NORTH, 12)
+    checkButtonElement(dpad, dpad.up, SDL_GAMEPAD_BUTTON_DPAD_UP, 12)
+    checkButtonElement(dpad, dpad.down, SDL_GAMEPAD_BUTTON_DPAD_DOWN, 12)
+    checkButtonElement(dpad, dpad.left, SDL_GAMEPAD_BUTTON_DPAD_LEFT, 12)
+    checkButtonElement(dpad, dpad.right, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, 12)
+    checkButtonAlt(leftShoulder, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, 12)
+    checkButtonAlt(rightShoulder, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, 12)
 
 #if defined(__MAC_10_14_1) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_14_1
     // Requires macOS 10.14.1+
-    checkButtonAlt(leftThumbstickButton, SDL_CONTROLLER_BUTTON_LEFTSTICK, 14)
-    checkButtonAlt(rightThumbstickButton, SDL_CONTROLLER_BUTTON_RIGHTSTICK, 14)
+    checkButtonAlt(leftThumbstickButton, SDL_GAMEPAD_BUTTON_LEFT_STICK, 14)
+    checkButtonAlt(rightThumbstickButton, SDL_GAMEPAD_BUTTON_RIGHT_STICK, 14)
 #else
 #warning "This SDK doesn't support the detection of thumbstick buttons. You will not be able to rebind them from the menu on 10.14.1 or higher."
 #endif
 
 #if defined(__MAC_10_15) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_15
     // Requires macOS 10.15+
-    checkButton(Menu, SDL_CONTROLLER_BUTTON_START, 15)
-    checkButton(Options, SDL_CONTROLLER_BUTTON_BACK, 15)
+    checkButton(Menu, SDL_GAMEPAD_BUTTON_START, 15)
+    checkButton(Options, SDL_GAMEPAD_BUTTON_BACK, 15)
 #else
 #warning "This SDK doesn't support the detection of Start and Back buttons. You will not be able to rebind them from the menu on 10.15 or higher."
 #endif
     
 #if defined(__MAC_11_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_11_0
     // Requires macOS 11.0+
-    checkButton(Home, SDL_CONTROLLER_BUTTON_GUIDE, 16)
+    checkButton(Home, SDL_GAMEPAD_BUTTON_GUIDE, 16)
 #else
 #warning "This SDK doesn't support the detection of the Guide button. You will not be able to rebind it from the menu on 11.0 or higher."
 #endif
     
-    checkAxis(leftThumbstick, xAxis, SDL_CONTROLLER_AXIS_LEFTX)
-    checkAxis(leftThumbstick, yAxis, SDL_CONTROLLER_AXIS_LEFTY)
-    checkAxis(rightThumbstick, xAxis, SDL_CONTROLLER_AXIS_RIGHTX)
-    checkAxis(rightThumbstick, yAxis, SDL_CONTROLLER_AXIS_RIGHTY)
+    checkAxis(leftThumbstick, xAxis, SDL_GAMEPAD_AXIS_LEFTX)
+    checkAxis(leftThumbstick, yAxis, SDL_GAMEPAD_AXIS_LEFTY)
+    checkAxis(rightThumbstick, xAxis, SDL_GAMEPAD_AXIS_RIGHTX)
+    checkAxis(rightThumbstick, yAxis, SDL_GAMEPAD_AXIS_RIGHTY)
     
     else if (element == gamepad.leftTrigger && (gamepad.leftTrigger.value >= 0.5 || gamepad.leftTrigger.value <= -0.5)) {
         s.type = CAxis;
-        s.d.ca.axis = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+        s.d.ca.axis = SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
         s.d.ca.dir = AxisDir::Positive;
     }
     
     else if (element == gamepad.rightTrigger && (gamepad.rightTrigger.value >= 0.5 || gamepad.rightTrigger.value <= -0.5)) {
         s.type = CAxis;
-        s.d.ca.axis = SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+        s.d.ca.axis = SDL_GAMEPAD_AXIS_RIGHT_TRIGGER;
         s.d.ca.dir = AxisDir::Positive;
     }
     

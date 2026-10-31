@@ -209,8 +209,8 @@ createShadowSet()
 	int bpp;
 	Uint32 rm, gm, bm, am;
 
-	SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888, &bpp, &rm, &gm, &bm, &am);
-	SDL_Surface *surf = SDL_CreateRGBSurface(0, 1*32, 16*32, bpp, rm, gm, bm, am);
+	SDL_GetMasksForPixelFormat(SDL_PIXELFORMAT_ABGR8888, &bpp, &rm, &gm, &bm, &am);
+	SDL_Surface *surf = SDL_CreateSurface(1*32, 16*32, SDL_GetPixelFormatForMasks(bpp, rm, gm, bm, am));
 
 	std::vector<SDL_Rect> rects;
 	SDL_Rect rect = { 0, 0, 16, 16 };
@@ -254,19 +254,19 @@ createShadowSet()
 
 	/* Fill rects with half opacity black */
 	uint32_t color = (0x80808080 & am);
-	SDL_FillRects(surf, rects.data(), rects.size(), color);
+	SDL_FillSurfaceRects(surf, rects.data(), rects.size(), color);
 
 	return surf;
 }
 
-static void doBlit(Bitmap *bm, const IntRect &src, const Vec2i &dst)
+static void doBlit(Bitmap *bm, const IntRect src, const Vec2i &dst)
 {
 	/* Translate tile to pixel units */
 	IntRect _src(src.x*32, src.y*32, src.w*32, src.h*32);
 	Vec2i _dst(dst.x*32, dst.y*32);
 	IntRect bmr(0, 0, bm->width(), bm->height());
 
-	if (!SDL_IntersectRect(&_src, &bmr, &_src))
+	if (!SDL_GetRectIntersection(&_src, &bmr, &_src))
 		return;
 
 	GLMeta::blitRectangle(_src, _dst);
@@ -294,12 +294,12 @@ void build(TEXFBO &tf, Bitmap *bitmaps[BM_COUNT])
 
 			int bpp;
 			Uint32 rMask, gMask, bMask, aMask;
-			SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888,
+			SDL_GetMasksForPixelFormat(SDL_PIXELFORMAT_ABGR8888,
 			                           &bpp, &rMask, &gMask, &bMask, &aMask);
 			SDL_Surface *blitTemp =
-				SDL_CreateRGBSurface(0, destWidth, destHeight, bpp, rMask, gMask, bMask, aMask);
+				SDL_CreateSurface(destWidth, destHeight, SDL_GetPixelFormatForMasks(bpp, rMask, gMask, bMask, aMask));
 
-			SDL_BlitScaled(shadow, &srcRect, blitTemp, 0);
+			SDL_BlitSurfaceScaled(shadow, &srcRect, blitTemp, 0);
 
 			TEX::bind(tf.selfHires->tex);
 			TEX::uploadSubImage(destX, destY,
@@ -310,7 +310,7 @@ void build(TEXFBO &tf, Bitmap *bitmaps[BM_COUNT])
 			TEX::uploadSubImage(shadowArea.x*32, shadowArea.y*32,
 				shadow->w, shadow->h, shadow->pixels, GL_RGBA);
 		}
-		SDL_FreeSurface(shadow);
+		SDL_DestroySurface(shadow);
 	}
 
 	Bitmap *bm;
@@ -321,7 +321,7 @@ void build(TEXFBO &tf, Bitmap *bitmaps[BM_COUNT])
 		GLMeta::blitSource(bm->getGLTypes()); \
 		for (size_t i = 0; i < blits##part##N; ++i) \
 		{\
-			const IntRect &src = blits##part[i].src; \
+			const IntRect src = blits##part[i].src; \
 			const Vec2i &dst = blits##part[i].dst; \
 			doBlit(bm, src, dst); \
 		} \

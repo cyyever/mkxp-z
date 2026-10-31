@@ -38,7 +38,8 @@
 #include <array>
 #include <unordered_map>
 
-#include <SDL_ttf.h>
+#include <SDL3_ttf/SDL_ttf.h>
+#include <memory>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -66,13 +67,36 @@
 #define BNDL_F_D(f) BUNDLED_FONT_D(f)
 #define BNDL_F_L(f) BUNDLED_FONT_L(f)
 
-/* Dirty hack to get the FT_Face.
- * SDL_ttf will probably never move it from the beginning of the struct. */
-#define TTF_FONT_TO_FT_FACE(font) (*reinterpret_cast<FT_Face *>(font))
+// SDL_ttf's font handle is opaque. Read metrics through an independent
+// FreeType face backed by the same bytes, without relying on its struct layout.
+struct FontMetrics {
+    FT_Library library = nullptr;
+    FT_Face face = nullptr;
+    std::unique_ptr<void, decltype(&SDL_free)> data{nullptr, SDL_free};
+    ~FontMetrics() {
+        if (face) FT_Done_Face(face);
+        if (library) FT_Done_FreeType(library);
+    }
+};
 
-static SDL_RWops *openBundledFont()
+static std::unique_ptr<FontMetrics> loadFontMetrics(SDL_IOStream *stream) {
+    auto metrics = std::make_unique<FontMetrics>();
+    const Sint64 offset = SDL_TellIO(stream);
+    if (offset < 0)
+        return nullptr;
+    size_t size = 0;
+    metrics->data.reset(SDL_LoadFile_IO(stream, &size, false));
+    const bool restored = SDL_SeekIO(stream, offset, SDL_IO_SEEK_SET) >= 0;
+    if (!metrics->data || !restored || FT_Init_FreeType(&metrics->library) ||
+        FT_New_Memory_Face(metrics->library,
+            static_cast<const FT_Byte *>(metrics->data.get()), size, 0, &metrics->face))
+        return nullptr;
+    return metrics;
+}
+
+static SDL_IOStream *openBundledFont()
 {
-    return SDL_RWFromConstMem(BNDL_F_D(BUNDLED_FONT), BNDL_F_L(BUNDLED_FONT));
+    return SDL_IOFromConstMem(BNDL_F_D(BUNDLED_FONT), BNDL_F_L(BUNDLED_FONT));
 }
 
 
@@ -192,16 +216,15 @@ static std::string decodeSfntName(const FT_SfntName &aname)
 	return str;
 }
 
-void SharedFontState::initFontSetCB(SDL_RWops &ops,
+void SharedFontState::initFontSetCB(SDL_IOStream *ops,
                                     const std::string &filename)
 {
-	TTF_Font *font = TTF_OpenFontRW(&ops, 0, 0);
-
-	if (!font)
-		return;
-
-	std::string family = TTF_FontFaceFamilyName(font);
-	std::string style = TTF_FontFaceStyleName(font);
+	auto metrics = loadFontMetrics(ops);
+    if (!metrics)
+        return;
+    FT_Face face = metrics->face;
+    std::string family = face->family_name ? face->family_name : "";
+    std::string style = face->style_name ? face->style_name : "";
 
 	std::transform(family.begin(), family.end(), family.begin(),
 		[](unsigned char c){ return std::tolower(c); });
@@ -213,7 +236,6 @@ void SharedFontState::initFontSetCB(SDL_RWops &ops,
 	else if (style != "Regular" && set.other.empty())
 		set.other = filename;
 
-	FT_Face face = TTF_FONT_TO_FT_FACE(font);
 
 	if (FT_IS_SFNT(face))
 	{
@@ -259,7 +281,6 @@ void SharedFontState::initFontSetCB(SDL_RWops &ops,
 		}
 	}
 
-	TTF_CloseFont(font);
 }
 
 // https://github.com/wine-mirror/wine/blob/dc34fef45d491516fa8eaee45b2ae40faa7b0bfe/dlls/win32u/freetype.c
@@ -270,7 +291,7 @@ void SharedFontState::initFontSetCB(SDL_RWops &ops,
 /* We're not currently using yMax and yMin for anything,
  * but it could be useful later. */
 typedef struct {
-	TTF_Font *font;
+	FT_Face face;
 	int ppem;
 	short yMax;
 	short yMin;
@@ -302,7 +323,7 @@ typedef struct {
 static unsigned int freetype_get_font_data( Font_Container *font, uint32_t table,
                                             unsigned int offset, void *buf, unsigned int cbData)
 {
-	FT_Face ft_face = *(reinterpret_cast<FT_Face *>( font->font ));
+	FT_Face ft_face = font->face;
 	FT_ULong len;
 	FT_Error err;
 
@@ -454,7 +475,7 @@ static inline USHORT get_fixed_windescent(USHORT windescent)
 
 static int calc_ppem_for_height(Font_Container *font, int height)
 {
-	FT_Face ft_face = *(reinterpret_cast<FT_Face *>( font->font ));
+	FT_Face ft_face = font->face;
 	TT_OS2 *pOS2;
 	TT_HoriHeader *pHori;
 
@@ -563,7 +584,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 	}
 	
 	/* Not in pool; open new handle */
-	SDL_RWops *ops;
+	SDL_IOStream *ops;
 
 	if (family.empty())
 	{
@@ -576,29 +597,33 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 		 * we have no 'regular' styled font asset */
 		const char *path = req->c_str();
 
-		ops = SDL_AllocRW();
 		try{
-			shState->fileSystem().openReadRaw(*ops, path, true);
+			ops = shState->fileSystem().openReadRaw(path);
 		} catch (const Exception &e) {
-			SDL_FreeRW(ops);
 			p->size_to_ppem.erase(key);
 			throw e;
 		}
 	}
 
 	/* Try to compute the size the same way Windows does. */
-	font = TTF_OpenFontRW(ops, 1, 0);
+    auto metrics = loadFontMetrics(ops);
+    if (!metrics) {
+        SDL_CloseIO(ops);
+        p->size_to_ppem.erase(key);
+        throw Exception(Exception::SDLError, "Unable to read font metrics");
+    }
+    font = TTF_OpenFontIO(ops, true, 1.0f);
 
 	if (font)
 	{
-		FT_Face face = TTF_FONT_TO_FT_FACE(font);
+			FT_Face face = metrics->face;
 		/* This is should always be true, but we may as well check... */
 		if (FT_IS_SCALABLE( face ))
 		{
 			if (ppem == 0)
 			{
 				Font_Container c = { 0 };
-				c.font = font;
+				c.face = face;
 				c.ppem = load_VDMX(&c, size);
 				if (!c.ppem)
 					c.ppem = calc_ppem_for_height( &c, size );
@@ -606,7 +631,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 				ppem = std::max<int>(c.ppem * p->fontScale, 1);
 				ppemMult = std::max<int>(ppem * hiresMult, 1);
 			}
-			if (TTF_SetFontSize(font, ppemMult))
+			if (!TTF_SetFontSize(font, ppemMult))
 			{
 				TTF_CloseFont(font);
 				font = 0;
@@ -620,7 +645,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 				ppem = std::max<int>(size * p->fontScale, 5);
 				ppemMult = std::max<int>(ppem * hiresMult, 1);
 			}
-			if (TTF_SetFontSize(font, ppemMult))
+			if (!TTF_SetFontSize(font, ppemMult))
 			{
 				TTF_CloseFont(font);
 				font = 0;
@@ -629,7 +654,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 		if (font)
 		{
 			/* RGSS doesn't use font hinting */
-			TTF_SetFontHinting(font, p->fontHinting);
+			TTF_SetFontHinting(font, static_cast<TTF_HintingFlags>(p->fontHinting));
 		}
 	}
 	
@@ -671,9 +696,9 @@ bool SharedFontState::fontPresent(std::string family) const
 
 MKXPZ_TTF_FONT *SharedFontState::openBundled(int size)
 {
-	SDL_RWops *ops = openBundledFont();
+	SDL_IOStream *ops = openBundledFont();
 
-	return TTF_OpenFontRW(ops, 1, size);
+	return TTF_OpenFontIO(ops, true, size);
 }
 
 void SharedFontState::setDefaultFontFamily(const std::string &family) {
@@ -1003,7 +1028,7 @@ MKXPZ_TTF_FONT *Font::getSdlFont(int outline_size)
 	if (p->italic)
 		style |= TTF_STYLE_ITALIC;
 
-	TTF_SetFontStyle(*font, style);
+	TTF_SetFontStyle(*font, static_cast<TTF_FontStyleFlags>(style));
 
 	return *font;
 }

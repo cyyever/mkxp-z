@@ -29,7 +29,7 @@
 #include "debugwriter.h"
 #include "fluid-fun.h"
 
-#include <SDL_rwops.h>
+#include <SDL3/SDL_iostream.h>
 
 #include <assert.h>
 #include <math.h>
@@ -613,7 +613,7 @@ struct MidiSource : ALDataSource, MidiReadHandler
 	/* MidiReadHandler (track that's currently being read) */
 	int16_t curTrack;
 
-	MidiSource(SDL_RWops &ops,
+	MidiSource(SDL_IOStream *ops,
 	           bool looped)
 	    : freq(SYNTH_SAMPLERATE),
 	      looped(looped),
@@ -622,16 +622,16 @@ struct MidiSource : ALDataSource, MidiReadHandler
 	      genDeltasCarry(0),
 	      curTrack(-1)
 	{
-		size_t dataLen = SDL_RWsize(&ops);
+		size_t dataLen = SDL_GetIOSize(ops);
 		std::vector<uint8_t> data(dataLen);
 
-		if (SDL_RWread(&ops, &data[0], 1, dataLen) < dataLen)
+		if (SDL_ReadIO(ops, &data[0], dataLen) < dataLen)
 		{
-			SDL_RWclose(&ops);
+			SDL_CloseIO(ops);
 			throw Exception(Exception::MKXPError, "Reading midi data failed");
 		}
 
-		SDL_RWclose(&ops);
+		SDL_CloseIO(ops);
 
 		readMidi(this, data);
 
@@ -910,7 +910,7 @@ struct MidiSource : ALDataSource, MidiReadHandler
 	}
 };
 
-ALDataSource *createMidiSource(SDL_RWops &ops,
+ALDataSource *createMidiSource(SDL_IOStream *ops,
                                bool looped)
 {
 	return new MidiSource(ops, looped);

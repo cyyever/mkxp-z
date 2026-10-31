@@ -21,41 +21,32 @@
 
 #include "aldatasource.h"
 #include "exception.h"
+#include "sdl-util.h"
 
-#include <SDL_sound.h>
-
-static int SDL_RWopsCloseNoop(SDL_RWops *ops) {
-	return 0;
-}
+#include <SDL3_sound/SDL_sound.h>
 
 struct SDLSoundSource : ALDataSource
 {
 	Sound_Sample *sample;
-	SDL_RWops srcOps;
-	SDL_RWops unclosableOps;
+	SDL_IOStream *srcOps = nullptr;
 	uint8_t sampleSize;
 	bool looped;
 
 	ALenum alFormat;
 	ALsizei alFreq;
 
-	SDLSoundSource(SDL_RWops &ops,
+	SDLSoundSource(SDL_IOStream *ops,
 	               const char *extension,
 	               uint32_t maxBufSize,
 	               bool looped)
 	    : srcOps(ops),
-	      unclosableOps(ops),
 	      looped(looped)
 	{
-		/* A copy of srcOps with a no-op close function,
-		 * so we can reuse the ops if we need to change the format. */
-		unclosableOps.close = SDL_RWopsCloseNoop;
-		
-		sample = Sound_NewSample(&unclosableOps, extension, 0, maxBufSize);
-		
+        sample = Sound_NewSample(borrowIO(srcOps), extension, nullptr, maxBufSize);
+
 		if (!sample)
 		{
-			SDL_RWclose(&srcOps);
+			SDL_CloseIO(srcOps);
 			throw Exception(Exception::SDLError, "SDL_sound: %s", Sound_GetError());
 		}
 
@@ -65,8 +56,8 @@ struct SDLSoundSource : ALDataSource
 		{
 			// OpenAL Soft doesn't support S32 formats.
 			// https://github.com/kcat/openal-soft/issues/934
-			case AUDIO_S32LSB :
-			case AUDIO_S32MSB :
+			case SDL_AUDIO_S32LE :
+			case SDL_AUDIO_S32BE :
 				validFormat = false;
 		}
 
@@ -77,17 +68,17 @@ struct SDLSoundSource : ALDataSource
 			// So we just have to close the sample (which closes the file too),
 			// and retry with a new desired format.
 			Sound_FreeSample(sample);
-			SDL_RWseek(&unclosableOps, 0, RW_SEEK_SET);
+			SDL_SeekIO(srcOps, 0, SDL_IO_SEEK_SET);
 			
-			Sound_AudioInfo desired;
-			SDL_memset(&desired, '\0', sizeof (Sound_AudioInfo));
-			desired.format = AUDIO_F32SYS;
+			SDL_AudioSpec desired;
+			SDL_memset(&desired, '\0', sizeof (SDL_AudioSpec));
+			desired.format = SDL_AUDIO_F32;
 
-			sample = Sound_NewSample(&unclosableOps, extension, &desired, maxBufSize);
+			sample = Sound_NewSample(borrowIO(srcOps), extension, &desired, maxBufSize);
 
 			if (!sample)
 			{
-				SDL_RWclose(&srcOps);
+				SDL_CloseIO(srcOps);
 				throw Exception(Exception::SDLError, "SDL_sound: %s", Sound_GetError());
 			}
 		}
@@ -95,13 +86,13 @@ struct SDLSoundSource : ALDataSource
 		sampleSize = formatSampleSize(sample->actual.format);
 
 		alFormat = chooseALFormat(sampleSize, sample->actual.channels);
-		alFreq = sample->actual.rate;
+		alFreq = sample->actual.freq;
 	}
 
 	~SDLSoundSource()
 	{
 		Sound_FreeSample(sample);
-		SDL_RWclose(&srcOps);
+		SDL_CloseIO(srcOps);
 	}
 
 	Status fillBuffer(AL::Buffer::ID alBuffer)
@@ -141,7 +132,7 @@ struct SDLSoundSource : ALDataSource
 
 	int sampleRate()
 	{
-		return sample->actual.rate;
+		return sample->actual.freq;
 	}
 
 	void seekToOffset(double seconds)
@@ -170,7 +161,7 @@ struct SDLSoundSource : ALDataSource
 	}
 };
 
-ALDataSource *createSDLSource(SDL_RWops &ops,
+ALDataSource *createSDLSource(SDL_IOStream *ops,
                               const char *extension,
 			                  uint32_t maxBufSize,
 			                  bool looped)

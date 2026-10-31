@@ -26,7 +26,7 @@
 #include "gl-util.h"
 #include "vertex.h"
 
-#include <SDL_surface.h>
+#include <SDL3/SDL_surface.h>
 
 namespace GLMeta
 {
@@ -70,8 +70,8 @@ int smoothScalingMethod(int scaleIsSpecial);
 void blitBegin(TEXFBO &target, bool preferHires = false, int scaleIsOne = 0);
 void blitBeginScreen(const Vec2i &size, int scaleIsOne = 0);
 void blitSource(TEXFBO &source, int scaleIsOne = 0);
-void blitRectangle(const IntRect &src, const Vec2i &dstPos);
-void blitRectangle(const IntRect &src, const IntRect &dst,
+void blitRectangle(const IntRect src, const Vec2i &dstPos);
+void blitRectangle(const IntRect src, const IntRect &dst,
                    bool smooth = false);
 void blitEnd();
 
