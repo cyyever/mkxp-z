@@ -95,7 +95,6 @@ enum
 {
     REQUEST_SETFULLSCREEN = 0,
     REQUEST_WINRESIZE,
-    REQUEST_WINREPOSITION,
     REQUEST_WINRENAME,
     REQUEST_WINCENTER,
     REQUEST_MESSAGEBOX,
@@ -492,11 +491,6 @@ void EventThread::process(RGSSThreadData &rtData)
                         rtData.rqWindowAdjust.clear();
                         break;
                         
-                    case REQUEST_WINREPOSITION :
-                        SDL_SetWindowPosition(win, event.window.data1, event.window.data2);
-                        rtData.rqWindowAdjust.clear();
-                        break;
-                        
                     case REQUEST_WINCENTER :
                         rc = SDL_GetDesktopDisplayMode(SDL_GetWindowDisplayIndex(win), &dm);
                         if (!rc)
@@ -733,16 +727,6 @@ void EventThread::requestWindowResize(int width, int height)
     event.type = usrIdStart + REQUEST_WINRESIZE;
     event.window.data1 = width;
     event.window.data2 = height;
-    SDL_PushEvent(&event);
-}
-
-void EventThread::requestWindowReposition(int x, int y)
-{
-    shState->rtData().rqWindowAdjust.set();
-    SDL_Event event;
-    event.type = usrIdStart + REQUEST_WINREPOSITION;
-    event.window.data1 = x;
-    event.window.data2 = y;
     SDL_PushEvent(&event);
 }
 
