@@ -10,6 +10,7 @@
 #include <assert.h>
 
 #include <stdint.h>
+#include <ranges>
 #include <vector>
 
 #include "util/paths.h"
@@ -44,12 +45,10 @@ void fillStringVec(json::value &item, std::vector<std::string> &vector) {
         }
         return;
     }
-    auto &array = item.as_array();
-    for (size_t i = 0; i < array.size(); i++) {
-        if (!array[i].is_string())
-            continue;
-        
-        vector.push_back(array[i].as_string());
+    for (const auto &value : item.as_array() | std::views::filter([](const auto &value) {
+             return value.is_string();
+         })) {
+        vector.push_back(value.as_string());
     }
 }
 
