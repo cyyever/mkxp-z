@@ -196,7 +196,7 @@ ruby = declare_dependency(
             ]
             : [
                 meson.project_build_root() / 'build' / 'ext' / 'pty' / 'pty.a',
-                meson.project_build_root() / 'build' / 'ext' / 'syslog' / 'syslog.a',
+                meson.project_build_root() / 'build' / 'ext' / 'syslog' / 'syslog_ext.a',
             ],
         meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
         meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
