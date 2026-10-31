@@ -2,6 +2,15 @@ def check(value, message)
   raise message unless value
 end
 
+# MRI installs generated rbconfig.rb in the platform-specific subdirectory.
+# The test's RUBYLIB points at the shared versioned library directory.
+if (runtime_lib = ENV['RUBYLIB'])
+  arch_lib = Dir.glob(File.join(runtime_lib, '*')).find do |path|
+    File.file?(File.join(path, 'rbconfig.rb'))
+  end
+  $LOAD_PATH.unshift(arch_lib) if arch_lib
+end
+
 check(RUBY_VERSION == '4.0.9', "unexpected runtime: #{RUBY_DESCRIPTION}")
 check(verify_native_class, 'native class replacement')
 check(verify_typed_data == 42, 'C++ typed data')
