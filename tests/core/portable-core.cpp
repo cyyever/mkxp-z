@@ -77,7 +77,9 @@ void testFilesystem() {
     const auto unicodeRelative = utf8(u8"\u96e8\u8840\\..\\\u5b58\u6a94");
     check(paths::fromRgss(unicodeRelative).generic_u8string() == u8"\u5b58\u6a94", "Unicode dot normalization");
     const auto native = fs::absolute(paths::fromRgss("a\\..\\file")).lexically_normal().make_preferred();
-    check(native == folder / "file", "absolute native path for SDL/Ruby");
+    // macOS temp paths may use /var while current_path resolves /private/var.
+    check(fs::equivalent(native.parent_path(), folder) && native.filename() == "file",
+          "absolute native path for SDL/Ruby");
 }
 
 void testSerialization() {
