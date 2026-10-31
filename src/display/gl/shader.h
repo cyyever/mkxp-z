@@ -109,10 +109,6 @@ public:
 	SimpleShader();
 	SimpleShader(const ShaderNoConstructTag &);
 
-	void setTexOffsetX(int value);
-
-protected:
-	GLint u_texOffsetX;
 };
 
 class SimpleColorShader : public ShaderBase
