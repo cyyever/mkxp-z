@@ -195,6 +195,15 @@ if not sdl3.found()
         'SDL_TEST_LIBRARY': false,
         'SDL_TESTS': false,
         'SDL_INSTALL': false,
+        # Subsystems the engine never calls. GPU stays for the planned GPU port;
+        # HIDAPI stays because it provides the gamepad drivers.
+        'SDL_CAMERA': false,
+        'SDL_DIALOG': false,
+        'SDL_HAPTIC': false,
+        'SDL_RENDER': false,
+        'SDL_SENSOR': false,
+        'SDL_TRAY': false,
+        'SDL_VULKAN': false,
     })
     sdl3 = cmake.subproject('sdl3', options: sdl3_options).dependency('SDL3-static')
     meson.override_dependency('sdl3', sdl3, static: true)
