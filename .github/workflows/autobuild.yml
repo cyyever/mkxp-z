@@ -22,7 +22,6 @@ jobs:
       matrix:
         include:
           - version: 3.1
-          - version: '4.0'
     env:
       packages: autoconf meson python3
     steps:
@@ -49,11 +48,6 @@ jobs:
               config.read('subprojects/ruby-${{ matrix.version }}.wrap')
               print(config['wrap-file']['directory'])
             PYTHON
-            if [ '${{ matrix.version }}' = '4.0' ]; then
-              autoconf -o configure.regenerated
-              cmp configure configure.regenerated
-              exit
-            fi
             hashes="$(sha256sum -b configure tool/config.guess tool/config.sub)"
             cat <<< "$hashes"
             autoreconf -fi
