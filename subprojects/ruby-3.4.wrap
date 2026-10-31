@@ -4,4 +4,4 @@ source_filename = ruby-3.4.12.tar.gz
 source_hash = 5e5d85ad93b0adcccbad47733680f4892bd0078e3342437f7babce01c1872479
 directory = ruby-3.4.12
 patch_directory = ruby-3.4
-diff_files = ruby-3.4-build.patch, ruby-3.4-rgss.patch
+diff_files = ruby-3.4-build.patch, ruby-3.4-rgss.patch, ruby-3.4-win32-winnt.patch
