@@ -319,18 +319,11 @@ SimpleShader::SimpleShader()
 
 	ShaderBase::init();
 
-	GET_U(texOffsetX);
 }
 
 SimpleShader::SimpleShader(const ShaderNoConstructTag &)
 {
 }
-
-void SimpleShader::setTexOffsetX(int value)
-{
-	gl.Uniform1f(u_texOffsetX, value);
-}
-
 
 SimpleColorShader::SimpleColorShader()
 {
@@ -913,7 +906,6 @@ BicubicShader::BicubicShader() : Lanczos3Shader(ShaderNoConstructTag())
 
 	ShaderBase::init();
 
-	GET_U(texOffsetX);
 	GET_U(sourceSize);
 	GET_U(bc);
 }
@@ -929,7 +921,6 @@ Lanczos3Shader::Lanczos3Shader() : SimpleShader(ShaderNoConstructTag())
 
 	ShaderBase::init();
 
-	GET_U(texOffsetX);
 	GET_U(sourceSize);
 }
 
@@ -950,7 +941,6 @@ XbrzShader::XbrzShader() : Lanczos3Shader(ShaderNoConstructTag())
 
 	ShaderBase::init();
 
-	GET_U(texOffsetX);
 	GET_U(sourceSize);
 	GET_U(targetScale);
 }
