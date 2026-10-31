@@ -34,6 +34,10 @@ libraries = (
 )
 for name in libraries:
     matches = list((root / '.bundle/gems').glob(name + '-[0-9]*'))
+    # Ruby 3.4 still ships some of these libraries in the core tree.
+    if not matches and ((root / 'lib' / (name + '.rb')).is_file()
+                        or (root / 'ext' / name).is_dir()):
+        continue
     if len(matches) != 1:
         raise RuntimeError(f'Expected one bundled source for {name}, got {matches}')
     gem = matches[0]

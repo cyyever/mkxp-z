@@ -1,4 +1,4 @@
-project('ruby-4.0', 'c', 'cpp', meson_version: '>=1.4.0')
+project('ruby-3.4', 'c', 'cpp', meson_version: '>=1.4.0')
 
 find_program('cmp', required: true)
 
@@ -54,7 +54,6 @@ ruby = declare_dependency(
                 '--with-soname=ruby',
                 '--disable-shared',
                 '--disable-yjit',
-                '--disable-zjit',
                 '--disable-install-doc',
                 '--with-out-ext=openssl,readline,dbm,gdbm,-test-',
                 '--with-static-linked-ext',
@@ -231,4 +230,4 @@ miniruby = custom_target(
     build_by_default: true,
 )
 
-meson.override_dependency('ruby-4.0', ruby, static: true)
+meson.override_dependency('ruby-3.4', ruby, static: true)

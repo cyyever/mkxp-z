@@ -7,7 +7,7 @@ foreach name : ['libffi', 'yaml-0.1', 'zlib']
     test_cflags += '-I' + dep.get_variable(pkgconfig: 'includedir')
     test_ldflags += '-L' + dep.get_variable(pkgconfig: 'libdir')
 endforeach
-ruby_project = subproject('ruby-4.0', default_options: {
+ruby_project = subproject('ruby-3.4', default_options: {
     'c_std': c_std,
     'cpp_std': dependency_cpp_std,
     'cflags': run_command(quotetool, test_cflags, check: true).stdout().strip(),
@@ -23,6 +23,6 @@ embedded_ruby = executable(
     override_options: engine_standards,
 )
 test('ruby-rgss', embedded_ruby, args: [files('rgss.rb')], env: {
-    'RUBYLIB': ruby_project.get_variable('ruby_build_dir') / 'dist/lib/ruby/4.0.0',
+    'RUBYLIB': ruby_project.get_variable('ruby_build_dir') / 'dist/lib/ruby/3.4.0',
     'RUBYOPT': '',
 }, timeout: 120)
