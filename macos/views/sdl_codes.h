@@ -8,7 +8,7 @@
 #ifndef sdl_codes_h
 #define sdl_codes_h
 
-#include <SDL_scancode.h>
+#include <SDL3/SDL_scancode.h>
 
 // Stuff straight from SDL to make my life easier.
 

@@ -24,6 +24,7 @@
 #endif
 
 #include "util/paths.h"
+#include <SDL3/SDL_main.h>
 #include <cstdlib>
 
 #include "icon.png.xxd"
@@ -31,10 +32,10 @@
 #include <alc.h>
 #include <alext.h>
 
-#include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_sound.h>
-#include <SDL_ttf.h>
+#include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
+#include <SDL3_sound/SDL_sound.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 #include <cassert>
 #include <cstring>
@@ -53,7 +54,7 @@
 
 #include "system/system.h"
 
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
 #include "resource.h"
 #include <processenv.h>
 #include <winsock2.h>
@@ -72,12 +73,12 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #include "steamshim_child.h"
 #endif
 
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 #include <Availability.h>
 #include "TouchBar.h"
 #endif
 
-#if !defined(__ANDROID__) && !defined(__APPLE__) && !defined(_WIN32)
+#if !defined(__ANDROID__) && !defined(SDL_PLATFORM_APPLE) && !defined(_WIN32)
 #  define MKXPZ_CHECK_FOR_WAYLAND_SUPPORT
 #endif
 
@@ -125,10 +126,10 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
-  threadData->glContext =
-      initGL(threadData->window, threadData->config, threadData);
-  if (!threadData->glContext)
+  if (!SDL_GL_MakeCurrent(threadData->window, threadData->glContext)) {
+    rgssThreadError(threadData, SDL_GetError());
     return 0;
+  }
 
   /* Setup AL context */
   static const ALCint attrs[] = {
@@ -156,7 +157,7 @@ int rgssThreadFun(void *userdata) {
   try {
     SharedState::initInstance(threadData);
   } catch (const Exception &exc) {
-    rgssThreadError(threadData, exc.msg);
+    showInitError(exc.msg);
     alcDestroyContext(alcCtx);
 
     return 0;
@@ -197,36 +198,36 @@ static void showInitError(const std::string &msg) {
 }
 
 static void setupWindowIcon(const Config &conf, SDL_Window *win) {
-  SDL_RWops *iconSrc;
+  SDL_IOStream *iconSrc;
 
   if (conf.iconPath.empty())
-    iconSrc = SDL_RWFromConstMem(mkxp_assets_icon_png, mkxp_assets_icon_png_len);
+    iconSrc = SDL_IOFromConstMem(mkxp_assets_icon_png, mkxp_assets_icon_png_len);
   else
-    iconSrc = SDL_RWFromFile(conf.iconPath.c_str(), "rb");
+    iconSrc = SDL_IOFromFile(conf.iconPath.c_str(), "rb");
 
-  SDL_Surface *iconImg = IMG_Load_RW(iconSrc, SDL_TRUE);
+  SDL_Surface *iconImg = IMG_Load_IO(iconSrc, true);
 
   if (iconImg) {
     SDL_SetWindowIcon(win, iconImg);
-    SDL_FreeSurface(iconImg);
+    SDL_DestroySurface(iconImg);
   }
 }
 
 static SDL_Window *initVideo(const Config &conf) {
-  Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+  SDL_WindowFlags winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
   if (conf.winResizable)
     winFlags |= SDL_WINDOW_RESIZABLE;
   if (conf.fullscreen)
-    winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+    winFlags |= SDL_WINDOW_FULLSCREEN;
 
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
     return nullptr;
   }
 
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, SDL_FALSE) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE | SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, false) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
 
-  SDL_Window *window = SDL_CreateWindow(conf.windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, conf.defScreenW, conf.defScreenH, winFlags);
+  SDL_Window *window = SDL_CreateWindow(conf.windowTitle.c_str(), conf.defScreenW, conf.defScreenH, winFlags);
   if (window == nullptr) {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
   }
@@ -244,11 +245,11 @@ int main(int argc, char *argv[]) {
       SDL_GetHintBoolean(
         SDL_HINT_OPENGL_ES_DRIVER,
 #ifdef MKXPZ_USE_GLES_BY_DEFAULT
-        SDL_TRUE
+        true
 #else
-        SDL_FALSE
+        false
 #endif // MKXPZ_USE_GLES_BY_DEFAULT
-      ) != SDL_FALSE ? "1" : "0"
+      ) != false ? "1" : "0"
     );
 
 #ifndef WORKDIR_CURRENT
@@ -273,7 +274,7 @@ int main(int argc, char *argv[]) {
     if (conf.windowTitle.empty())
       conf.windowTitle = conf.game.title;
 
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
     // Create a debug console in debug mode
     if (conf.winConsole) {
       if (setupWindowsConsole()) {
@@ -288,130 +289,13 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* initialize SDL first */
-    if (SDL_Init(SDL_INIT_GAMECONTROLLER | SDL_INIT_TIMER) < 0) {
+    if (!SDL_Init(SDL_INIT_GAMEPAD)) {
       showInitError(std::string("Error initializing SDL: ") + SDL_GetError());
       return 0;
     }
 
     SDL_Window *win = nullptr;
 
-#ifdef MKXPZ_CHECK_FOR_WAYLAND_SUPPORT
-    {
-      const char *sdl_videodriver = SDL_GetHint(SDL_HINT_VIDEODRIVER);
-      if (sdl_videodriver == nullptr || sdl_videodriver[0] == 0) {
-        /* Select SDL's Wayland video driver if SDL_VIDEODRIVER is unset and Wayland support is available on the user's machine */
-        void *wayland_client = SDL_LoadObject(MKXPZ_WAYLAND_CLIENT_SONAME);
-        void *wayland_cursor = SDL_LoadObject(MKXPZ_WAYLAND_CURSOR_SONAME);
-        void *wayland_egl = SDL_LoadObject(MKXPZ_WAYLAND_EGL_SONAME);
-        void *xkbcommon = SDL_LoadObject(MKXPZ_XKBCOMMON_SONAME);
-        if (
-          wayland_client != nullptr
-            && wayland_cursor != nullptr
-            && wayland_egl != nullptr
-            && xkbcommon != nullptr
-        ) {
-          void *(*_wl_display_connect)(const char *name) = reinterpret_cast<void *(*)(const char *name)>(SDL_LoadFunction(wayland_client, "wl_display_connect"));
-          void (*_wl_display_disconnect)(void *display) = reinterpret_cast<void (*)(void *display)>(SDL_LoadFunction(wayland_client, "wl_display_disconnect"));
-          void *(*_wl_cursor_image_get_buffer)(void *image) = reinterpret_cast<void *(*)(void *image)>(SDL_LoadFunction(wayland_cursor, "wl_cursor_image_get_buffer"));
-          void (*_wl_cursor_theme_destroy)(void *theme) = reinterpret_cast<void (*)(void *theme)>(SDL_LoadFunction(wayland_cursor, "wl_cursor_theme_destroy"));
-          void *(*_wl_cursor_theme_get_cursor)(void *theme, const char *name) = reinterpret_cast<void *(*)(void *theme, const char *name)>(SDL_LoadFunction(wayland_cursor, "wl_cursor_theme_get_cursor"));
-          void *(*_wl_cursor_theme_load)(const char *name, int size, void *shm) = reinterpret_cast<void *(*)(const char *name, int size, void *shm)>(SDL_LoadFunction(wayland_cursor, "wl_cursor_theme_load"));
-          void *(*_wl_egl_window_create)(void *surface, int width, int height) = reinterpret_cast<void *(*)(void *surface, int width, int height)>(SDL_LoadFunction(wayland_egl, "wl_egl_window_create"));
-          void (*_wl_egl_window_destroy)(void *egl_window) = reinterpret_cast<void (*)(void *egl_window)>(SDL_LoadFunction(wayland_egl, "wl_egl_window_destroy"));
-          void (*_wl_egl_window_resize)(void *egl_window, int width, int height, int dx, int dy) = reinterpret_cast<void (*)(void *egl_window, int width, int height, int dx, int dy)>(SDL_LoadFunction(wayland_egl, "wl_egl_window_resize"));
-          void *(*_xkb_context_new)(int flags) = reinterpret_cast<void *(*)(int flags)>(SDL_LoadFunction(xkbcommon, "xkb_context_new"));
-          void (*_xkb_context_unref)(void *context) = reinterpret_cast<void (*)(void *context)>(SDL_LoadFunction(xkbcommon, "xkb_context_unref"));
-          if (
-            _wl_display_connect != nullptr
-              && _wl_display_disconnect != nullptr
-              && _wl_cursor_image_get_buffer != nullptr
-              && _wl_cursor_theme_destroy != nullptr
-              && _wl_cursor_theme_get_cursor != nullptr
-              && _wl_cursor_theme_load != nullptr
-              && _wl_egl_window_create != nullptr
-              && _wl_egl_window_destroy != nullptr
-              && _wl_egl_window_resize != nullptr
-              && _xkb_context_new != nullptr
-              && _xkb_context_unref != nullptr
-          ) {
-            void *display = _wl_display_connect(nullptr);
-            if (display != nullptr) {
-              _wl_display_disconnect(display);
-              SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "wayland", SDL_HINT_OVERRIDE);
-            }
-          }
-        }
-        if (xkbcommon != nullptr) {
-          SDL_UnloadObject(xkbcommon);
-        }
-        if (wayland_cursor != nullptr) {
-          SDL_UnloadObject(wayland_cursor);
-        }
-        if (wayland_client != nullptr) {
-          SDL_UnloadObject(wayland_client);
-        }
-      }
-      sdl_videodriver = SDL_GetHint(SDL_HINT_VIDEODRIVER);
-      if (sdl_videodriver == nullptr || sdl_videodriver[0] == 0) {
-        /* Select SDL's X11 video driver, with fallback to KMSDRM, if SDL_VIDEODRIVER is unset and X11 support is available on the user's machine */
-        void *x11 = SDL_LoadObject(MKXPZ_X11_SONAME);
-        void *xcursor = SDL_LoadObject(MKXPZ_XCURSOR_SONAME);
-        void *xext = SDL_LoadObject(MKXPZ_XEXT_SONAME);
-        void *xfixes = SDL_LoadObject(MKXPZ_XFIXES_SONAME);
-        void *xi = SDL_LoadObject(MKXPZ_XI_SONAME);
-        void *xrandr = SDL_LoadObject(MKXPZ_XRANDR_SONAME);
-        if (
-          x11 != nullptr
-            && xcursor != nullptr
-            && xext != nullptr
-            && xfixes != nullptr
-            && xi != nullptr
-            && xrandr != nullptr
-        ) {
-          SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "x11,kmsdrm", SDL_HINT_OVERRIDE);
-        }
-        if (x11 != nullptr) {
-          SDL_UnloadObject(x11);
-        }
-        if (xcursor != nullptr) {
-          SDL_UnloadObject(xcursor);
-        }
-        if (xext != nullptr) {
-          SDL_UnloadObject(xext);
-        }
-        if (xfixes != nullptr) {
-          SDL_UnloadObject(xfixes);
-        }
-        if (xi != nullptr) {
-          SDL_UnloadObject(xi);
-        }
-        if (xrandr != nullptr) {
-          SDL_UnloadObject(xrandr);
-        }
-      }
-      sdl_videodriver = SDL_GetHint(SDL_HINT_VIDEODRIVER);
-      if (sdl_videodriver == nullptr || sdl_videodriver[0] == 0) {
-        /* Otherwise, use KMSDRM */
-        SDL_SetHintWithPriority(SDL_HINT_VIDEODRIVER, "kmsdrm", SDL_HINT_OVERRIDE);
-      }
-
-      /* Prevent ANGLE from using Wayland if we haven't selected SDL's Wayland video driver */
-      sdl_videodriver = SDL_GetHint(SDL_HINT_VIDEODRIVER);
-      assert(sdl_videodriver != nullptr && sdl_videodriver[0] != 0); /* Should already have been explicitly set by the Wayland check above */
-      if (
-        (sdl_videodriver[0] != 'W' && sdl_videodriver[0] != 'w')
-          || (sdl_videodriver[1] != 'A' && sdl_videodriver[1] != 'a')
-          || (sdl_videodriver[2] != 'Y' && sdl_videodriver[2] != 'y')
-          || (sdl_videodriver[3] != 'L' && sdl_videodriver[3] != 'l')
-          || (sdl_videodriver[4] != 'A' && sdl_videodriver[4] != 'a')
-          || (sdl_videodriver[5] != 'N' && sdl_videodriver[5] != 'n')
-          || (sdl_videodriver[6] != 'D' && sdl_videodriver[6] != 'd')
-          || sdl_videodriver[7] != 0
-      ) {
-        mkxp_setenv("WAYLAND_DISPLAY", nullptr);
-      }
-    }
-#endif // MKXPZ_CHECK_FOR_WAYLAND_SUPPORT
 
 #ifdef MKXPZ_HAVE_ANGLE
     bool angle_allow_fallback = false;
@@ -525,8 +409,8 @@ int main(int argc, char *argv[]) {
     }
 
     if (mkxp_use_angle) {
-      bool sdl_hint_opengl_es_driver = SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, SDL_FALSE);
-      bool sdl_hint_video_x11_force_egl = SDL_GetHintBoolean(SDL_HINT_VIDEO_X11_FORCE_EGL, SDL_FALSE);
+      bool sdl_hint_opengl_es_driver = SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, false);
+      bool sdl_hint_video_x11_force_egl = SDL_GetHintBoolean(SDL_HINT_VIDEO_X11_FORCE_EGL, false);
       SDL_SetHintWithPriority(SDL_HINT_OPENGL_ES_DRIVER, "1", SDL_HINT_OVERRIDE);
       SDL_SetHintWithPriority(SDL_HINT_VIDEO_X11_FORCE_EGL, "1", SDL_HINT_OVERRIDE);
       if (angle_allow_fallback && (win = initVideo(conf)) == nullptr) {
@@ -599,7 +483,7 @@ int main(int argc, char *argv[]) {
 
       return 0;
     }
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
     WSAData wsadata = {0};
     if (WSAStartup(0x101, &wsadata) || wsadata.wVersion != 0x101) {
       char buf[200];
@@ -610,7 +494,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
     
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
     {
         std::string downloadsPath = "/Users/" + mkxp_sys::getUserName() + "/Downloads";
         
@@ -627,7 +511,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
     
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 #define DEBUG_FSELECT_MSG "Select the folder from which to load game files. This is the folder containing the game's INI."
 #define DEBUG_FSELECT_PROMPT "Load Game"
     if (conf.manualFolderSelect) {
@@ -649,7 +533,7 @@ int main(int argc, char *argv[]) {
 
     /* OSX and Windows have their own native ways of
      * dealing with icons; don't interfere with them */
-#ifdef __LINUX__
+#ifdef SDL_PLATFORM_LINUX
     setupWindowIcon(conf, win);
 #else
     (void)setupWindowIcon;
@@ -670,8 +554,8 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    SDL_DisplayMode mode;
-    SDL_GetDisplayMode(0, 0, &mode);
+    const SDL_DisplayMode *displayMode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(win));
+    SDL_DisplayMode mode = displayMode ? *displayMode : SDL_DisplayMode{};
 
     /* Can't sync to display refresh rate if its value is unknown */
     if (!mode.refresh_rate)
@@ -679,8 +563,16 @@ int main(int argc, char *argv[]) {
 
     EventThread eventThread;
 
-    // The RGSS thread creates and owns the OpenGL context.
-    SDL_GLContext glCtx = nullptr;
+    // SDL3 creates window contexts on the main thread. Hand the context over
+    // before starting the RGSS renderer thread.
+    SDL_GLContext glCtx = initGL(win, conf, nullptr);
+    if (!glCtx)
+        return 1;
+    if (!SDL_GL_MakeCurrent(win, nullptr)) {
+        showInitError(SDL_GetError());
+        SDL_GL_DestroyContext(glCtx);
+        return 1;
+    }
 
     RGSSThreadData rtData(&eventThread, argv[0], win, alcDev, mode.refresh_rate,
                           mkxp_sys::getScalingFactor(), conf, glCtx);
@@ -689,13 +581,13 @@ int main(int argc, char *argv[]) {
     SDL_GetWindowSize(win, &winW, &winH);
     rtData.windowSizeMsg.post(Vec2i(winW, winH));
     
-    SDL_GL_GetDrawableSize(win, &drwW, &drwH);
+    SDL_GetWindowSizeInPixels(win, &drwW, &drwH);
     rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
 
     /* Load and post key bindings */
     rtData.bindingUpdateMsg.post(loadBindings(conf));
     
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
     // Create Touch Bar
     initTouchBar(win, conf);
 #endif
@@ -738,7 +630,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (rtData.glContext)
-      SDL_GL_DeleteContext(rtData.glContext);
+      SDL_GL_DestroyContext(rtData.glContext);
 
     /* Clean up any remainin events */
     eventThread.cleanup();
@@ -748,7 +640,7 @@ int main(int argc, char *argv[]) {
     alcCloseDevice(alcDev);
     SDL_DestroyWindow(win);
 
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
     if (wsadata.wVersion)
       WSACleanup();
 #endif
@@ -777,15 +669,15 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
   glCtx = SDL_GL_CreateContext(win);
 
   if (!glCtx) {
-    rgssThreadError(threadData, std::string("Could not create OpenGL context: ") + SDL_GetError());
+    showInitError(std::string("Could not create OpenGL context: ") + SDL_GetError());
     return 0;
   }
 
   try {
     initGLFunctions();
   } catch (const Exception &exc) {
-    rgssThreadError(threadData, exc.msg);
-    SDL_GL_DeleteContext(glCtx);
+    showInitError(exc.msg);
+    SDL_GL_DestroyContext(glCtx);
 
     return 0;
   }

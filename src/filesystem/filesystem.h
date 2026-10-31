@@ -22,7 +22,7 @@
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 
-#include <SDL_rwops.h>
+#include <SDL3/SDL_iostream.h>
 #include <string>
 
 
@@ -58,16 +58,14 @@ public:
 		 * After this function returns, ops becomes invalid, so don't take
 		 * references to it. Instead, copy the structure without closing
 		 * if you need to further read from it later. */
-		virtual bool tryRead(SDL_RWops &ops, const char *ext) = 0;
+		virtual bool tryRead(SDL_IOStream *ops, const char *ext) = 0;
 	};
 
 	void openRead(OpenHandler &handler,
 	              const char *filename);
 
 	/* Circumvents extension supplementing */
-	void openReadRaw(SDL_RWops &ops,
-	                 const char *filename,
-	                 bool freeOnClose = false);
+	SDL_IOStream *openReadRaw(const char *filename);
 
 	/* Does not perform extension supplementing */
 	bool exists(const char *filename);
@@ -78,6 +76,5 @@ private:
 	FileSystemPrivate *p;
 };
 
-extern const Uint32 SDL_RWOPS_PHYSFS;
 
 #endif // FILESYSTEM_H

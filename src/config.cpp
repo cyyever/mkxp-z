@@ -6,7 +6,7 @@
 //
 
 #include "config.h"
-#include <SDL_filesystem.h>
+#include <SDL3/SDL_filesystem.h>
 #include <assert.h>
 
 #include <stdint.h>
@@ -52,7 +52,7 @@ void fillStringVec(json::value &item, std::vector<std::string> &vector) {
     }
 }
 
-bool copyObject(json::value &dest, json::value &src, const char *objectName = "") {
+bool copyObject(json::value &dest, json::value src, const char *objectName = "") {
     assert(dest.is_object());
     if (src.is_null())
         return false;
@@ -158,7 +158,7 @@ void Config::read(int argc, char *argv[]) {
         {"solidFonts", json::array({})},
         {"renderer", 0},
         {"subImageFix", false},
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
         {"enableBlitting", false},
 #else
         {"enableBlitting", true},

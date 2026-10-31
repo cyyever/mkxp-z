@@ -22,11 +22,11 @@
 #ifndef EVENTTHREAD_H
 #define EVENTTHREAD_H
 
-#include <SDL_scancode.h>
-#include <SDL_mouse.h>
-#include <SDL_mutex.h>
-#include <SDL_atomic.h>
-#include <SDL_gamecontroller.h>
+#include <SDL3/SDL_scancode.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL_Mutex.h>
+#include <SDL3/SDL_atomic.h>
+#include <SDL3/SDL_gamepad.h>
 
 #include <string>
 
@@ -49,8 +49,8 @@ class EventThread
 public:
     
     struct ControllerState {
-        int axes[SDL_CONTROLLER_AXIS_MAX];
-        bool buttons[SDL_CONTROLLER_BUTTON_MAX];
+        int axes[SDL_GAMEPAD_AXIS_COUNT];
+        bool buttons[SDL_GAMEPAD_BUTTON_COUNT];
     };
 
 	struct MouseState
@@ -71,11 +71,11 @@ public:
 		FingerState fingers[MAX_FINGERS];
 	};
 
-	static uint8_t keyStates[SDL_NUM_SCANCODES];
+	static uint8_t keyStates[SDL_SCANCODE_COUNT];
     static ControllerState controllerState;
 	static MouseState mouseState;
 	static TouchState touchState;
-    static SDL_atomic_t verticalScrollDistance;
+    static SDL_AtomicInt verticalScrollDistance;
     
     std::string textInputBuffer;
     void lockText(bool lock);
@@ -106,7 +106,7 @@ public:
 	bool getShowCursor() const;
     bool getControllerConnected() const;
     
-    SDL_GameController *controller() const;
+    SDL_Gamepad *controller() const;
 
 	void showMessageBox(const char *body, int flags = 0);
 
@@ -117,7 +117,7 @@ public:
 	void notifyGameScreenChange(const SDL_Rect &screen);
 
 private:
-	static int eventFilter(void *, SDL_Event*);
+	static bool eventFilter(void *, SDL_Event*);
 
 	void resetInputStates();
 	void setFullscreen(SDL_Window *, bool mode);
@@ -128,11 +128,11 @@ private:
 	bool fullscreen;
 	bool showCursor;
     
-    SDL_GameController *ctrl;
+    SDL_Gamepad *ctrl;
     
 	AtomicFlag msgBoxDone;
     
-    SDL_mutex *textInputLock;
+    SDL_Mutex *textInputLock;
 
 	struct
 	{
@@ -191,7 +191,7 @@ struct UnidirMessage
 	}
 
 private:
-	SDL_mutex *mutex;
+	SDL_Mutex *mutex;
 	mutable AtomicFlag changed;
 	T current;
 };
@@ -220,8 +220,8 @@ private:
 		void waitForUnlock();
 
 		AtomicFlag locked;
-		SDL_mutex *mut;
-		SDL_cond *cond;
+		SDL_Mutex *mut;
+		SDL_Condition *cond;
 	};
 
 	Util mainSync;

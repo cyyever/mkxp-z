@@ -30,7 +30,6 @@ foreach dep_name : [
     not is_unix ? 'oss' : '',
     'portaudio',
     'roc',
-    'sdl3',
     'snapd-glib',
     'snapd-glib-2',
     'sndfile',
@@ -186,306 +185,22 @@ if not physfs.found()
 endif
 global_dependencies += physfs
 
-sdl2 = dependency('sdl2', allow_fallback: false, method: 'pkg-config', required: get_option('sdl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-sdl2main = sdl2
-
-if is_unix and (not sdl2.found() or not sdl2main.found())
-    if is_bsd
-        libinotify = dependency('libinotify', allow_fallback: false, required: get_option('libinotify_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-        if not libinotify.found()
-            libinotify_options = meson_base_options
-            libinotify = subproject('libinotify', default_options: libinotify_options).get_variable('libinotify')
-        endif
-    else
-        meson.override_dependency('libinotify', null_dep, static: true)
-    endif
-
-    libudev = dependency('libudev', allow_fallback: false, required: get_option('libudev_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libudev.found()
-        libudev = subproject('systemd', default_options: meson_base_options).get_variable('libudev')
-    endif
-
-    dbus = dependency('dbus-1', allow_fallback: false, required: get_option('dbus_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not dbus.found()
-        dbus = subproject('dbus', default_options: meson_base_options).get_variable('dbus')
-    endif
-
-    ibus = dependency('ibus-1.0', allow_fallback: false, required: get_option('ibus_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not ibus.found()
-        glib = dependency('glib-2.0', allow_fallback: false, required: get_option('glib_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-        if not glib.found()
-            glib = subproject('glib', default_options: meson_base_options + {
-                'bsymbolic_functions': false,
-                'dtrace': 'disabled',
-                'glib_assert': false,
-                'glib_checks': false,
-                'glib_debug': 'disabled',
-                'introspection': 'disabled',
-                'libelf': 'disabled',
-                'sysprof': 'disabled',
-                'systemtap': 'disabled',
-                'tests': false,
-                'xattr': false,
-            }).get_variable('libglib_dep')
-        endif
-
-        ibus = subproject('ibus', default_options: meson_base_options).get_variable('ibus')
-    endif
-
-    libdrm = dependency('libdrm', allow_fallback: false, required: get_option('libdrm_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libdrm.found()
-        libdrm = subproject('libdrm', default_options: meson_base_options).get_variable('libdrm')
-    endif
-
-    x11 = dependency('x11', allow_fallback: false, required: get_option('x11_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not x11.found()
-        subproject('xorgproto', default_options: meson_base_options)
-        subproject('libxau', default_options: meson_base_options)
-        subproject('libxcb', default_options: meson_base_options)
-        x11 = subproject('libx11', default_options: meson_base_options).get_variable('libx11')
-        subproject('libxfixes', default_options: meson_base_options)
-        subproject('libxext', default_options: meson_base_options)
-        subproject('libxi', default_options: meson_base_options)
-        subproject('libxrender', default_options: meson_base_options)
-        subproject('libxrandr', default_options: meson_base_options)
-        subproject('libxcursor', default_options: meson_base_options)
-    endif
-
-    wayland_client = dependency('wayland-client', allow_fallback: false, required: get_option('wayland_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not wayland_client.found()
-        subproject('expat', default_options: meson_base_options)
-
-        wayland_client = subproject('wayland', default_options: meson_base_options).get_variable('wayland')
-    endif
-
-    libxkbcommon = dependency('xkbcommon', allow_fallback: false, required: get_option('libxkbcommon_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libxkbcommon.found()
-        libxkbcommon = subproject('libxkbcommon', default_options: meson_base_options).get_variable('libxkbcommon')
-    endif
-
-    libdecor = dependency('libdecor-0', allow_fallback: false, required: get_option('libdecor_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not libdecor.found()
-        libdecor = subproject('libdecor', default_options: meson_base_options).get_variable('libdecor')
-    endif
+sdl3 = dependency('sdl3', version: '>=3.4', allow_fallback: false,
+    required: get_option('sdl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+if not sdl3.found()
+    sdl3 = subproject('sdl3', default_options: meson_base_options).get_variable('sdl3_dep')
+    sdl3_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('SDL3-' + sdl3.version()) / 'include']
 else
-    foreach dep_name : [
-        'dbus-1',
-        'gio-2.0',
-        'glib-2.0',
-        'gmodule-2.0',
-        'gobject-2.0',
-        'ibus-1.0',
-        'libdecor-0',
-        'libdrm',
-        'libinotify',
-        'libudev',
-        'wayland-client',
-        'wayland-cursor',
-        'wayland-egl',
-        'wayland-egl-backend',
-        'wayland-protocols',
-        'wayland-scanner',
-        'wayland-server',
-        'x11',
-        'x11-xcb',
-        'xau',
-        'xcb',
-        'xcursor',
-        'xext',
-        'xfixes',
-        'xi',
-        'xkbcommon',
-        'xkbcommon-x11',
-        'xrandr',
-        'xrender',
-    ]
-        meson.override_dependency(dep_name, null_dep, static: true)
-    endforeach
+    sdl3_includes = ['-I' + sdl3.get_variable(pkgconfig: 'includedir')]
 endif
+global_dependencies += sdl3
 
-if is_unix
-    global_args += [
-        '-DMKXPZ_WAYLAND_CLIENT_SONAME="' + run_command(sonametool, 'wayland-client', check: true).stdout().strip() + '"',
-        '-DMKXPZ_WAYLAND_CURSOR_SONAME="' + run_command(sonametool, 'wayland-cursor', check: true).stdout().strip() + '"',
-        '-DMKXPZ_WAYLAND_EGL_SONAME="' + run_command(sonametool, 'wayland-egl', check: true).stdout().strip() + '"',
-        '-DMKXPZ_X11_SONAME="' + run_command(sonametool, 'X11', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XCURSOR_SONAME="' + run_command(sonametool, 'Xcursor', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XEXT_SONAME="' + run_command(sonametool, 'Xext', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XFIXES_SONAME="' + run_command(sonametool, 'Xfixes', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XI_SONAME="' + run_command(sonametool, 'Xi', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XKBCOMMON_SONAME="' + run_command(sonametool, 'xkbcommon', check: true).stdout().strip() + '"',
-        '-DMKXPZ_XRANDR_SONAME="' + run_command(sonametool, 'Xrandr', check: true).stdout().strip() + '"',
-    ]
-endif
-
-if not sdl2.found() or not sdl2main.found()
-    have_angle = get_option('angle').allowed()
-
-    if have_angle
-        require_system_xxhash = get_option('xxhash_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled)
-        xxhash = dependency('libxxhash', allow_fallback: false, required: get_option('angle').auto() and require_system_xxhash.enabled() ? get_option('angle') : require_system_xxhash)
-        if not xxhash.found()
-            if not get_option('xxhash_system').enabled()
-                subproject('xxhash', default_options: meson_base_options)
-            else
-                have_angle = false
-            endif
-        endif
-    endif
-
-    spirv_headers_source_dir = subproject('spirv-headers', default_options: meson_base_options).get_variable('spirv_headers_source_dir')
-
-    if have_angle
-        have_angle_vulkan = get_option('angle_vulkan').allowed()
-        require_system_spirv_tools = get_option('spirv_tools_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled)
-        spirv_tools = dependency('SPIRV-Tools', allow_fallback: false, required: get_option('angle').auto() and require_system_spirv_tools.enabled() ? get_option('angle') : require_system_spirv_tools)
-        if not spirv_tools.found()
-            if not require_system_spirv_tools.enabled()
-                spirv_tools_options = cmake.subproject_options()
-                spirv_tools_options.add_cmake_defines(cmake_base_options + {
-                    'CMAKE_CXX_STANDARD': 17,
-                    'CMAKE_C_FLAGS': run_command(quotetool, '-I' + spirv_headers_source_dir / 'include', check: true).stdout().strip(),
-                    'CMAKE_CXX_FLAGS': run_command(quotetool, '-I' + spirv_headers_source_dir / 'include', check: true).stdout().strip(),
-                    'SPIRV-Headers_SOURCE_DIR': spirv_headers_source_dir,
-                    'BUILD_SHARED_LIBS': false,
-                    'BUILD_TESTING': false,
-                    'SKIP_SPIRV_TOOLS_INSTALL': true,
-                    'SPIRV-TOOLS_USE_MIMALLOC': false,
-                })
-                foreach opt, val : cmake_override_options
-                    spirv_tools_options.set_override_option(opt, val)
-                endforeach
-                meson.override_dependency('SPIRV-Tools', cmake.subproject('spirv-tools', options: spirv_tools_options).dependency('SPIRV-Tools-static'), static: true)
-            else
-                if get_option('angle_vulkan').enabled()
-                    error('SPIRV-Tools is required for ANGLE Vulkan backend')
-                endif
-                have_angle = false
-                have_angle_vulkan = false
-            endif
-        endif
-    endif
-
-    if have_angle and have_angle_vulkan
-        require_system_volk = get_option('volk_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled)
-        volk = dependency('volk', allow_fallback: false, required: get_option('angle').auto() and require_system_spirv_tools.enabled() ? get_option('angle') : require_system_spirv_tools)
-        if not volk.found()
-            if not require_system_volk.enabled()
-                global_dependencies += subproject('volk', default_options: meson_base_options).get_variable('volk')
-            else
-                if get_option('angle_vulkan').enabled()
-                    error('volk is required for ANGLE Vulkan backend')
-                endif
-                have_angle = false
-                have_angle_vulkan = false
-            endif
-        else
-            global_dependencies += volk
-        endif
-    endif
-
-    if have_angle
-        if get_option('angle_direct3d11').disabled()
-            angle_direct3d11 = 'disabled'
-        elif get_option('angle_direct3d11').enabled()
-            angle_direct3d11 = 'enabled'
-        else
-            angle_direct3d11 = 'auto'
-        endif
-        if get_option('angle_metal').disabled()
-            angle_metal = 'disabled'
-        elif get_option('angle_metal').enabled()
-            angle_metal = 'enabled'
-        else
-            angle_metal = 'auto'
-        endif
-        if get_option('angle_null').disabled()
-            angle_null = 'disabled'
-        elif get_option('angle_null').enabled()
-            angle_null = 'enabled'
-        else
-            angle_null = 'auto'
-        endif
-        if get_option('angle_vulkan').disabled()
-            angle_vulkan = 'disabled'
-        elif get_option('angle_vulkan').enabled()
-            angle_vulkan = 'enabled'
-        else
-            angle_vulkan = 'auto'
-        endif
-        angle = subproject('angle', default_options: meson_base_options + {
-            'direct3d11': angle_direct3d11,
-            'metal': angle_metal,
-            'null': angle_null,
-            'opengl': 'disabled',
-            'vulkan': have_angle_vulkan ? angle_vulkan : 'disabled',
-        })
-        have_angle_direct3d11 = angle.get_variable('have_direct3d11')
-        have_angle_metal = angle.get_variable('have_metal')
-        have_angle_null = angle.get_variable('have_null')
-        have_angle_vulkan = angle.get_variable('have_vulkan')
-        global_args += '-DMKXPZ_HAVE_ANGLE'
-        if have_angle_direct3d11
-            global_args += '-DMKXPZ_HAVE_ANGLE_DIRECT3D11'
-        endif
-        if have_angle_metal
-            global_args += '-DMKXPZ_HAVE_ANGLE_METAL'
-        endif
-        if have_angle_null
-            global_args += '-DMKXPZ_HAVE_ANGLE_NULL'
-        endif
-        if have_angle_vulkan
-            gplv3_features += 'ANGLE Vulkan backend'
-            global_args += '-DMKXPZ_HAVE_ANGLE_VULKAN'
-        endif
-    endif
-
-    sdl2_options = meson_base_options + {
-        'test': false,
-        'run_test': false,
-        'use_atomic': 'enabled',
-        'use_audio': 'disabled',
-        'use_cpuinfo': 'enabled',
-        'use_events': 'enabled',
-        'use_file': 'enabled',
-        'use_filesystem': 'enabled',
-        'use_joystick': 'enabled',
-        'use_haptic': 'disabled',
-        'use_hidapi': 'disabled',
-        'use_loadso': 'enabled',
-        'use_locale': 'disabled',
-        'use_render': 'enabled',
-        'use_power': 'enabled',
-        'use_sensor': 'disabled',
-        'use_threads': 'enabled',
-        'use_timers': 'enabled',
-        'use_video': 'enabled',
-        'use_video_kmsdrm': is_unix ? 'enabled' : 'disabled',
-        'use_video_x11': is_unix ? 'enabled' : 'disabled',
-        'use_video_wayland': is_unix ? 'enabled' : 'disabled',
-        'use_video_wayland_libdecor': is_unix ? 'enabled' : 'disabled',
-        'use_video_opengl': 'enabled',
-        'use_video_openglesv2': 'enabled',
-        'use_video_vulkan': 'disabled',
-        'use_video_offscreen': 'disabled',
-        'prefer_dlopen': is_unix,
-        'system_iconv': 'enabled',
-        'angle': have_angle ? 'enabled' : 'disabled',
-    }
-    sdl2main = declare_dependency(dependencies: [
-        subproject('sdl2', default_options: sdl2_options).get_variable('sdl2main_dep'),
-        host_system in ['windows', 'cygwin'] ? meson.get_compiler('c').find_library('mingw32') : [],
-    ])
-    sdl2 = subproject('sdl2', default_options: sdl2_options).get_variable('sdl2_dep')
-    sdl2_includes = ['-I' + meson.project_build_root() / 'subprojects' / ('SDL2-' + sdl2.version()) / 'include', '-I' + meson.project_source_root() / 'subprojects' / ('SDL2-' + sdl2.version()) / 'include']
-else
-    if get_option('angle').enabled()
-        error('ANGLE support requires vendored SDL')
-    endif
-    have_angle = false
-    sdl2_includes = ['-I' + sdl2.get_variable(pkgconfig: 'includedir'), '-I' + (sdl2.get_variable(pkgconfig: 'includedir') / 'SDL2')]
-endif
-global_dependencies += [sdl2main, sdl2]
+# SDL3 owns the platform backends. Native OpenGL remains until the GPU port.
+have_angle = false
+have_angle_direct3d11 = false
+have_angle_metal = false
+have_angle_null = false
+have_angle_vulkan = false
 
 have_alsa = false
 have_jack = false
@@ -746,32 +461,20 @@ else
 endif
 global_dependencies += [vorbis, vorbisfile]
 
-sdl2_sound = dependency('sdl2_sound', allow_fallback: false, required: get_option('sdl_sound_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not sdl2_sound.found()
-    sdl2_sound_internal_cflags = []
-    sdl2_sound_external_cflags = []
-    if sdl2.type_name() == 'internal'
-        sdl2_sound_internal_cflags += sdl2_includes
-    else
-        sdl2_sound_external_cflags += sdl2_includes
-    endif
-    sdl2_sound_options = cmake.subproject_options()
-    sdl2_sound_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, sdl2_sound_internal_cflags + sdl2_sound_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, sdl2_sound_internal_cflags + sdl2_sound_external_cflags, check: true).stdout().strip(),
+sdl3_sound = dependency('sdl3_sound', allow_fallback: false,
+    required: get_option('sdl_sound_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+if not sdl3_sound.found()
+    sound_options = cmake.subproject_options()
+    sound_options.add_cmake_defines(cmake_base_options + {
+        'CMAKE_C_FLAGS': run_command(quotetool, sdl3_includes, check: true).stdout().strip(),
         'SDLSOUND_BUILD_SHARED': false,
         'SDLSOUND_BUILD_TEST': false,
+        'SDLSOUND_INSTALL': false,
     })
-    foreach opt, val : cmake_override_options
-        sdl2_sound_options.set_override_option(opt, val)
-    endforeach
-    sdl2_sound = declare_dependency(dependencies: [
-        sdl2,
-        cmake.subproject('sdl2_sound', options: sdl2_sound_options).dependency('SDL2_sound-static'),
-    ])
-    meson.override_dependency('sdl2_sound', sdl2_sound, static: true)
+    sdl3_sound = declare_dependency(dependencies: [sdl3,
+        cmake.subproject('sdl3_sound', options: sound_options).dependency('SDL3_sound-static')])
 endif
-global_dependencies += sdl2_sound
+global_dependencies += sdl3_sound
 
 freetype = dependency('freetype2', allow_fallback: false, method: 'pkg-config', required: get_option('freetype_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not freetype.found()
@@ -791,60 +494,15 @@ else
 endif
 global_dependencies += freetype
 
-sdl2_ttf = dependency('sdl2_ttf', allow_fallback: false, required: get_option('sdl_ttf_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not sdl2_ttf.found()
-    sdl2_ttf_internal_cflags = []
-    sdl2_ttf_external_cflags = []
-    if freetype.type_name() == 'internal'
-        sdl2_ttf_internal_cflags += freetype_includes
-    else
-        sdl2_ttf_external_cflags += freetype_includes
-    endif
-    if sdl2.type_name() == 'internal'
-        sdl2_ttf_internal_cflags += sdl2_includes
-    else
-        sdl2_ttf_external_cflags += sdl2_includes
-    endif
-    sdl2_ttf_options = cmake.subproject_options()
-    sdl2_ttf_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, sdl2_ttf_internal_cflags + sdl2_ttf_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, sdl2_ttf_internal_cflags + sdl2_ttf_external_cflags, check: true).stdout().strip(),
-        'BUILD_SHARED_LIBS': false,
-        'BUILD_TESTING': false,
-    })
-    foreach opt, val : cmake_override_options
-        sdl2_ttf_options.set_override_option(opt, val)
-    endforeach
-    sdl2_ttf = declare_dependency(dependencies: [
-        freetype,
-        sdl2,
-        cmake.subproject('sdl2_ttf', options: sdl2_ttf_options).dependency('SDL2_ttf'),
-    ])
-    meson.override_dependency('sdl2_ttf', sdl2_ttf, static: true)
+sdl3_ttf = dependency('sdl3_ttf', allow_fallback: false,
+    required: get_option('sdl_ttf_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+if not sdl3_ttf.found()
+    # Share the same FreeType dependency with SDL_ttf and our font metrics code.
+    meson.override_dependency('freetype2', freetype, static: true)
+    sdl3_ttf = subproject('sdl3_ttf', default_options: meson_base_options).get_variable('sdl3_ttf_dep')
 endif
-global_dependencies += sdl2_ttf
-
-if sdl2_ttf.type_name() == 'internal'
-    global_args += '-DMKXPZ_TTF_FONT=_TTF_Font'
-elif meson.get_compiler('c').compiles('''
-    #include <SDL_ttf.h>
-    int main(void) {
-        TTF_Font *font = TTF_OpenFont("", 0);
-        return font != NULL;
-    }
-''', name: 'TTF_Font test', dependencies: sdl2_ttf)
-    global_args += '-DMKXPZ_TTF_FONT=TTF_Font'
-elif meson.get_compiler('c').compiles('''
-    #include <SDL_ttf.h>
-    int main(void) {
-        _TTF_Font *font = TTF_OpenFont("", 0);
-        return font != NULL;
-    }
-''', name: '_TTF_Font test', dependencies: sdl2_ttf)
-    global_args += '-DMKXPZ_TTF_FONT=_TTF_Font'
-else
-    error('failed to determine the name of the TTF_Font type')
-endif
+global_dependencies += sdl3_ttf
+global_args += '-DMKXPZ_TTF_FONT=TTF_Font'
 
 pixman = dependency('pixman-1', allow_fallback: false, required: get_option('pixman_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not pixman.found()
@@ -1024,51 +682,12 @@ if not subproject('theoraplay', default_options: theoraplay_options).get_variabl
 endif
 global_dependencies += theoraplay
 
-sdl2_image = dependency('sdl2_image', allow_fallback: false, required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not sdl2_image.found()
-    sdl2_image_internal_cflags = []
-    sdl2_image_external_cflags = []
-    if sdl2.type_name() == 'internal'
-        sdl2_image_internal_cflags += sdl2_includes
-    else
-        sdl2_image_external_cflags += sdl2_includes
-    endif
-    sdl2_image_options = cmake.subproject_options()
-    sdl2_image_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, sdl2_image_internal_cflags + sdl2_image_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, sdl2_image_internal_cflags + sdl2_image_external_cflags, check: true).stdout().strip(),
-        'BUILD_SHARED_LIBS': false,
-        'SDL2IMAGE_JPG_SAVE': true,
-        'SDL2IMAGE_PNG_SAVE': true,
-        'SDL2IMAGE_PNG_SHARED': false,
-        'SDL2IMAGE_JPG_SHARED': false,
-        'SDL2IMAGE_JXL': true,
-        'SDL2IMAGE_JXL_SHARED': false,
-        'SDL2IMAGE_VENDORED': true,
-        'SDL2IMAGE_SAMPLES': false,
-        'SDL2IMAGE_BACKEND_WIC': false,
-        'SDL2IMAGE_BACKEND_IMAGEIO': false,
-        'JPEGXL_ENABLE_DEVTOOLS': false,
-        'JPEGXL_ENABLE_EXAMPLES': false,
-        'JPEGXL_ENABLE_FUZZERS': false,
-        'JPEGXL_ENABLE_MANPAGES': false,
-        'JPEGXL_ENABLE_TOOLS': false,
-        'JPEGXL_STATIC': true,
-    })
-    foreach opt, val : cmake_override_options
-        sdl2_image_options.set_override_option(opt, val)
-    endforeach
-    sdl2_image = declare_dependency(dependencies: [
-        sdl2,
-        cmake.subproject('sdl2_image', options: sdl2_image_options).dependency('SDL2_image'),
-        cmake.subproject('sdl2_image', options: sdl2_image_options).dependency('brotlicommon-static'),
-        cmake.subproject('sdl2_image', options: sdl2_image_options).dependency('brotlidec-static'),
-        cmake.subproject('sdl2_image', options: sdl2_image_options).dependency('hwy'),
-        cmake.subproject('sdl2_image', options: sdl2_image_options).dependency('jxl_dec-static'),
-    ])
-    meson.override_dependency('SDL2_image', sdl2_image, static: true)
+sdl3_image = dependency('sdl3_image', allow_fallback: false,
+    required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+if not sdl3_image.found()
+    sdl3_image = subproject('sdl3_image', default_options: meson_base_options).get_variable('sdl3_image_dep')
 endif
-global_dependencies += sdl2_image
+global_dependencies += sdl3_image
 
 fluidsynth = dependency('fluidsynth', allow_fallback: false, required: get_option('fluidsynth_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not fluidsynth.found()

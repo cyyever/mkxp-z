@@ -22,7 +22,7 @@
 #ifndef GLFUN_H
 #define GLFUN_H
 
-#include <SDL_opengl.h>
+#include <SDL3/SDL_opengl.h>
 
 /* Etc */
 typedef GLenum (APIENTRYP _PFNGLGETERRORPROC) (void);

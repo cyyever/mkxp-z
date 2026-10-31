@@ -9,6 +9,7 @@
 #define system_h
 
 #include <string>
+#include <SDL3/SDL_platform_defines.h>
 
 struct SDL_Window;
 
@@ -17,9 +18,9 @@ struct SDL_Window;
 #define MKXPZ_PLATFORM_LINUX 2
 #define MKXPZ_PLATFORM_BSD 3
 
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_WINDOWS
-#elif defined __APPLE__
+#elif defined SDL_PLATFORM_APPLE
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_MACOS
 #elif defined __linux__
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_LINUX
@@ -39,7 +40,7 @@ enum WineHostType {
 std::string getSystemLanguage();
 std::string getUserName();
 std::string getDefaultGameRoot();
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);
 #endif
 int getScalingFactor();
@@ -49,7 +50,7 @@ bool isRosetta();
 WineHostType getRealHostType();
 }
 
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 void openSettingsWindow();
 #endif
 

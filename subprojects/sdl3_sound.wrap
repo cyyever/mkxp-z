@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/icculus/SDL_sound.git
+revision = v3.2.0
+depth = 1
+method = cmake
+
+diff_files = sdl3_sound-deps.patch

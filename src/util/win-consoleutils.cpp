@@ -1,4 +1,4 @@
-#if __WIN32__
+#if SDL_PLATFORM_WIN32
 
 #include "win-consoleutils.h"
 
@@ -67,4 +67,4 @@ static int openStdHandle(const DWORD &nStdHandle)
     return _open_osfhandle((intptr_t)handle, _O_TEXT);
 }
 
-#endif // __WIN32__
+#endif // SDL_PLATFORM_WIN32

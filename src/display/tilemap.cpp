@@ -49,7 +49,7 @@
 #include <algorithm>
 #include <vector>
 
-#include <SDL_surface.h>
+#include <SDL3/SDL_surface.h>
 
 extern const StaticRect autotileRects[];
 

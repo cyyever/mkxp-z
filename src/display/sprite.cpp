@@ -39,7 +39,7 @@
 #include <math.h>
 #include <numbers>
 
-#include <SDL_rect.h>
+#include <SDL3/SDL_rect.h>
 
 #include "sigslot/signal.hpp"
 
@@ -454,7 +454,7 @@ struct SpritePrivate
         IntRect self = adjustedSrcRect;
         self.setPos(trans.getPositionI() + trans.getGlobalOffset() - trans.getAdjustedOriginI());
         
-        isVisible = SDL_HasIntersection(&self, &sceneGeo.rect);
+        isVisible = SDL_HasRectIntersection(&self, &sceneGeo.rect);
     }
     
     void emitWaveChunk(SVertex *&vert, float phase, float width,

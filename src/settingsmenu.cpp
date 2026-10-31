@@ -23,11 +23,11 @@
 
 #include "settingsmenu.h"
 
-#include <SDL_video.h>
-#include <SDL_ttf.h>
-#include <SDL_surface.h>
-#include <SDL_keyboard.h>
-#include <SDL_rect.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3_ttf/SDL_ttf.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_rect.h>
 
 #include "keybindings.h"
 #include "eventthread.h"
@@ -82,7 +82,7 @@ struct VButton
 static constexpr auto vButtonsN = std::size(vButtons);
 
 /* Human readable string representation */
-std::string sourceDescString(const SourceDesc &src)
+std::string sourceDescString(const SourceDesc src)
 {
 	char buf[128];
 	//char pos;
@@ -97,7 +97,7 @@ std::string sourceDescString(const SourceDesc &src)
 		if (src.d.scan == SDL_SCANCODE_LSHIFT)
 			return "Shift";
 
-		SDL_Keycode key = SDL_GetKeyFromScancode(src.d.scan);
+		SDL_Keycode key = SDL_GetKeyFromScancode(src.d.scan, SDL_KMOD_NONE, false);
 		const char *str = SDL_GetKeyName(key);
 
 		if (*str == '\0')
@@ -262,7 +262,7 @@ struct SettingsMenuPrivate
 	uint32_t winID;
 
 	TTF_Font *font;
-	SDL_PixelFormat *rgb;
+	const SDL_PixelFormatDetails *rgb;
 
 	RGSSThreadData &rtData;
 
@@ -284,15 +284,15 @@ struct SettingsMenuPrivate
 	{
 		int bpp;
 		Uint32 rMask, gMask, bMask, aMask;
-		SDL_PixelFormatEnumToMasks(SDL_PIXELFORMAT_ABGR8888,
+		SDL_GetMasksForPixelFormat(SDL_PIXELFORMAT_ABGR8888,
 		                           &bpp, &rMask, &gMask, &bMask, &aMask);
 
-		return SDL_CreateRGBSurface(0, w, h, bpp, rMask, gMask, bMask, 0);
+		return SDL_CreateSurface(w, h, SDL_GetPixelFormatForMasks(bpp, rMask, gMask, bMask, 0));
 	}
 
 	void fillSurface(SDL_Surface *surf, uint8_t grey)
 	{
-		SDL_FillRect(surf, 0, SDL_MapRGBA(rgb, grey, grey, grey, 255));
+		SDL_FillSurfaceRect(surf, 0, SDL_MapRGBA(rgb, nullptr, grey, grey, grey, 255));
 	}
 
 	void fillRect(SDL_Surface *surf,
@@ -300,7 +300,7 @@ struct SettingsMenuPrivate
 	              uint8_t r, uint8_t g, uint8_t b)
 	{
 		SDL_Rect rect = { drawOff.x+x, drawOff.y+y, w, h };
-		SDL_FillRect(surf, &rect, SDL_MapRGB(rgb, r, g, b));
+		SDL_FillSurfaceRect(surf, &rect, SDL_MapRGB(rgb, nullptr, r, g, b));
 	}
 
 	void fillRect(SDL_Surface *surf, uint8_t grey,
@@ -374,14 +374,14 @@ struct SettingsMenuPrivate
 		SDL_Color c = { cText, cText, cText, 255 };
 		applyFontStyle(bold);
 
-		return TTF_RenderUTF8_Blended(font, str, c);
+		return TTF_RenderText_Blended(font, str, 0, c);
 	}
 
 	SDL_Surface *createTextSurface(const char *str, SDL_Color c,
 	                               bool bold)
 	{
 		applyFontStyle(bold);
-		return TTF_RenderUTF8_Blended(font, str, c);
+		return TTF_RenderText_Blended(font, str, 0, c);
 	}
 
 	/* Horizontally centered */
@@ -413,7 +413,7 @@ struct SettingsMenuPrivate
 		{
 			dstRect.w = alignW;
 			dstRect.x = x;
-			SDL_BlitScaled(txtSurf, 0, surf, &dstRect);
+			SDL_BlitSurfaceScaled(txtSurf, 0, surf, &dstRect);
 		}
 	}
 
@@ -423,7 +423,7 @@ struct SettingsMenuPrivate
 	{
 		SDL_Surface *txt = createTextSurface(str, c, bold);
 		blitTextSurf(surf, x, y, alignW, txt, just);
-		SDL_FreeSurface(txt);
+		SDL_DestroySurface(txt);
 	}
 
 	void drawText(SDL_Surface *surf, const char *str,
@@ -476,7 +476,7 @@ struct SettingsMenuPrivate
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				const SourceDesc &src = bWidgets[i].src[j];
+				const SourceDesc src = bWidgets[i].src[j];
 
 				if (src.type == Invalid)
 					continue;
@@ -540,8 +540,8 @@ struct SettingsMenuPrivate
 
 			SDL_BlitSurface(txt, 0, winSurf, &fill);
 
-			SDL_FreeSurface(txt);
-			SDL_FreeSurface(dark);
+			SDL_DestroySurface(txt);
+			SDL_DestroySurface(dark);
 		}
 
 		SDL_UpdateWindowSurface(window);
@@ -604,9 +604,9 @@ struct SettingsMenuPrivate
 
 		switch (event.type)
 		{
-		case SDL_KEYDOWN:
+		case SDL_EVENT_KEY_DOWN:
 			desc.type = Key;
-			desc.d.scan = event.key.keysym.scancode;
+			desc.d.scan = event.key.scancode;
 
 			/* Special case aliases */
 			if (desc.d.scan == SDL_SCANCODE_RSHIFT)
@@ -617,21 +617,21 @@ struct SettingsMenuPrivate
 
 			break;
 
-		case SDL_CONTROLLERBUTTONDOWN:
+		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 			desc.type = CButton;
-			desc.d.cb = (SDL_GameControllerButton)event.cbutton.button;
+			desc.d.cb = (SDL_GamepadButton)event.gbutton.button;
 			break;
 
-		case SDL_CONTROLLERAXISMOTION:
+		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 		{
-			int v = event.caxis.value;
+			int v = event.gaxis.value;
 
 			/* Only register if pushed halfway through */
 			if (v > -JAXIS_THRESHOLD && v < JAXIS_THRESHOLD)
 				return true;
 
 			desc.type = CAxis;
-			desc.d.ca.axis = (SDL_GameControllerAxis)event.caxis.axis;
+			desc.d.ca.axis = (SDL_GamepadAxis)event.gaxis.axis;
 			desc.d.ca.dir = v < 0 ? Negative : Positive;
 			break;
 		}
@@ -933,15 +933,13 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	p->hasFocus = false;
 	p->destroyReq = false;
 
-	p->window = SDL_CreateWindow("Key bindings",
-	                             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-	                             winSize.x, winSize.y, SDL_WINDOW_INPUT_FOCUS);
+	p->window = SDL_CreateWindow("Key bindings", winSize.x, winSize.y, 0);
 	p->winSurf = SDL_GetWindowSurface(p->window);
 	p->winID = SDL_GetWindowID(p->window);
 
 	p->font = SharedFontState::openBundled(fontSize);
 
-	p->rgb = p->winSurf->format;
+	p->rgb = SDL_GetPixelFormatDetails(p->winSurf->format);
 
 	const size_t layoutW = 4;
 	const size_t layoutH = 3;
@@ -1017,21 +1015,26 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	/* First, check whether this event is for us */
 	switch (event.type)
 	{
-	case SDL_WINDOWEVENT :
-	case SDL_MOUSEBUTTONDOWN :
-	case SDL_MOUSEBUTTONUP :
-	case SDL_MOUSEMOTION :
-	case SDL_KEYDOWN :
-	case SDL_KEYUP :
+	case SDL_EVENT_WINDOW_SHOWN :
+    case SDL_EVENT_WINDOW_FOCUS_GAINED :
+    case SDL_EVENT_WINDOW_FOCUS_LOST :
+    case SDL_EVENT_WINDOW_EXPOSED :
+    case SDL_EVENT_WINDOW_MOUSE_LEAVE :
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED :
+	case SDL_EVENT_MOUSE_BUTTON_DOWN :
+	case SDL_EVENT_MOUSE_BUTTON_UP :
+	case SDL_EVENT_MOUSE_MOTION :
+	case SDL_EVENT_KEY_DOWN :
+	case SDL_EVENT_KEY_UP :
 		/* We can do this because windowID has the same
 		 * struct offset in all these event types */
 		if (event.window.windowID != p->winID)
 			return false;
 		break;
 
-	case SDL_CONTROLLERBUTTONDOWN :
-	case SDL_CONTROLLERBUTTONUP :
-	case SDL_CONTROLLERAXISMOTION :
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN :
+	case SDL_EVENT_GAMEPAD_BUTTON_UP :
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION :
 		if (!p->hasFocus)
 			return false;
 		break;
@@ -1045,27 +1048,24 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 	switch (event.type)
 	{
 	/* Ignore these event */
-	case SDL_MOUSEBUTTONUP :
-	case SDL_KEYUP :
+	case SDL_EVENT_MOUSE_BUTTON_UP :
+	case SDL_EVENT_KEY_UP :
 		return true;
 
-	case SDL_WINDOWEVENT :
-		switch (event.window.event)
-		{
-		case SDL_WINDOWEVENT_SHOWN : // SDL is bugged and doesn't give us a first FOCUS_GAINED event
-		case SDL_WINDOWEVENT_FOCUS_GAINED :
+		case SDL_EVENT_WINDOW_SHOWN : // SDL is bugged and doesn't give us a first FOCUS_GAINED event
+		case SDL_EVENT_WINDOW_FOCUS_GAINED :
 			p->hasFocus = true;
 			break;
 
-		case SDL_WINDOWEVENT_FOCUS_LOST :
+		case SDL_EVENT_WINDOW_FOCUS_LOST :
 			p->hasFocus = false;
 			break;
 
-		case SDL_WINDOWEVENT_EXPOSED :
+		case SDL_EVENT_WINDOW_EXPOSED :
 			SDL_UpdateWindowSurface(p->window);
 			break;
 
-		case SDL_WINDOWEVENT_LEAVE:
+		case SDL_EVENT_WINDOW_MOUSE_LEAVE:
 			if (p->hovered)
 			{
 				p->hovered->leave();
@@ -1073,22 +1073,20 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			}
 			break;
 
-		case SDL_WINDOWEVENT_CLOSE:
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
 			p->onCancel();
-		}
+        return true;
 
-		return true;
-
-	case SDL_MOUSEMOTION:
+	case SDL_EVENT_MOUSE_MOTION:
 		p->onMotion(event.motion);
 		return true;
 
-	case SDL_KEYDOWN:
+	case SDL_EVENT_KEY_DOWN:
 		if (p->state != AwaitingInput)
 		{
-			if (event.key.keysym.sym == SDLK_RETURN)
+			if (event.key.key == SDLK_RETURN)
 				p->onAccept();
-			else if (event.key.keysym.sym == SDLK_ESCAPE)
+			else if (event.key.key == SDLK_ESCAPE)
 				p->onCancel();
 
 			return true;
@@ -1096,7 +1094,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 
 		/* Don't let the user bind keys that trigger
 		 * mkxp functions */
-		switch(event.key.keysym.scancode)
+		switch(event.key.scancode)
 		{
 		case SDL_SCANCODE_F1:
 		case SDL_SCANCODE_F2:
@@ -1106,13 +1104,13 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			break;
 		}
 
-	case SDL_CONTROLLERBUTTONDOWN:
-	case SDL_CONTROLLERAXISMOTION:
+	case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+	case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 		if (p->state != AwaitingInput)
 			return true;
 		break;
 
-	case SDL_MOUSEBUTTONDOWN:
+	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		p->onClick(event.button);
 		return true;
 	default:

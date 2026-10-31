@@ -49,16 +49,15 @@ void subRectImageUpload(GLint srcW, GLint srcX, GLint srcY,
 	}
 	else
 	{
-		SDL_PixelFormat *form = src->format;
-		SDL_Surface *tmp = SDL_CreateRGBSurface(0, dstW, dstH, form->BitsPerPixel,
-		                                        form->Rmask, form->Gmask, form->Bmask, form->Amask);
+		const SDL_PixelFormatDetails *form = src->format;
+		SDL_Surface *tmp = SDL_CreateSurface(dstW, dstH, SDL_GetPixelFormatForMasks(form->bits_per_pixel, form->Rmask, form->Gmask, form->Bmask, form->Amask));
 		SDL_Rect srcRect = { srcX, srcY, dstW, dstH };
 
 		SDL_BlitSurface(src, &srcRect, tmp, 0);
 
 		TEX::uploadSubImage(dstX, dstY, dstW, dstH, tmp->pixels, format);
 
-		SDL_FreeSurface(tmp);
+		SDL_DestroySurface(tmp);
 	}
 }
 
@@ -352,12 +351,12 @@ void blitSource(TEXFBO &source, int scaleIsSpecial)
 	}
 }
 
-void blitRectangle(const IntRect &src, const Vec2i &dstPos)
+void blitRectangle(const IntRect src, const Vec2i &dstPos)
 {
 	blitRectangle(src, IntRect(dstPos.x, dstPos.y, src.w, src.h), false);
 }
 
-void blitRectangle(const IntRect &src, const IntRect &dst, bool smooth)
+void blitRectangle(const IntRect src, const IntRect &dst, bool smooth)
 {
 	// Handle high-res dest
 	int scaledDstX = dst.x * blitDstWidthHires / blitDstWidthLores;

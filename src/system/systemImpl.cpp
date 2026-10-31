@@ -7,23 +7,23 @@
 
 #include "system.h"
 #include "util/exception.h"
-#include <SDL_filesystem.h>
+#include <SDL3/SDL_filesystem.h>
 #include <memory>
 
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
 #include <stdlib.h>
 #include <windows.h>
 #else
 #include <locale>
 #endif
 
-#include <SDL_loadso.h>
+#include <SDL3/SDL_loadso.h>
 #include <cstring>
 #include <string>
 
 std::string systemImpl::getSystemLanguage() {
     static char buf[50] = {0};
-#if defined(__WIN32__)
+#if defined(SDL_PLATFORM_WIN32)
     wchar_t wbuf[50] = {0};
     LANGID lid = GetUserDefaultLangID();
     LCIDToLocaleName(lid, wbuf, sizeof(wbuf), 0);
@@ -33,7 +33,7 @@ std::string systemImpl::getSystemLanguage() {
 #endif
     
     for (int i = 0; (size_t)i < strlen(buf); i++) {
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
         if (buf[i] == '-') {
             buf[i] = '_';
 #else
@@ -48,7 +48,7 @@ std::string systemImpl::getSystemLanguage() {
 
 std::string systemImpl::getUserName() {
     
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
     // The Ruby binding gets the username from the environment loaded
     // with Ruby instead, should fix getting it from WinAPI at some point
     return std::string("unused");
@@ -107,8 +107,8 @@ int systemImpl::getScalingFactor() {
 }
 
 std::string systemImpl::getDefaultGameRoot() {
-    const std::unique_ptr<char, decltype(&SDL_free)> path(SDL_GetBasePath(), SDL_free);
+    const char *path = SDL_GetBasePath();
     if (!path)
         throw Exception(Exception::MKXPError, "Failed to retrieve executable path");
-    return path.get();
+    return path;
 }

@@ -21,7 +21,7 @@
 
 #include <iterator>
 
-#include <SDL_joystick.h>
+#include <SDL3/SDL_joystick.h>
 #include <string>
 
 

@@ -49,7 +49,7 @@ struct KbBindingData
 
 struct CtrlBindingData
 {
-    SDL_GameControllerButton source;
+    SDL_GamepadButton source;
     Input::ButtonCode target;
     
     void add(BDescVec &d) const
@@ -106,24 +106,24 @@ static constexpr auto defaultKbBindings2N = std::size(defaultKbBindings2);
 
 static const CtrlBindingData defaultCtrlBindings[] =
 {
-	{ SDL_CONTROLLER_BUTTON_X, Input::A  },
-	{ SDL_CONTROLLER_BUTTON_B, Input::B  },
-	{ SDL_CONTROLLER_BUTTON_A, Input::C },
-	{ SDL_CONTROLLER_BUTTON_Y, Input::X  },
-	{ SDL_CONTROLLER_BUTTON_LEFTSTICK, Input::Y  },
-	{ SDL_CONTROLLER_BUTTON_RIGHTSTICK, Input::Z },
-	{ SDL_CONTROLLER_BUTTON_LEFTSHOULDER, Input::L  },
-	{ SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, Input::R  },
+	{ SDL_GAMEPAD_BUTTON_WEST, Input::A  },
+	{ SDL_GAMEPAD_BUTTON_EAST, Input::B  },
+	{ SDL_GAMEPAD_BUTTON_SOUTH, Input::C },
+	{ SDL_GAMEPAD_BUTTON_NORTH, Input::X  },
+	{ SDL_GAMEPAD_BUTTON_LEFT_STICK, Input::Y  },
+	{ SDL_GAMEPAD_BUTTON_RIGHT_STICK, Input::Z },
+	{ SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, Input::L  },
+	{ SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, Input::R  },
     
-    { SDL_CONTROLLER_BUTTON_DPAD_UP, Input::Up },
-    { SDL_CONTROLLER_BUTTON_DPAD_DOWN, Input::Down },
-    { SDL_CONTROLLER_BUTTON_DPAD_LEFT, Input::Left },
-    { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, Input::Right }
+    { SDL_GAMEPAD_BUTTON_DPAD_UP, Input::Up },
+    { SDL_GAMEPAD_BUTTON_DPAD_DOWN, Input::Down },
+    { SDL_GAMEPAD_BUTTON_DPAD_LEFT, Input::Left },
+    { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, Input::Right }
 };
 
 static constexpr auto defaultCtrlBindingsN = std::size(defaultCtrlBindings);
 
-static void addAxisBinding(BDescVec &d, SDL_GameControllerAxis axis, AxisDir dir, Input::ButtonCode target)
+static void addAxisBinding(BDescVec &d, SDL_GamepadAxis axis, AxisDir dir, Input::ButtonCode target)
 {
 	SourceDesc src;
 	src.type = CAxis;
@@ -154,10 +154,10 @@ BDescVec genDefaultBindings(const Config &conf)
 	for (size_t i = 0; i < defaultCtrlBindingsN; ++i)
 		defaultCtrlBindings[i].add(d);
 
-	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTX, Negative, Input::Left );
-	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTX, Positive, Input::Right);
-	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTY, Negative, Input::Up   );
-	addAxisBinding(d, SDL_CONTROLLER_AXIS_LEFTY, Positive, Input::Down );
+	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTX, Negative, Input::Left );
+	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTX, Positive, Input::Right);
+	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTY, Negative, Input::Up   );
+	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTY, Positive, Input::Down );
 
 	return d;
 }
@@ -242,14 +242,14 @@ static bool verifyDesc(const BindingDesc &desc)
 	if (i == codesN)
 		return false;
 
-	const SourceDesc &src = desc.src;
+	const SourceDesc src = desc.src;
 
 	switch (src.type)
 	{
 	case Invalid:
 		return true;
 	case Key:
-		return src.d.scan < SDL_NUM_SCANCODES;
+		return src.d.scan < SDL_SCANCODE_COUNT;
             
     case CButton:
         return true;

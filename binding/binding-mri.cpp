@@ -55,7 +55,7 @@ extern "C" {
 #endif
 }
 
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
 #include "binding-mri-win32.h"
 #endif
 
@@ -63,10 +63,10 @@ extern "C" {
 #include <string>
 #include <zlib.h>
 
-#include <SDL_cpuinfo.h>
-#include <SDL_filesystem.h>
-#include <SDL_loadso.h>
-#include <SDL_power.h>
+#include <SDL3/SDL_cpuinfo.h>
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_loadso.h>
+#include <SDL3/SDL_power.h>
 
 #include "git-hash.h"
 
@@ -298,7 +298,7 @@ static void mriBindingInit() {
     
     // Set $stdout and its ilk accordingly on Windows
     // I regret teaching you that word
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
     if (shState->config().winConsole)
         configureWindowsStreams();
 #endif
@@ -502,7 +502,7 @@ RB_METHOD(mkxpUserName) {
     
     // Using the Windows API isn't working with usernames that involve Unicode
     // characters for some dumb reason
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
     VALUE env = rb_const_get(rb_mKernel, rb_intern("ENV"));
     return rb_funcall(env, rb_intern("[]"), 1, rb_str_new_cstr("USERNAME"));
 #else
@@ -547,7 +547,7 @@ RB_METHOD(mkxpSettingsMenu) {
 RB_METHOD(mkxpCpuCount) {
     RB_UNUSED_PARAM;
     
-    return INT2NUM(SDL_GetCPUCount());
+    return INT2NUM(SDL_GetNumLogicalCPUCores());
 }
 
 RB_METHOD(mkxpSystemMemory) {
@@ -657,7 +657,7 @@ RB_METHOD_GUARD(mkxpStringToUTF8Bang) {
 }
 RB_METHOD_GUARD_END
 
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 #define OPENCMD "open "
 #define OPENARGS "--args"
 #elif defined(_WIN32)
@@ -680,7 +680,7 @@ RB_METHOD_GUARD(mkxpLaunch) {
     command += "\""; command += RSTRING_PTR(cmdname); command += "\"";
     
     if (args != RUBY_Qnil) {
-#if defined(__APPLE__) || defined(_WIN32)
+#if defined(SDL_PLATFORM_APPLE) || defined(_WIN32)
         command += " ";
         command += OPENARGS;
         Check_Type(args, T_ARRAY);
@@ -1264,7 +1264,7 @@ static void mriBindingExecute() {
 #else
     ruby_init();
     rb_eval_string("$KCODE='U'");
-#ifdef __WIN32__
+#ifdef SDL_PLATFORM_WIN32
     if (!conf.winConsole) {
         VALUE iostr = rb_str_new2("NUL");
         // Sysinit isn't a thing yet, so send io to /dev/null instead

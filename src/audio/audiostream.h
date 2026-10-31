@@ -81,7 +81,7 @@ struct AudioStream
 	bool noResumeStop;
 
 	ALStream stream;
-	SDL_mutex *streamMut;
+	SDL_Mutex *streamMut;
 
 	/* Fade out */
 	struct
