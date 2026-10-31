@@ -61,6 +61,7 @@
 #include <algorithm>
 #include <errno.h>
 #include <functional>
+#include <numeric>
 #include <sys/time.h>
 #include <unistd.h>
 #include <time.h>
@@ -1162,9 +1163,7 @@ public:
     double averageFPS() {
         double ret = 0;
         SDL_LockMutex(avgFPSLock);
-        for (double times : avgFPSData)
-            ret += times;
-        
+        ret = std::ranges::fold_left(avgFPSData, 0.0, std::plus{});
         ret = 1 / (ret / avgFPSData.size());
         SDL_UnlockMutex(avgFPSLock);
         return ret;
