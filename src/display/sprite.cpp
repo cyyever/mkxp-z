@@ -36,11 +36,8 @@
 #include "glstate.h"
 #include "quadarray.h"
 
-// TODO: Replace M_PI with std::numbers::pi once we upgrade to C++20.
 #include <math.h>
-#ifndef M_PI
-# define M_PI 3.14159265358979323846
-#endif
+#include <numbers>
 
 #include <SDL_rect.h>
 
@@ -265,7 +262,7 @@ struct SpritePrivate
         }
         
         // Calculate the slope in segments of 45deg, so I don't have to deal with near-infinite slopes
-        bushSlope = tan(abs(fwrap(angle - 45, 90) - 45) * M_PI / 180.0f);
+        bushSlope = tan(abs(fwrap(angle - 45, 90) - 45) * std::numbers::pi / 180.0f);
         // Manually set negative slopes
         bushSlope *= fwrap(angle, 180) > 90 ? -1 : 1;
         
@@ -323,7 +320,7 @@ struct SpritePrivate
         
         // We use a "left-handed" coordinate system, with positive y values being below the x-axis,
         // so we need to use the negative of the angle to get the proper y values.
-        float rotation  = -angle * M_PI / 180.0f;
+        float rotation  = -angle * std::numbers::pi / 180.0f;
         
         // p1 doesn't change, so we can skip rotating it
         Vec2 p1 = src.topLeft();
@@ -463,7 +460,7 @@ struct SpritePrivate
     void emitWaveChunk(SVertex *&vert, float phase, float width,
                        const Vec2 &zoom, int chunkY, int chunkLength, int offsetLength)
     {
-        float wavePos = phase + ((offsetLength + chunkY) / (float) wave.length) * (float) (M_PI * 2);
+        float wavePos = phase + ((offsetLength + chunkY) / (float) wave.length) * (float) (std::numbers::pi * 2);
         float chunkX = sin(wavePos) * wave.amp / zoom.x;
         
         FloatRect pos(chunkX, chunkY / zoom.y, adjustedSrcRect.w, chunkLength / zoom.y);
@@ -601,7 +598,7 @@ struct SpritePrivate
         wave.qArray.resize(!!firstLength + chunks + !!lastLength);
         SVertex *vert = &wave.qArray.vertices[0];
         
-        float phase = (wave.phase * (float) M_PI) / 180.0f;
+        float phase = (wave.phase * (float) std::numbers::pi) / 180.0f;
         
         if (firstLength > 0)
             emitWaveChunk(vert, phase, width, zoom, 0, firstLength, firstOffset);

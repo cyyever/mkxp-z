@@ -1,6 +1,19 @@
-project('mkxp-z', 'c', 'cpp', version: '2.4.2', meson_version: '>=1.4.0')
+project('mkxp-z', 'c', 'cpp', version: '2.4.2', meson_version: '>=1.10.0',
+        default_options: {'cpp_std': 'c++26,c++latest'})
+
+c_std = 'gnu11,c11'
+# MSVC exposes its implemented C++26 features through /std:c++latest.
+cpp_std = 'c++26,c++latest'
+engine_standards = {'c_std': c_std, 'cpp_std': cpp_std}
 if host_machine.system() == 'darwin'
     add_languages('objcpp', native: false)
+    engine_standards += {'objcpp_std': cpp_std}
+endif
+
+# Exercise the production portable code without downloading engine dependencies.
+if get_option('core_tests_only')
+    subdir('tests/core')
+    subdir_done()
 endif
 
 gplv3_features = []
@@ -27,10 +40,10 @@ global_cpp_args = []
 global_objc_args = ['-fobjc-arc', '-fobjc-weak']
 global_objcpp_args = []
 global_link_args = []
-c_std = 'gnu11,c11'
-cpp_std = 'gnu++14,c++14'
+# External projects keep their own language baseline.
+dependency_cpp_std = 'gnu++14,c++14'
 
-common = subproject('common', default_options: {'c_std': c_std, 'cpp_std': cpp_std})
+common = subproject('common', default_options: {'c_std': c_std, 'cpp_std': dependency_cpp_std})
 cmake = import('cmake')
 python = common.get_variable('python')
 embedtool = common.get_variable('embedtool')
@@ -91,10 +104,6 @@ endif
 # Defines
 if get_option('workdir_current')
     global_args += '-DWORKDIR_CURRENT'
-endif
-
-if get_option('cxx11_experimental') == true
-    global_args += '-DMKXPZ_EXP_FS'
 endif
 
 if get_option('force32') == true
@@ -158,7 +167,7 @@ if get_option('steamworks_path') != ''
             '-fobjc-weak',
         ],
         link_args: global_link_args,
-        override_options: {'c_std': c_std, 'cpp_std': cpp_std},
+        override_options: engine_standards,
         win_subsystem: get_option('steamshim_debug') ? 'console' : 'windows',
         build_rpath: rpath,
         install_rpath: rpath,
@@ -179,7 +188,7 @@ libmkxp = static_library(
     cpp_args: global_args + global_cpp_args,
     objc_args: global_args + global_objc_args,
     objcpp_args: global_args + global_objc_args + global_cpp_args + global_objcpp_args,
-    override_options: {'c_std': c_std, 'cpp_std': cpp_std},
+    override_options: engine_standards,
 )
 
 executable(
@@ -250,7 +259,7 @@ if host_system == 'darwin'
                 '-fobjc-weak',
             ],
             link_args: global_link_args,
-            override_options: {'c_std': c_std, 'cpp_std': cpp_std},
+            override_options: engine_standards,
             win_subsystem: get_option('steamshim_debug') ? 'console' : 'windows',
             build_rpath: rpath,
             install_rpath: rpath,
