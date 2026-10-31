@@ -26,6 +26,8 @@
 #include "alstream.h"
 #include "sdl-util.h"
 
+#include <atomic>
+#include <mutex>
 #include <string>
 
 struct AudioStream
@@ -58,7 +60,7 @@ struct AudioStream
 	/* Note that 'extPaused' and 'noResumeStop' are
 	 * effectively only used with the AudioStream
 	 * instance representing the BGM.
-	 * They are not AtomicFlags because they're regarded
+	 * They are not atomics because they're regarded
 	 * as part of the underlying stream state, and
 	 * always accessed with the stream lock held */
 
@@ -81,21 +83,21 @@ struct AudioStream
 	bool noResumeStop;
 
 	ALStream stream;
-	SDL_Mutex *streamMut;
+	std::mutex streamMut;
 
 	/* Fade out */
 	struct
 	{
 		/* Fade out is in progress */
-		AtomicFlag active;
+		std::atomic<bool> active{false};
 
 		/* Request fade thread to finish and
 		 * cleanup (like it normally would) */
-		AtomicFlag reqFini;
+		std::atomic<bool> reqFini{false};
 
 		/* Request fade thread to terminate
 		 * immediately */
-		AtomicFlag reqTerm;
+		std::atomic<bool> reqTerm{false};
 
 		SDL_Thread *thread;
 		std::string threadName;
@@ -111,8 +113,8 @@ struct AudioStream
 	/* Fade in */
 	struct
 	{
-		AtomicFlag rqFini;
-		AtomicFlag rqTerm;
+		std::atomic<bool> rqFini{false};
+		std::atomic<bool> rqTerm{false};
 
 		SDL_Thread *thread;
 		std::string threadName;
@@ -135,8 +137,10 @@ struct AudioStream
 	/* Any access to this classes 'stream' member,
 	 * whether state query or modification, must be
 	 * protected by a 'lock'/'unlock' pair */
-	void lockStream();
-	void unlockStream();
+	/* Any access to this class's 'stream' member,
+	 * whether state query or modification, must
+	 * hold this lock */
+	[[nodiscard]] std::unique_lock<std::mutex> lockStream() { return std::unique_lock(streamMut); }
 
 	void setVolume(VolumeType type, float value);
 	float getVolume(VolumeType type);

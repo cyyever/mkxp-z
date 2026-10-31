@@ -31,7 +31,6 @@
 #include "sdl-util.h"
 #include "debugwriter.h"
 
-#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_timer.h>
 
@@ -53,8 +52,6 @@ ALStream::ALStream(LoopMode loopMode,
 	for (int i = 0; i < STREAM_BUFS; ++i)
 		alBuf[i] = AL::Buffer::gen();
 
-	pauseMut = SDL_CreateMutex();
-
 	threadName = std::string("al_stream (") + threadId + ")";
 }
 
@@ -67,8 +64,6 @@ ALStream::~ALStream()
 
 	for (int i = 0; i < STREAM_BUFS; ++i)
 		AL::Buffer::del(alBuf[i]);
-
-	SDL_DestroyMutex(pauseMut);
 }
 
 void ALStream::close()
@@ -268,18 +263,18 @@ void ALStream::openSource(const std::string &filename)
 	}
 	
 	source = handler.source;
-	needsRewind.clear();
+	needsRewind = false;
 }
 
 void ALStream::stopStream()
 {
-	threadTermReq.set();
+	threadTermReq = true;
 
 	if (thread)
 	{
 		SDL_WaitThread(thread, 0);
 		thread = 0;
-		needsRewind.set();
+		needsRewind = true;
 	}
 
 	/* Need to stop the source _after_ the thread has terminated,
@@ -295,9 +290,9 @@ void ALStream::startStream(double offset)
 	AL::Source::clearQueue(alSrc);
 
 	preemptPause = false;
-	streamInited.clear();
-	sourceExhausted.clear();
-	threadTermReq.clear();
+	streamInited = false;
+	sourceExhausted = false;
+	threadTermReq = false;
 
 	startOffset = offset;
 	procFrames = offset * source->sampleRate();
@@ -308,26 +303,22 @@ void ALStream::startStream(double offset)
 
 void ALStream::pauseStream()
 {
-	SDL_LockMutex(pauseMut);
+	std::scoped_lock lock(pauseMut);
 
 	if (AL::Source::getState(alSrc) != AL_PLAYING)
 		preemptPause = true;
 	else
 		AL::Source::pause(alSrc);
-
-	SDL_UnlockMutex(pauseMut);
 }
 
 void ALStream::resumeStream()
 {
-	SDL_LockMutex(pauseMut);
+	std::scoped_lock lock(pauseMut);
 
 	if (preemptPause)
 		preemptPause = false;
 	else
 		AL::Source::play(alSrc);
-
-	SDL_UnlockMutex(pauseMut);
 }
 
 void ALStream::checkStopped()
@@ -389,7 +380,7 @@ void ALStream::streamData()
 			resumeStream();
 
 			firstBuffer = false;
-			streamInited.set();
+			streamInited = true;
 		}
 
 		if (threadTermReq)
@@ -397,7 +388,7 @@ void ALStream::streamData()
 
 		if (status == ALDataSource::EndOfStream)
 		{
-			sourceExhausted.set();
+			sourceExhausted = true;
 			break;
 		}
 	}
@@ -447,7 +438,7 @@ void ALStream::streamData()
 
 			if (status == ALDataSource::Error)
 			{
-				sourceExhausted.set();
+				sourceExhausted = true;
 				return;
 			}
 
@@ -466,7 +457,7 @@ void ALStream::streamData()
 				lastBuf = buf;
 
 			if (status == ALDataSource::EndOfStream)
-				sourceExhausted.set();
+				sourceExhausted = true;
 		}
 
 		if (threadTermReq)
