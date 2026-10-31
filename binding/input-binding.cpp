@@ -512,11 +512,14 @@ RB_METHOD(inputSetMode) {
 
 RB_METHOD(inputGets) {
     RB_UNUSED_PARAM;
-    shState->eThread().lockText(true);
-    VALUE ret = rb_utf8_str_new_cstr(shState->input().getText());
-    shState->input().clearText();
-    shState->eThread().lockText(false);
-    return ret;
+    std::string text;
+    {
+        auto guard = shState->eThread().lockText();
+        text = shState->input().getText();
+        shState->input().clearText();
+    }
+    // Build the Ruby string after unlocking: Ruby raises via longjmp, which would skip the guard.
+    return rb_utf8_str_new(text.data(), text.size());
 }
 
 RB_METHOD_GUARD(inputGetClipboard) {

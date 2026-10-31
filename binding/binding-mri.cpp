@@ -1256,7 +1256,7 @@ static void mriBindingExecute() {
          */
         showMsg("An error occurred while initializing Ruby. (Invalid JIT settings?)");
         ruby_cleanup(state);
-        shState->rtData().rqTermAck.set();
+        shState->rtData().rqTermAck = true;
         return;
     }
     rb_enc_set_default_internal(rb_enc_from_encoding(rb_utf8_encoding()));
@@ -1323,7 +1323,7 @@ static void mriBindingExecute() {
     
     ruby_cleanup(0);
     
-    shState->rtData().rqTermAck.set();
+    shState->rtData().rqTermAck = true;
 }
 
 static void mriBindingTerminate() { throw Exception(Exception::SystemExit, " "); }

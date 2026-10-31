@@ -166,7 +166,7 @@ int rgssThreadFun(void *userdata) {
   /* Start script execution */
   scriptBinding->execute();
 
-  threadData->rqTermAck.set();
+  threadData->rqTermAck = true;
   threadData->ethread->requestTerminate();
 
   SharedState::finiInstance();
@@ -189,7 +189,7 @@ static void printRgssVersion(int ver) {
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg) {
   rtData->rgssErrorMsg = msg;
   rtData->ethread->requestTerminate();
-  rtData->rqTermAck.set();
+  rtData->rqTermAck = true;
 }
 
 static void showInitError(const std::string &msg) {
@@ -599,7 +599,7 @@ int main(int argc, char *argv[]) {
     eventThread.process(rtData);
 
     /* Request RGSS thread to stop */
-    rtData.rqTerm.set();
+    rtData.rqTerm = true;
 
     /* Wait for RGSS thread response */
     for (int i = 0; i < 1000; ++i) {

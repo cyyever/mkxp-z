@@ -1,7 +1,6 @@
 #ifndef SDLUTIL_H
 #define SDLUTIL_H
 
-#include <SDL3/SDL_atomic.h>
 #include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_iostream.h>
 
@@ -9,43 +8,6 @@
 #include <iostream>
 #include <cstring>
 #include <memory>
-
-struct AtomicFlag
-{
-	AtomicFlag()
-	{
-		clear();
-	}
-
-	void set()
-	{
-		SDL_SetAtomicInt(&atom, 1);
-	}
-
-	void clear()
-	{
-		SDL_SetAtomicInt(&atom, 0);
-	}
-    
-    void wait()
-    {
-        while (SDL_GetAtomicInt(&atom)) {}
-    }
-    
-    void reset()
-    {
-        wait();
-        set();
-    }
-
-	operator bool() const
-	{
-		return SDL_GetAtomicInt(&atom);
-	}
-
-private:
-	mutable SDL_AtomicInt atom;
-};
 
 template<class C, void (C::*func)()>
 int __sdlThreadFun(void *obj)

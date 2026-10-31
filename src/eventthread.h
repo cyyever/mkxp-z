@@ -24,10 +24,11 @@
 
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_mouse.h>
-#include <SDL3/SDL_mutex.h>
-#include <SDL3/SDL_atomic.h>
 #include <SDL3/SDL_gamepad.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 
 #include <stdint.h>
@@ -75,16 +76,15 @@ public:
     static ControllerState controllerState;
 	static MouseState mouseState;
 	static TouchState touchState;
-    static SDL_AtomicInt verticalScrollDistance;
+    static std::atomic<int> verticalScrollDistance;
     
     std::string textInputBuffer;
-    void lockText(bool lock);
+    [[nodiscard]] std::unique_lock<std::mutex> lockText() { return std::unique_lock(textInputLock); }
     
 
 	static bool allocUserEvents();
 
 	EventThread();
-    ~EventThread();
 
 	void process(RGSSThreadData &rtData);
 	void cleanup();
@@ -130,13 +130,13 @@ private:
     
     SDL_Gamepad *ctrl;
     
-	AtomicFlag msgBoxDone;
+	std::atomic<bool> msgBoxDone{false};
     
-    SDL_Mutex *textInputLock;
+    std::mutex textInputLock;
 
 	struct
 	{
-		AtomicFlag sendUpdates;
+		std::atomic<bool> sendUpdates{false};
 	} fps;
 };
 
@@ -146,24 +146,16 @@ template<typename T>
 struct UnidirMessage
 {
 	UnidirMessage()
-	    : mutex(SDL_CreateMutex()),
-	      current(T())
+	    : current(T())
 	{}
-
-	~UnidirMessage()
-	{
-		SDL_DestroyMutex(mutex);
-	}
 
 	/* Done from the sending side */
 	void post(const T &value)
 	{
-		SDL_LockMutex(mutex);
+		std::scoped_lock guard(mutex);
 
-		changed.set();
+		changed = true;
 		current = value;
-
-		SDL_UnlockMutex(mutex);
 	}
 
 	/* Done from the receiving side */
@@ -172,12 +164,10 @@ struct UnidirMessage
 		if (!changed)
 			return false;
 
-		SDL_LockMutex(mutex);
+		std::scoped_lock guard(mutex);
 
 		out = current;
-		changed.clear();
-
-		SDL_UnlockMutex(mutex);
+		changed = false;
 
 		return true;
 	}
@@ -185,14 +175,13 @@ struct UnidirMessage
 	/* Done from either */
 	void get(T &out) const
 	{
-		SDL_LockMutex(mutex);
+		std::scoped_lock guard(mutex);
 		out = current;
-		SDL_UnlockMutex(mutex);
 	}
 
 private:
-	SDL_Mutex *mutex;
-	mutable AtomicFlag changed;
+	mutable std::mutex mutex;
+	mutable std::atomic<bool> changed{false};
 	T current;
 };
 
@@ -212,16 +201,13 @@ struct SyncPoint
 private:
 	struct Util
 	{
-		Util();
-		~Util();
-
 		void lock();
 		void unlock(bool multi);
 		void waitForUnlock();
 
-		AtomicFlag locked;
-		SDL_Mutex *mut;
-		SDL_Condition *cond;
+		std::atomic<bool> locked{false};
+		std::mutex mut;
+		std::condition_variable cond;
 	};
 
 	Util mainSync;
@@ -232,19 +218,19 @@ private:
 struct RGSSThreadData
 {
 	/* Main thread sets this to request RGSS thread to terminate */
-	AtomicFlag rqTerm;
+	std::atomic<bool> rqTerm{false};
 	/* In response, RGSS thread sets this to confirm
 	 * that it received the request and isn't stuck */
-	AtomicFlag rqTermAck;
+	std::atomic<bool> rqTermAck{false};
 
 	/* Set when F12 is pressed */
-	AtomicFlag rqReset;
+	std::atomic<bool> rqReset{false};
 
 	/* Set when F12 is released */
-	AtomicFlag rqResetFinish;
+	std::atomic<bool> rqResetFinish{false};
     
     // Set when window is being adjusted (resize, reposition)
-    AtomicFlag rqWindowAdjust;
+    std::atomic<bool> rqWindowAdjust{false};
 
 	EventThread *ethread;
 	UnidirMessage<Vec2i> windowSizeMsg;
@@ -286,7 +272,7 @@ struct RGSSThreadData
 	      config(newconf),
           glContext(ctx)
 	{
-		rqResetFinish.set();
+		rqResetFinish = true;
 	}
 };
 

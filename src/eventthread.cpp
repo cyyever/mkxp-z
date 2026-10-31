@@ -88,7 +88,7 @@ uint8_t EventThread::keyStates[];
 EventThread::ControllerState EventThread::controllerState;
 EventThread::MouseState EventThread::mouseState;
 EventThread::TouchState EventThread::touchState;
-SDL_AtomicInt EventThread::verticalScrollDistance;
+std::atomic<int> EventThread::verticalScrollDistance;
 
 /* User event codes */
 enum
@@ -127,12 +127,6 @@ EventThread::EventThread()
 fullscreen(false),
 showCursor(false)
 {
-    textInputLock = SDL_CreateMutex();
-}
-
-EventThread::~EventThread()
-{
-    SDL_DestroyMutex(textInputLock);
 }
 
 SDL_TimerID hideCursorTimerID = 0;
@@ -169,7 +163,7 @@ void EventThread::process(RGSSThreadData &rtData)
     bool displayingFPS = rtData.config.displayFPS;
     
     if (displayingFPS || rtData.config.printFPS)
-        fps.sendUpdates.set();
+        fps.sendUpdates = true;
 
     bool cursorInWindow = false;
     /* Will be updated eventually */
@@ -306,11 +300,12 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                         break;
             case SDL_EVENT_TEXT_INPUT :
-                lockText(true);
-                if (textInputBuffer.size() < 512) {
-                    textInputBuffer += event.text.text;
+                {
+                    auto guard = lockText();
+                    if (textInputBuffer.size() < 512) {
+                        textInputBuffer += event.text.text;
+                    }
                 }
-                lockText(false);
                 break;
                 
             case SDL_EVENT_QUIT :
@@ -361,7 +356,7 @@ void EventThread::process(RGSSThreadData &rtData)
                     if (!displayingFPS)
                     {
                         
-                        fps.sendUpdates.set();
+                        fps.sendUpdates = true;
                         displayingFPS = true;
                     }
                     else
@@ -369,7 +364,7 @@ void EventThread::process(RGSSThreadData &rtData)
                         displayingFPS = false;
                         
                         if (!rtData.config.printFPS)
-                            fps.sendUpdates.clear();
+                            fps.sendUpdates = false;
                         
                         if (fullscreen)
                         {
@@ -396,8 +391,8 @@ void EventThread::process(RGSSThreadData &rtData)
                         break;
                     
                     resetting = true;
-                    rtData.rqResetFinish.clear();
-                    rtData.rqReset.set();
+                    rtData.rqResetFinish = false;
+                    rtData.rqReset = true;
                     break;
                 }
                 
@@ -411,7 +406,7 @@ void EventThread::process(RGSSThreadData &rtData)
                         break;
                     
                     resetting = false;
-                    rtData.rqResetFinish.set();
+                    rtData.rqResetFinish = true;
                     break;
                 }
                 
@@ -460,7 +455,7 @@ void EventThread::process(RGSSThreadData &rtData)
                 
             case SDL_EVENT_MOUSE_WHEEL :
                 /* Only consider vertical scrolling for now */
-                SDL_AddAtomicInt(&verticalScrollDistance, event.wheel.y);
+                verticalScrollDistance += static_cast<int>(event.wheel.y);
                 
             case SDL_EVENT_FINGER_DOWN :
                 i = event.tfinger.fingerID;
@@ -487,12 +482,14 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                     case REQUEST_WINRESIZE :
                         SDL_SetWindowSize(win, event.window.data1, event.window.data2);
-                        rtData.rqWindowAdjust.clear();
+                        rtData.rqWindowAdjust = false;
+                        rtData.rqWindowAdjust.notify_all();
                         break;
                         
                     case REQUEST_WINCENTER :
                         SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-                        rtData.rqWindowAdjust.clear();
+                        rtData.rqWindowAdjust = false;
+                        rtData.rqWindowAdjust.notify_all();
                         break;
                         
                     case REQUEST_WINRENAME :
@@ -508,16 +505,12 @@ void EventThread::process(RGSSThreadData &rtData)
                                 SDL_SetTextInputRect(&rect);
                             }
                             SDL_StartTextInput(win);
-                            lockText(true);
-                            textInputBuffer.clear();
-                            lockText(false);
+                            { auto guard = lockText(); textInputBuffer.clear(); }
                         }
                         else
                         {
                             SDL_StopTextInput(win);
-                            lockText(true);
-                            textInputBuffer.clear();
-                            lockText(false);
+                            { auto guard = lockText(); textInputBuffer.clear(); }
                         }
                         break;
                         
@@ -536,7 +529,7 @@ void EventThread::process(RGSSThreadData &rtData)
                                                  (const char*)event.user.data1, win);
 #endif
                         free(event.user.data1);
-                        msgBoxDone.set();
+                        msgBoxDone = true;
                         break;
                     }
                     case REQUEST_SETCURSORVISIBLE :
@@ -717,7 +710,7 @@ void EventThread::requestFullscreenMode(bool mode)
 
 void EventThread::requestWindowResize(int width, int height)
 {
-    shState->rtData().rqWindowAdjust.set();
+    shState->rtData().rqWindowAdjust = true;
     SDL_Event event;
     event.type = usrIdStart + REQUEST_WINRESIZE;
     event.window.data1 = width;
@@ -727,7 +720,7 @@ void EventThread::requestWindowResize(int width, int height)
 
 void EventThread::requestWindowCenter()
 {
-    shState->rtData().rqWindowAdjust.set();
+    shState->rtData().rqWindowAdjust = true;
     SDL_Event event;
     event.type = usrIdStart + REQUEST_WINCENTER;
     SDL_PushEvent(&event);
@@ -766,7 +759,7 @@ void EventThread::requestSettingsMenu()
 
 void EventThread::showMessageBox(const char *body, int flags)
 {
-    msgBoxDone.clear();
+    msgBoxDone = false;
     
     // mkxp has already been asked to quit.
     // Don't break things if the window wants to close
@@ -839,11 +832,6 @@ void EventThread::notifyGameScreenChange(const SDL_Rect &screen)
     SDL_PushEvent(&event);
 }
 
-void EventThread::lockText(bool lock)
-{
-    lock ? SDL_LockMutex(textInputLock) : SDL_UnlockMutex(textInputLock);
-}
-
 void SyncPoint::haltThreads()
 {
     if (mainSync.locked)
@@ -891,39 +879,27 @@ void SyncPoint::passSecondarySync()
     secondSync.waitForUnlock();
 }
 
-SyncPoint::Util::Util()
-{
-    mut = SDL_CreateMutex();
-    cond = SDL_CreateCondition();
-}
-
-SyncPoint::Util::~Util()
-{
-    SDL_DestroyCondition(cond);
-    SDL_DestroyMutex(mut);
-}
-
 void SyncPoint::Util::lock()
 {
-    locked.set();
+    locked = true;
 }
 
 void SyncPoint::Util::unlock(bool multi)
 {
-    locked.clear();
+    {
+        /* Clear under the mutex so a waiter cannot miss the wakeup */
+        std::scoped_lock guard(mut);
+        locked = false;
+    }
     
     if (multi)
-        SDL_BroadcastCondition(cond);
+        cond.notify_all();
     else
-        SDL_SignalCondition(cond);
+        cond.notify_one();
 }
 
 void SyncPoint::Util::waitForUnlock()
 {
-    SDL_LockMutex(mut);
-    
-    while (locked)
-        SDL_WaitCondition(cond, mut);
-    
-    SDL_UnlockMutex(mut);
+    std::unique_lock guard(mut);
+    cond.wait(guard, [this] { return !locked; });
 }

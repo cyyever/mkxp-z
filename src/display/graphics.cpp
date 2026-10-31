@@ -49,8 +49,9 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
-#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_thread.h>
+
+#include <mutex>
 
 #ifdef MKXPZ_STEAM
 #include "steamshim_child.h"
@@ -113,13 +114,13 @@ struct Movie
     Bitmap *videoBitmap;
     SDL_IOStream *srcOps = nullptr;
     SDL_Thread *audioThread;
-    AtomicFlag audioThreadTermReq;
+    std::atomic<bool> audioThreadTermReq{false};
     volatile AudioQueue *audioQueueHead;
     volatile AudioQueue *audioQueueTail;
     ALuint audioSource;
     ALuint alBuffers[STREAM_BUFS];
     ALshort audioBuffer[MOVIE_AUDIO_BUFFER_SIZE];
-    SDL_Mutex *audioMutex;
+    std::mutex audioMutex;
     
     Movie(bool skippable_)
     : decoder(0), audio(0), video(0), skippable(skippable_), videoBitmap(0), audioThread(0)
@@ -228,14 +229,13 @@ struct Movie
         item->offset = 0;
         item->next = NULL;
         
-        SDL_LockMutex(audioMutex);
+        std::scoped_lock lock(audioMutex);
         if (audioQueueTail) {
             audioQueueTail->next = item;
         } else {
             audioQueueHead = item;
         }
         audioQueueTail = item;
-        SDL_UnlockMutex(audioMutex);
     }
     
     void bufferMovieAudio(THEORAPLAY_Decoder *decoder, const Uint32 now) {
@@ -266,7 +266,7 @@ struct Movie
 
                 remainingSamples = MOVIE_AUDIO_BUFFER_SIZE;
                 sampleBuffer = audioBuffer;
-                SDL_LockMutex(audioMutex);
+                std::unique_lock lock(audioMutex);
 
                 while(audioQueueHead && (remainingSamples > 0)) {
                     audioPacketAndOffset = audioQueueHead;
@@ -302,7 +302,7 @@ struct Movie
 
                 if(!audioQueueHead) audioQueueTail = NULL;
 
-                SDL_UnlockMutex(audioMutex);
+                lock.unlock();
 
                 alBufferData(alBuffers[procBufs], channels == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, audioBuffer,
                     (MOVIE_AUDIO_BUFFER_SIZE - remainingSamples) * sizeof(ALshort), sampleRate);
@@ -330,8 +330,7 @@ struct Movie
         alGenBuffers(STREAM_BUFS, alBuffers);
         alSourcef(audioSource, AL_GAIN, volume);
 
-        audioThreadTermReq.clear();
-        audioMutex = SDL_CreateMutex();
+        audioThreadTermReq = false;
         queueAudioPacket(audio);
         audio = NULL;
         bufferMovieAudio(decoder, 0);
@@ -424,6 +423,12 @@ struct Movie
     ~Movie()
     {
         if (hasAudio) {
+            audioThreadTermReq = true;
+            if(audioThread) {
+                SDL_WaitThread(audioThread, 0);
+                audioThread = 0;
+            }
+            
             if (audioQueueTail) {
                 THEORAPLAY_freeAudio(audioQueueTail->audio);
             }
@@ -433,12 +438,6 @@ struct Movie
                 THEORAPLAY_freeAudio(audioQueueHead->audio);
             }
             audioQueueHead = NULL;
-            SDL_DestroyMutex(audioMutex);
-            audioThreadTermReq.set();
-            if(audioThread) {
-                SDL_WaitThread(audioThread, 0);
-                audioThread = 0;
-            }
             alSourceStop(audioSource);
             alDeleteSources(1, &audioSource);
             alDeleteBuffers(STREAM_BUFS, alBuffers);
@@ -856,9 +855,9 @@ struct GraphicsPrivate {
     
     std::vector<double> avgFPSData;
     double last_avg_update;
-    SDL_Mutex *avgFPSLock;
+    std::mutex avgFPSLock;
     
-    SDL_Mutex *glResourceLock;
+    std::mutex glResourceLock;
     bool multithreadedMode;
     
     /* Global list of all live Disposables
@@ -879,8 +878,6 @@ struct GraphicsPrivate {
     integerScaleActive(rtData->config.integerScaling.active),
     integerLastMileScaling(rtData->config.integerScaling.lastMileScaling) {
         avgFPSData = std::vector<double>();
-        avgFPSLock = SDL_CreateMutex();
-        glResourceLock = SDL_CreateMutex();
         
         if (integerScaleActive) {
             integerScaleFactor = Vec2i(0, 0);
@@ -903,8 +900,6 @@ struct GraphicsPrivate {
     ~GraphicsPrivate() {
         TEXFBO::fini(frozenScene);
         TEXFBO::fini(integerScaleBuffer);
-        SDL_DestroyMutex(avgFPSLock);
-        SDL_DestroyMutex(glResourceLock);
     }
     
     void updateScreenResoRatio(RGSSThreadData *rtData) {
@@ -1024,7 +1019,7 @@ struct GraphicsPrivate {
     }
     
     void shutdown() {
-        threadData->rqTermAck.set();
+        threadData->rqTermAck = true;
         shState->texPool().disable();
         
         scriptBinding->terminate();
@@ -1161,36 +1156,32 @@ public:
     }
     
     double averageFPS() {
-        double ret = 0;
-        SDL_LockMutex(avgFPSLock);
-        ret = std::ranges::fold_left(avgFPSData, 0.0, std::plus{});
-        ret = 1 / (ret / avgFPSData.size());
-        SDL_UnlockMutex(avgFPSLock);
-        return ret;
+        std::scoped_lock lock(avgFPSLock);
+        double ret = std::ranges::fold_left(avgFPSData, 0.0, std::plus{});
+        return 1 / (ret / avgFPSData.size());
     }
     
     void setLock(bool force = false) {
         if (!(force || multithreadedMode)) return;
         
-        SDL_LockMutex(glResourceLock);
+        glResourceLock.lock();
         SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
     }
     
     void releaseLock(bool force = false) {
         if (!(force || multithreadedMode)) return;
         
-        SDL_UnlockMutex(glResourceLock);
+        glResourceLock.unlock();
     }
 
     void updateAvgFPS() {
-        SDL_LockMutex(avgFPSLock);
+        std::scoped_lock lock(avgFPSLock);
         if (avgFPSData.size() > 40)
             avgFPSData.erase(avgFPSData.begin());
         
         double time = shState->runTime();
         avgFPSData.push_back(time - last_avg_update);
         last_avg_update = time;
-        SDL_UnlockMutex(avgFPSLock);
     }
 };
 
@@ -1217,7 +1208,7 @@ double Graphics::lastUpdate() {
 }
 
 void Graphics::update(bool checkForShutdown) {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     p->last_update = shState->runTime();
     
     // update Input.repeat timing, rounding the framerate to the nearest 2
@@ -1496,7 +1487,7 @@ int Graphics::displayHeight() const {
 }
 
 void Graphics::resizeScreen(int width, int height) {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     p->checkResize(true);
     
     Vec2i sizeLores(width, height);
@@ -1531,7 +1522,7 @@ void Graphics::resizeScreen(int width, int height) {
 }
 
 void Graphics::resizeWindow(int width, int height, bool center) {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     p->checkResize();
     
     if (width == p->winSize.x / p->backingScaleFactor &&
@@ -1584,7 +1575,7 @@ void Graphics::playMovie(const char *filename, int volume_, bool skippable) {
 }
 
 void Graphics::screenshot(const char *filename) {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     Bitmap *ss = snapToBitmap();
     ss->saveToFile(filename);
     ss->dispose();
@@ -1627,11 +1618,11 @@ void Graphics::reset() {
         update();
     else
         repaintWait(p->threadData->rqResetFinish, false);
-    p->threadData->rqReset.clear();
+    p->threadData->rqReset = false;
 }
 
 void Graphics::center() {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     if (getFullscreen())
         return;
     
@@ -1725,7 +1716,7 @@ double Graphics::getScale() const {
 }
 
 void Graphics::setScale(double factor) {
-    p->threadData->rqWindowAdjust.wait();
+    p->threadData->rqWindowAdjust.wait(true);
     factor = clamp(factor, 0.5, 4.0);
     
     if (factor == getScale())
@@ -1743,7 +1734,7 @@ void Graphics::setFrameskip(bool value) { p->useFrameSkip = value; }
 
 Scene *Graphics::getScreen() const { return &p->screen; }
 
-void Graphics::repaintWait(const AtomicFlag &exitCond, bool checkReset) {
+void Graphics::repaintWait(const std::atomic<bool> &exitCond, bool checkReset) {
     if (exitCond)
         return;
     

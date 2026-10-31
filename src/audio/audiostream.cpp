@@ -24,7 +24,6 @@
 #include "util.h"
 #include "exception.h"
 
-#include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_timer.h>
 
@@ -46,31 +45,26 @@ AudioStream::AudioStream(ALStream::LoopMode loopMode,
 	fadeIn.thread = 0;
 	fadeIn.threadName = std::string("audio_fadein (") + threadId + ")";
 
-	streamMut = SDL_CreateMutex();
 }
 
 AudioStream::~AudioStream()
 {
 	if (fade.thread)
 	{
-		fade.reqTerm.set();
+		fade.reqTerm = true;
 		SDL_WaitThread(fade.thread, 0);
 	}
 
 	if (fadeIn.thread)
 	{
-		fadeIn.rqTerm.set();
+		fadeIn.rqTerm = true;
 		SDL_WaitThread(fadeIn.thread, 0);
 	}
 
-	lockStream();
+	auto lock = lockStream();
 
 	stream.stop();
 	stream.close();
-
-	unlockStream();
-
-	SDL_DestroyMutex(streamMut);
 }
 
 void AudioStream::play(const std::string &filename,
@@ -80,7 +74,7 @@ void AudioStream::play(const std::string &filename,
 {
 	finiFadeOutInt();
 
-	lockStream();
+	auto lock = lockStream();
 
 	float _volume = clamp<int>(volume, 0, 100) / 100.0f;
 	float _pitch  = clamp<int>(pitch, 50, 150) / 100.0f;
@@ -94,7 +88,6 @@ void AudioStream::play(const std::string &filename,
 	&&  _pitch   == current.pitch
 	&&  (sState == ALStream::Playing || sState == ALStream::Paused))
 	{
-		unlockStream();
 		return;
 	}
 
@@ -106,7 +99,6 @@ void AudioStream::play(const std::string &filename,
 	{
 		setVolume(Base, _volume);
 		current.volume = _volume;
-		unlockStream();
 		return;
 	}
 
@@ -115,17 +107,9 @@ void AudioStream::play(const std::string &filename,
 
 	if (diffFile || sState == ALStream::Closed)
 	{
-		try
-		{
-			/* This will throw on errors while
-			 * opening the data source */
-			stream.open(filename);
-		}
-		catch (const Exception &e)
-		{
-			unlockStream();
-			throw e;
-		}
+		/* This will throw on errors while
+		 * opening the data source */
+		stream.open(filename);
 	} else {
 		switch (sState)
 		{
@@ -153,88 +137,64 @@ void AudioStream::play(const std::string &filename,
 	else
 		noResumeStop = false;
 
-	unlockStream();
 }
 
 void AudioStream::stop()
 {
 	finiFadeOutInt();
 
-	lockStream();
+	auto lock = lockStream();
 
 	noResumeStop = true;
 
 	stream.stop();
 
-	unlockStream();
 }
 
 void AudioStream::fadeOut(int duration)
 {
-	lockStream();
+	auto lock = lockStream();
 
 	ALStream::State sState = stream.queryState();
 	noResumeStop = true;
 
 	if (fade.active)
 	{
-		unlockStream();
-
 		return;
 	}
 
 	if (sState == ALStream::Paused)
 	{
 		stream.stop();
-		unlockStream();
-
 		return;
 	}
 
 	if (sState != ALStream::Playing)
 	{
-		unlockStream();
-
 		return;
 	}
 
 	if (fade.thread)
 	{
-		fade.reqFini.set();
+		fade.reqFini = true;
 		SDL_WaitThread(fade.thread, 0);
 		fade.thread = 0;
 	}
 
-	fade.active.set();
+	fade.active = true;
 	fade.msStep = 1.0f / duration;
-	fade.reqFini.clear();
-	fade.reqTerm.clear();
+	fade.reqFini = false;
+	fade.reqTerm = false;
 	fade.startTicks = SDL_GetTicks();
 
 	fade.thread = createSDLThread
 		<AudioStream, &AudioStream::fadeOutThread>(this, fade.threadName);
-
-	unlockStream();
 }
 
 void AudioStream::seek(double offset)
 {
-	lockStream();
+	auto lock = lockStream();
 	stream.play(offset);
-	unlockStream();
-}
-
-/* Any access to this classes 'stream' member,
- * whether state query or modification, must be
- * protected by a 'lock'/'unlock' pair */
-void AudioStream::lockStream()
-{
-	SDL_LockMutex(streamMut);
-}
-
-void AudioStream::unlockStream()
-{
-	SDL_UnlockMutex(streamMut);
 }
 
 void AudioStream::setVolume(VolumeType type, float value)
@@ -267,14 +227,14 @@ void AudioStream::finiFadeOutInt()
 {
 	if (fade.thread)
 	{
-		fade.reqFini.set();
+		fade.reqFini = true;
 		SDL_WaitThread(fade.thread, 0);
 		fade.thread = 0;
 	}
 
 	if (fadeIn.thread)
 	{
-		fadeIn.rqFini.set();
+		fadeIn.rqFini = true;
 		SDL_WaitThread(fadeIn.thread, 0);
 		fadeIn.thread = 0;
 	}
@@ -285,8 +245,8 @@ void AudioStream::startFadeIn()
 	/* Previous fadein should always be terminated in play() */
 	assert(!fadeIn.thread);
 
-	fadeIn.rqFini.clear();
-	fadeIn.rqTerm.clear();
+	fadeIn.rqFini = false;
+	fadeIn.rqTerm = false;
 	fadeIn.startTicks = SDL_GetTicks();
 
 	fadeIn.thread = createSDLThread
@@ -301,7 +261,7 @@ void AudioStream::fadeOutThread()
 		if (fade.reqTerm)
 			break;
 
-		lockStream();
+		auto lock = lockStream();
 
 		uint32_t curDur = SDL_GetTicks() - fade.startTicks;
 		float resVol = 1.0f - (curDur*fade.msStep);
@@ -316,19 +276,16 @@ void AudioStream::fadeOutThread()
 				stream.stop();
 
 			setVolume(FadeOut, 1.0f);
-			unlockStream();
-
 			break;
 		}
 
 		setVolume(FadeOut, resVol);
-
-		unlockStream();
+		lock.unlock();
 
 		SDL_Delay(AUDIO_SLEEP);
 	}
 
-	fade.active.clear();
+	fade.active = false;
 }
 
 void AudioStream::fadeInThread()
@@ -338,7 +295,7 @@ void AudioStream::fadeInThread()
 		if (fadeIn.rqTerm)
 			break;
 
-		lockStream();
+		auto lock = lockStream();
 
 		/* Fade in duration is always 1 second */
 		uint32_t cur = SDL_GetTicks() - fadeIn.startTicks;
@@ -351,14 +308,11 @@ void AudioStream::fadeInThread()
 		||  fadeIn.rqFini)
 		{
 			setVolume(FadeIn, 1.0f);
-			unlockStream();
-
 			break;
 		}
 
 		setVolume(FadeIn, prog);
-
-		unlockStream();
+		lock.unlock();
 
 		SDL_Delay(AUDIO_SLEEP);
 	}

@@ -22,6 +22,8 @@
 #ifndef GRAPHICS_H
 #define GRAPHICS_H
 
+#include <atomic>
+
 #include "util.h"
 
 class Scene;
@@ -29,7 +31,6 @@ class Bitmap;
 class Disposable;
 struct RGSSThreadData;
 struct GraphicsPrivate;
-struct AtomicFlag;
 struct THEORAPLAY_VideoFrame;
 struct Movie;
 
@@ -92,7 +93,7 @@ public:
 	/* Repaint screen with static image until exitCond
 	 * is set. Observes reset flag on top of shutdown
 	 * if "checkReset" */
-	void repaintWait(const AtomicFlag &exitCond,
+	void repaintWait(const std::atomic<bool> &exitCond,
 	                 bool checkReset = true);
     
     void lock(bool force = false);

@@ -25,6 +25,8 @@
 #include "al-util.h"
 #include "sdl-util.h"
 
+#include <atomic>
+#include <mutex>
 #include <string>
 #include <SDL3/SDL_iostream.h>
 
@@ -52,18 +54,18 @@ struct ALStream
 
 	std::string threadName;
 
-	SDL_Mutex *pauseMut;
+	std::mutex pauseMut;
 	bool preemptPause;
 
 	/* When this flag isn't set and alSrc is
 	 * in 'STOPPED' state, stream isn't over
 	 * (it just hasn't started yet) */
-	AtomicFlag streamInited;
-	AtomicFlag sourceExhausted;
+	std::atomic<bool> streamInited{false};
+	std::atomic<bool> sourceExhausted{false};
 
-	AtomicFlag threadTermReq;
+	std::atomic<bool> threadTermReq{false};
 
-	AtomicFlag needsRewind;
+	std::atomic<bool> needsRewind{false};
 	double startOffset;
 
 	float pitch;
