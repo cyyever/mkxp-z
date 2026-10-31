@@ -92,11 +92,6 @@ struct Config {
     std::string execName;
     std::string titleLanguage;
     
-    struct {
-        std::string soundFont;
-        bool chorus;
-        bool reverb;
-    } midi;
     
     struct {
         int sourceCount;

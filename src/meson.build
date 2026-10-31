@@ -708,65 +708,6 @@ if not sdl3_image.found()
 endif
 global_dependencies += sdl3_image
 
-fluidsynth = dependency('fluidsynth', allow_fallback: false, required: get_option('fluidsynth_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not fluidsynth.found()
-    gcem_options = meson_base_options
-    gcem = subproject('gcem', default_options: gcem_options).get_variable('gcem')
-    gcem_include_dir = subproject('gcem', default_options: gcem_options).get_variable('gcem_include_dir')
-    gcem_includes = ['-I' + gcem_include_dir]
-
-    fluidsynth_internal_cflags = []
-    fluidsynth_external_cflags = []
-    if gcem.type_name() == 'internal'
-        fluidsynth_internal_cflags += gcem_includes
-    else
-        fluidsynth_external_cflags += gcem_includes
-    endif
-    fluidsynth_options = cmake.subproject_options()
-    fluidsynth_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, fluidsynth_internal_cflags + fluidsynth_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, fluidsynth_internal_cflags + fluidsynth_external_cflags, check: true).stdout().strip(),
-        'GCEM_INCLUDE_DIR': gcem_include_dir,
-        'BUILD_SHARED_LIBS': false,
-        'enable-alsa': false,
-        'enable-aufile': false,
-        'enable-dbus': false,
-        'enable-ipv6 ': false,
-        'enable-jack': false,
-        'enable-ladspa': false,
-        'enable-libinstpatch': false,
-        'enable-libsndfile': false,
-        'enable-midishare': false,
-        'enable-opensles': false,
-        'enable-oboe': false,
-        'enable-network': false,
-        'enable-oss': false,
-        'enable-dsound': false,
-        'enable-waveout': false,
-        'enable-winmidi': false,
-        'enable-sdl3': false,
-        'enable-pulseaudio': false,
-        'enable-pipewire': false,
-        'enable-readline': false,
-        'enable-threads': false,
-        'enable-openmp': false,
-        'enable-unicode': false,
-        'enable-native-dls': false,
-        'enable-systemd': false,
-        'enable-coreaudio': false,
-        'enable-coremidi': false,
-        'enable-framework': false,
-        'enable-dart': false,
-        'enable-kai': false,
-        'osal': 'embedded',
-    })
-    foreach opt, val : cmake_override_options
-        fluidsynth_options.set_override_option(opt, val)
-    endforeach
-    fluidsynth = cmake.subproject('fluidsynth', options: fluidsynth_options).dependency('libfluidsynth')
-    meson.override_dependency('fluidsynth', fluidsynth, static: true)
-endif
-global_dependencies += fluidsynth
 
 
 ruby = dependency('ruby-' + get_option('mri_version'), allow_fallback: false, required: get_option('ruby_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
@@ -827,8 +768,6 @@ main_source = files(
     'audio/alstream.cpp',
     'audio/audio.cpp',
     'audio/audiostream.cpp',
-    'audio/fluid-fun.cpp',
-    'audio/midisource.cpp',
     'audio/sdlsoundsource.cpp',
     'audio/soundemitter.cpp',
     'audio/vorbissource.cpp',
