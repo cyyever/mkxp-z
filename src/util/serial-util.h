@@ -22,91 +22,52 @@
 #ifndef SERIALUTIL_H
 #define SERIALUTIL_H
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
+#include <bit>
+#include <concepts>
+#include <cstdint>
+#include <cstring>
+#include <limits>
 
-#include <SDL_endian.h>
+namespace serial_detail {
+static_assert(std::endian::native == std::endian::little ||
+              std::endian::native == std::endian::big,
+              "RGSS serialization requires uniform byte order");
+static_assert(sizeof(double) == sizeof(uint64_t) && std::numeric_limits<double>::is_iec559,
+              "RGSS serialization requires IEEE 754 binary64 doubles");
 
-static inline int32_t
-readInt32(const char **dataP)
-{
-	int32_t result;
-
-	memcpy(&result, *dataP, 4);
-	*dataP += 4;
-
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-#  ifdef _MSC_VER
-	static_assert(sizeof(unsigned long) == sizeof(int32_t), "unsigned long should be 32 bits");
-	result = (int32_t)_byteswap_ulong((unsigned long)result);
-#  else
-	result = (int32_t)__builtin_bswap32((uint32_t)result);
-#  endif
-#endif
-
-	return result;
+template<std::endian Order = std::endian::native, std::unsigned_integral T>
+constexpr T littleEndian(T value) {
+    if constexpr (Order == std::endian::big)
+        return std::byteswap(value);
+    else
+        return value;
+}
 }
 
-static inline double
-readDouble(const char **dataP)
-{
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	uint64_t result;
-
-	memcpy(&result, *dataP, 8);
-	*dataP += 8;
-
-#  ifdef _MSC_VER
-	result = (uint64_t)_byteswap_uint64((unsigned __int64)result);
-#  else
-	result = __builtin_bswap64(result);
-#  endif
-
-	return *(double *)&result;
-#else
-	double result;
-
-	memcpy(&result, *dataP, 8);
-	*dataP += 8;
-
-	return result;
-#endif
+static inline int32_t readInt32(const char **dataP) {
+    uint32_t bits;
+    std::memcpy(&bits, *dataP, sizeof(bits));
+    *dataP += sizeof(bits);
+    return std::bit_cast<int32_t>(serial_detail::littleEndian(bits));
 }
 
-static inline void
-writeInt32(char **dataP, int32_t value)
-{
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-#  ifdef _MSC_VER
-	static_assert(sizeof(unsigned long) == sizeof(int32_t), "unsigned long should be 32 bits");
-	value = (int32_t)_byteswap_ulong((unsigned long)value);
-#  else
-	value = (int32_t)__builtin_bswap32((uint32_t)value);
-#  endif
-#endif
-
-	memcpy(*dataP, &value, 4);
-	*dataP += 4;
+static inline double readDouble(const char **dataP) {
+    uint64_t bits;
+    std::memcpy(&bits, *dataP, sizeof(bits));
+    *dataP += sizeof(bits);
+    return std::bit_cast<double>(serial_detail::littleEndian(bits));
 }
 
-static inline void
-writeDouble(char **dataP, double value)
-{
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-	uint64_t valueUint = *(uint64_t *)&value;
+static inline void writeInt32(char **dataP, int32_t value) {
+    const auto bits = serial_detail::littleEndian(std::bit_cast<uint32_t>(value));
+    std::memcpy(*dataP, &bits, sizeof(bits));
+    *dataP += sizeof(bits);
+}
 
-#  ifdef _MSC_VER
-	valueUint = (uint64_t)_byteswap_uint64((unsigned __int64)valueUint);
-#  else
-	valueUint = __builtin_bswap64(valueUint);
-#  endif
-
-	memcpy(*dataP, &valueUint, 8);
-#else
-	memcpy(*dataP, &value, 8);
-#endif
-	*dataP += 8;
+static inline void writeDouble(char **dataP, double value) {
+    const auto bits = serial_detail::littleEndian(std::bit_cast<uint64_t>(value));
+    std::memcpy(*dataP, &bits, sizeof(bits));
+    *dataP += sizeof(bits);
 }
 
 #endif // SERIALUTIL_H

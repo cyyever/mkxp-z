@@ -65,7 +65,7 @@ cmake_override_options = {
 meson_base_options = cmake_override_options + {
     'default_library': 'static',
     'c_std': c_std,
-    'cpp_std': cpp_std,
+    'cpp_std': dependency_cpp_std,
 }
 
 git_hash_fallback = ''
@@ -1212,7 +1212,7 @@ global_include_dirs += include_directories('.',
     'crypto',
     'display', 'display/gl', 'display/libnsgif', 'display/libnsgif/utils',
     'etc',
-    'filesystem', 'filesystem/ghc',
+    'filesystem',
     'input',
     'net',
     'system',
@@ -1278,7 +1278,8 @@ main_source = files(
     'etc/table.cpp',
 
     'filesystem/filesystem.cpp',
-    host_system == 'darwin' ? 'filesystem/filesystemImplApple.mm' : 'filesystem/filesystemImpl.cpp',
+    'filesystem/filesystemImpl.cpp',
+    host_system == 'darwin' ? 'filesystem/filesystemImplApple.mm' : 'filesystem/filesystemImplSDL.cpp',
 
     'input/input.cpp',
     'input/keybindings.cpp',

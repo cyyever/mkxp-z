@@ -9,55 +9,8 @@
 #import <SDL_syswm.h>
 
 #import "filesystemImpl.h"
-#import "util/exception.h"
-
-#define PATHTONS(str) [NSFileManager.defaultManager stringWithFileSystemRepresentation:str length:strlen(str)]
 
 #define NSTOPATH(str) [NSFileManager.defaultManager fileSystemRepresentationWithPath:str]
-
-bool filesystemImpl::fileExists(const char *path) {
-    @autoreleasepool{
-        BOOL isDir;
-        return  [NSFileManager.defaultManager fileExistsAtPath:PATHTONS(path) isDirectory: &isDir] && !isDir;
-    }
-}
-
-
-
-std::string filesystemImpl::contentsOfFileAsString(const char *path) {
-    @autoreleasepool {
-        NSString *fileContents = [NSString stringWithContentsOfFile: PATHTONS(path)];
-        if (fileContents == nil)
-            throw Exception(Exception::NoFileError, "Failed to read file at %s", path);
-        
-        return std::string(fileContents.UTF8String);
-    }
-}
-
-
-bool filesystemImpl::setCurrentDirectory(const char *path) {
-    @autoreleasepool {
-        return [NSFileManager.defaultManager changeCurrentDirectoryPath: PATHTONS(path)];
-    }
-}
-
-std::string filesystemImpl::getCurrentDirectory() {
-    @autoreleasepool {
-        return std::string(NSTOPATH(NSFileManager.defaultManager.currentDirectoryPath));
-    }
-}
-
-std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool absolute) {
-    @autoreleasepool {
-        NSString *nspath = [NSURL fileURLWithPath: PATHTONS(path)].URLByStandardizingPath.path;
-        NSString *pwd = [NSString stringWithFormat:@"%@/", NSFileManager.defaultManager.currentDirectoryPath];
-        if (!absolute) {
-            nspath = [nspath stringByReplacingOccurrencesOfString:pwd withString:@""];
-        }
-        nspath = [nspath stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
-        return std::string(NSTOPATH(nspath));
-    }
-}
 
 std::string filesystemImpl::getDefaultGameRoot() {
     @autoreleasepool {

@@ -1,5 +1,32 @@
 # mkxp-z
 
+This personal fork builds the engine in **C++26** mode with current compilers
+and Meson 1.10 or newer. GCC and Clang use `c++26` (or the equivalent `c++2c`
+flag chosen by Meson); MSVC uses `/std:c++latest`. This selects the language
+mode, without requiring every proposed C++26 feature to be implemented.
+See the [MSVC language-mode documentation](https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version)
+and [Clang implementation status](https://clang.llvm.org/cxx_status.html).
+
+Portable filesystem operations use `std::filesystem` with UTF-8 paths on all
+platforms. macOS retains its native app-bundle lookup and folder picker.
+RGSS serialization uses `std::endian`, `std::byteswap` and `std::bit_cast`,
+preserving the existing little-endian format. Third-party libraries retain
+their own language requirements.
+
+The portable core can be built and tested without SDL, Ruby or game assets:
+
+```sh
+meson setup build/core -Dcore_tests_only=true --buildtype=release
+meson test -C build/core --print-errorlogs
+```
+
+Run these commands from a Visual Studio developer shell when using MSVC.
+The core test workflow covers Linux GCC/Clang, macOS C++/Objective-C++, and
+Windows MSVC. These tests cover the production filesystem and serialization
+code; they do not establish full MSVC engine support or test game rendering.
+The full engine still uses the upstream dependency build pipeline below.
+The obsolete `cxx11_experimental` build option has been removed.
+
 <p align="center"><b>
   <a href="https://github.com/mkxp-z/mkxp-z/actions/workflows/autobuild.yml?query=event%3Apush">Automatic Builds</a>
   ・

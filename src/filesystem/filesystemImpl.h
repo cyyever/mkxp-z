@@ -9,7 +9,7 @@
 #define filesystemImpl_h
 
 #include <string>
-#include <SDL_video.h>
+struct SDL_Window;
 
 namespace filesystemImpl {
 bool fileExists(const char *path);

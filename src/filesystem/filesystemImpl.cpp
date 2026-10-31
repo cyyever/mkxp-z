@@ -5,101 +5,70 @@
 //  Created by ゾロアーク on 11/21/20.
 //
 
-#include <SDL_filesystem.h>
-
 #include "filesystemImpl.h"
 #include "util/exception.h"
-#include "util/debugwriter.h"
 
-#ifdef MKXPZ_EXP_FS
-#include <experimental/filesystem>
-namespace fs = std::experimental::filesystem;
-#else
-#include "ghc/filesystem.hpp"
-namespace fs = ghc::filesystem;
-#endif
-
+#include <algorithm>
+#include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <string_view>
 
-// https://stackoverflow.com/questions/12774207/fastest-way-to-check-if-a-file-exist-using-standard-c-c11-c
+namespace fs = std::filesystem;
+
+namespace {
+fs::path fromUtf8(std::string_view path) {
+    // char8_t selects UTF-8 conversion, independent of the Windows code page.
+    return fs::path(std::u8string(path.begin(), path.end()));
+}
+
+std::string toUtf8(const std::u8string &path) {
+    return {reinterpret_cast<const char *>(path.data()), path.size()};
+}
+}
+
 bool filesystemImpl::fileExists(const char *path) {
-    fs::path stdPath(path);
-    return (fs::exists(stdPath) && !fs::is_directory(stdPath));
+    std::error_code error;
+    const auto status = fs::status(fromUtf8(path), error);
+    return !error && fs::exists(status) && !fs::is_directory(status);
 }
 
-
-// https://stackoverflow.com/questions/2912520/read-file-contents-into-a-string-in-c
 std::string filesystemImpl::contentsOfFileAsString(const char *path) {
-    std::string ret;
     try {
-        std::ifstream ifs(path);
-        ret = std::string ( (std::istreambuf_iterator<char>(ifs) ),
-                       (std::istreambuf_iterator<char>()    ) );
-    } catch (...) {
-        throw Exception(Exception::NoFileError, "Failed to read file at %s", path);
+        // Preserve the original bytes, including CRLF and embedded NULs.
+        std::ifstream stream(fromUtf8(path), std::ios::binary);
+        stream.exceptions(std::ios::badbit);
+        if (stream.is_open())
+            return {std::istreambuf_iterator<char>(stream), {}};
+    } catch (const std::ios_base::failure &) {
+        // Translate read failures to the same engine exception as open failures.
     }
-
-    return ret;
+    throw Exception(Exception::NoFileError, "Failed to read file at %s", path);
 }
 
-// chdir and getcwd do not support unicode on Windows
 bool filesystemImpl::setCurrentDirectory(const char *path) {
-    fs::path stdPath(path);
-    fs::current_path(stdPath);
-    bool ret;
-
-    try {
-        ret = fs::equivalent(fs::current_path(), stdPath);
-    } catch (...) {
-        Debug() << "Failed to check current path." << path;
-        ret = false;
-    }
-    return ret;
+    std::error_code error;
+    fs::current_path(fromUtf8(path), error);
+    return !error;
 }
 
 std::string filesystemImpl::getCurrentDirectory() {
-    std::string ret;
     try {
-        ret = std::string(fs::current_path().string());
-    } catch (...) {
+        return toUtf8(fs::current_path().u8string());
+    } catch (const fs::filesystem_error &) {
         throw Exception(Exception::MKXPError, "Failed to retrieve current path");
     }
-    return ret;
 }
-
 
 std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool absolute) {
-    fs::path stdPath(path);
-    
-    if (!stdPath.is_absolute() && absolute)
-        stdPath = fs::current_path() / stdPath;
-
-    stdPath = stdPath.lexically_normal();
-    std::string ret(stdPath);
-    for (size_t i = 0; i < ret.length(); i++) {
-        char sep;
-        char sep_alt;
-#ifdef __WIN32__
-        if (preferred) {
-            sep = '\\';
-            sep_alt = '/';
-        }
-        else
-#endif
-        {
-            sep = '/';
-            sep_alt = '\\';
-        }
-        
-        if (ret[i] == sep_alt)
-            ret[i] = sep;
-    }
-    return ret;
-}
-
-std::string filesystemImpl::getDefaultGameRoot() {
-    char *p = SDL_GetBasePath();
-    std::string ret(p);
-    SDL_free(p);
-    return ret;
+    // RGSS paths can contain Windows separators on every host. Normalize those
+    // before collapsing dot components, including when running on Unix.
+    std::string portable(path);
+    std::ranges::replace(portable, '\\', '/');
+    auto result = fromUtf8(portable);
+    if (absolute && !result.is_absolute())
+        result = fs::current_path() / result;
+    result = result.lexically_normal();
+    return preferred ? toUtf8(result.make_preferred().u8string())
+                     : toUtf8(result.generic_u8string());
 }
