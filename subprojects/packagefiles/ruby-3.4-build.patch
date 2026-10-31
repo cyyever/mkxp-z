@@ -1,5 +1,5 @@
 diff --git a/common.mk b/common.mk
-index d09571d..0729d3b 100644
+index d3e7cfe..4096762 100644
 --- a/common.mk
 +++ b/common.mk
 @@ -9,7 +9,7 @@ dll: $(LIBRUBY_SO)
@@ -11,7 +11,7 @@ index d09571d..0729d3b 100644
  V0 = $(V:0=)
  Q1 = $(V:1=)
  Q = $(Q1:0=@)
-@@ -229,7 +229,7 @@ GOLFPRELUDES  = golf_prelude.rbbin
+@@ -295,7 +295,7 @@ GOLFPRELUDES  = golf_prelude.rbbin
  SCRIPT_ARGS   =	--dest-dir="$(DESTDIR)" \
  		--extout="$(EXTOUT)" \
  		--ext-build-dir="./ext" \
@@ -21,10 +21,10 @@ index d09571d..0729d3b 100644
  EXTMK_ARGS    =	$(SCRIPT_ARGS) --extension $(EXTS) --extstatic $(EXTSTATIC) \
  		--make-flags="V=$(V) MINIRUBY='$(MINIRUBY)'" \
 diff --git a/configure.ac b/configure.ac
-index b4dc31c..eae9eb2 100644
+index ebc9772..04636e3 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -435,7 +435,7 @@ AS_IF([test "$GCC" = yes], [
+@@ -423,7 +423,7 @@ AS_IF([test "$GCC" = yes], [
  
  RUBY_PROG_GNU_LD
  RUBY_CPPOUTFILE
@@ -33,7 +33,7 @@ index b4dc31c..eae9eb2 100644
  : ${OUTFLAG='-o '}
  : ${COUTFLAG=${OUTFLAG}}
  : ${CSRCFLAG=''}
-@@ -1250,7 +1250,7 @@ main()
+@@ -1218,7 +1218,7 @@ main()
  		AC_CHECK_FUNCS(cygwin_conv_path)
  		AC_LIBOBJ([langinfo])
  		],
@@ -42,7 +42,7 @@ index b4dc31c..eae9eb2 100644
  		ac_cv_header_pwd_h=no
  		ac_cv_header_utime_h=no
  		ac_cv_header_sys_ioctl_h=no
-@@ -1377,7 +1377,7 @@ AS_IF([test -n "${rb_there_is_in_fact_no_gplusplus_but_autoconf_is_cheating_us}"
+@@ -1343,7 +1343,7 @@ AS_IF([test -n "${rb_there_is_in_fact_no_gplusplus_but_autoconf_is_cheating_us}"
      ])
  ])
  
@@ -51,7 +51,7 @@ index b4dc31c..eae9eb2 100644
  AC_CHECK_LIB(dl, dlopen)	# Dynamic linking for SunOS/Solaris and SYSV
  AC_CHECK_LIB(socket, shutdown)  # SunOS/Solaris
  
-@@ -3063,7 +3063,7 @@ AS_IF([test "$rb_cv_binary_elf" = yes], [
+@@ -3024,7 +3024,7 @@ AS_IF([test "$rb_cv_binary_elf" = yes], [
    AC_CHECK_HEADERS([elf.h elf_abi.h])
    AS_IF([test $ac_cv_header_elf_h = yes -o $ac_cv_header_elf_abi_h = yes], [
      AC_LIBOBJ([addr2line])
@@ -60,7 +60,7 @@ index b4dc31c..eae9eb2 100644
    ])
  ])
  
-@@ -4233,7 +4233,7 @@ enum {
+@@ -4128,7 +4128,7 @@ enum {
  	], [
  	    LIBRUBY_SO=dummy
  	    LIBRUBY='lib$(RUBY_SO_NAME).a'
@@ -69,7 +69,7 @@ index b4dc31c..eae9eb2 100644
  	])
  	],
      [wasi*], [
-@@ -4313,6 +4313,7 @@ AS_IF([test "${universal_binary-no}" = yes ], [
+@@ -4224,6 +4224,7 @@ AS_IF([test "${universal_binary-no}" = yes ], [
  
  [end]_group
  
@@ -78,7 +78,7 @@ index b4dc31c..eae9eb2 100644
  LIBS=$ORIG_LIBS
  AS_IF([test -n "${LIBS}"], [
 diff --git a/cygwin/GNUmakefile.in b/cygwin/GNUmakefile.in
-index 8e83d73..2c6899b 100644
+index 7bcf1ad..e15b6de 100644
 --- a/cygwin/GNUmakefile.in
 +++ b/cygwin/GNUmakefile.in
 @@ -28,7 +28,7 @@ else
@@ -90,7 +90,7 @@ index 8e83d73..2c6899b 100644
    RUBY_EXP = $(RUBY_INSTALL_NAME).exp
    EXTOBJS = $(RUBY_EXP)
    LIBRUBYARG = $(LIBRUBY_A)
-@@ -106,8 +106,8 @@ endif
+@@ -104,8 +104,8 @@ endif
  $(LIBRUBY_SO): $(RUBYDEF)
  
  $(RUBYDEF): $(LIBRUBY_A) $(PREP) $(BOOTSTRAPRUBY_FAKE) $(RBCONFIG)
@@ -115,7 +115,7 @@ index 71026e7..5457d49 100644
  # define RUBY_EXTERN extern
  #endif
 diff --git a/include/ruby/onigmo.h b/include/ruby/onigmo.h
-index f673579..729c1d3 100644
+index b235b28..4b3fa6f 100644
 --- a/include/ruby/onigmo.h
 +++ b/include/ruby/onigmo.h
 @@ -47,9 +47,9 @@ extern "C" {
@@ -131,7 +131,7 @@ index f673579..729c1d3 100644
  #  endif
  # endif
 diff --git a/lib/mkmf.rb b/lib/mkmf.rb
-index 38a5a15..a08d64d 100644
+index 99f3764..e470051 100644
 --- a/lib/mkmf.rb
 +++ b/lib/mkmf.rb
 @@ -606,7 +606,7 @@ MSG
@@ -144,10 +144,10 @@ index 38a5a15..a08d64d 100644
        require 'tmpdir'
        Dir.mktmpdir("mkmf_", oldtmpdir = ENV["TMPDIR"]) do |tmpdir|
 diff --git a/template/Makefile.in b/template/Makefile.in
-index 443c394..9cd6113 100644
+index 769b880..58e8eab 100644
 --- a/template/Makefile.in
 +++ b/template/Makefile.in
-@@ -315,7 +315,7 @@ $(PROGRAM):
+@@ -303,7 +303,7 @@ $(PROGRAM):
  		$(ECHO) linking $@
  		$(Q) $(PURIFY) $(CC) $(EXE_LDFLAGS) $(XLDFLAGS) $(MAINOBJ) $(EXTOBJS) $(LIBRUBYARG) $(MAINLIBS) $(EXTLIBS) $(OUTFLAG)$@
  		$(Q) $(POSTLINK)
@@ -156,9 +156,9 @@ index 443c394..9cd6113 100644
  $(PROGRAM): @XRUBY_LIBPATHENV_WRAPPER@
  
  PRE_LIBRUBY_UPDATE = [ -n "$(LIBRUBY_SO_UPDATE)" ] || $(gnumake:yes=exec) $(RM) $(LIBRUBY_EXTS)
-@@ -432,17 +432,7 @@ $(MKFILES): config.status $(srcdir)/version.h $(ABI_VERSION_HDR)
- uncommon.mk: $(srcdir)/tool/prereq.status
- 	sed -f $(srcdir)/tool/prereq.status $(srcdir)/common.mk $(common_mk_includes) > $@
+@@ -422,17 +422,7 @@ $(MKFILES): config.status $(srcdir)/version.h $(ABI_VERSION_HDR)
+ uncommon.mk: $(srcdir)/common.mk
+ 		sed 's/{\$$([^(){}]*)[^{}]*}//g' $< > $@
  
 -.PHONY: reconfig
 -reconfig-args = $(srcdir)/$(CONFIGURE) $(yes_silence:yes=--silent) $(configure_args)
@@ -176,10 +176,10 @@ index 443c394..9cd6113 100644
  $(srcdir)/$(CONFIGURE): $(srcdir)/configure.ac
  	$(CHDIR) $(srcdir) && exec $(AUTOCONF) -o $(@F)
 diff --git a/template/fake.rb.in b/template/fake.rb.in
-index fed640a..e9acda4 100644
+index 84d69c8..c97ed2d 100644
 --- a/template/fake.rb.in
 +++ b/template/fake.rb.in
-@@ -61,7 +61,7 @@ libpathenv = libpathenv = "<%=arg['LIBPATHENV']%>"
+@@ -54,7 +54,7 @@ libpathenv = libpathenv = "<%=arg['LIBPATHENV']%>"
  preloadenv = preloadenv = "<%=arg['PRELOADENV']%>"
  libruby_so = libruby_so = "<%=arg['LIBRUBY_SO']%>"
  srcdir = "<%=arg['srcdir']%>"
@@ -189,10 +189,10 @@ index fed640a..e9acda4 100644
  eval(File.binread(fake), nil, fake)
  ropt = "-r#{__FILE__}"
 diff --git a/tool/rbinstall.rb b/tool/rbinstall.rb
-index 874c3ef..52dd5a5 100644
+index b194f2c..ea86afe 100644
 --- a/tool/rbinstall.rb
 +++ b/tool/rbinstall.rb
-@@ -899,7 +899,7 @@ def load_gemspec(file, base = nil, files: nil)
+@@ -791,7 +791,7 @@ def load_gemspec(file, base = nil)
  end
  
  def install_default_gem(dir, srcdir, bindir)
@@ -201,7 +201,7 @@ index 874c3ef..52dd5a5 100644
    install_dir = with_destdir(gem_dir)
    prepare "default gems from #{dir}", gem_dir
    RbInstall.no_write do
-@@ -1193,7 +1193,7 @@ install?(:ext, :arch, :gem, :'default-gems', :'default-gems-arch') do
+@@ -1095,7 +1095,7 @@ install?(:ext, :arch, :gem, :'default-gems', :'default-gems-arch') do
  end
  
  install?(:ext, :comm, :gem, :'bundled-gems') do

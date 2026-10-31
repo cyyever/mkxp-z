@@ -1,8 +1,8 @@
 diff --git a/class.c b/class.c
-index 788a671..a1d9b89 100644
+index 8e0786f..f470908 100644
 --- a/class.c
 +++ b/class.c
-@@ -1499,13 +1499,15 @@ rb_define_class(const char *name, VALUE super)
+@@ -992,13 +992,15 @@ rb_define_class(const char *name, VALUE super)
                       name, rb_obj_class(klass));
          }
          if (rb_class_real(RCLASS_SUPER(klass)) != super) {
@@ -20,10 +20,10 @@ index 788a671..a1d9b89 100644
          rb_raise(rb_eArgError, "no super class for '%s'", name);
      }
 diff --git a/include/ruby/win32.h b/include/ruby/win32.h
-index ae11a61..d0a6d1f 100644
+index 80e1418..bdf9c30 100644
 --- a/include/ruby/win32.h
 +++ b/include/ruby/win32.h
-@@ -168,7 +168,8 @@ typedef int clockid_t;
+@@ -164,7 +164,8 @@ typedef int clockid_t;
  #define HAVE_GETPPID 1
  #define getppid()		rb_w32_getppid()
  #define sleep(x)		rb_w32_Sleep((x)*1000)
@@ -34,13 +34,13 @@ index ae11a61..d0a6d1f 100644
  #undef HAVE_EXECV
  #define HAVE_EXECV 1
 diff --git a/sprintf.c b/sprintf.c
-index cb266a9..8f97915 100644
+index 90fe91c..5233048 100644
 --- a/sprintf.c
 +++ b/sprintf.c
-@@ -937,7 +937,8 @@ rb_str_format(int argc, const VALUE *argv, VALUE fmt)
-     rb_str_tmp_frozen_release(orig, fmt);
+@@ -953,7 +953,8 @@ rb_str_format_ary(int argc, const VALUE *argv, VALUE fmt, VALUE ary)
      /* XXX - We cannot validate the number of arguments if (digit)$ style used.
       */
+     format_args_check(ary, argc0, argv0);
 -    if (posarg >= 0 && nextarg < argc && !(argc == 2 && RB_TYPE_P(argv[1], T_HASH))) {
 +    /* RGSS ignores surplus format arguments even with $DEBUG enabled. */
 +    if (0) {
@@ -48,10 +48,10 @@ index cb266a9..8f97915 100644
          if (RTEST(ruby_debug)) rb_raise(rb_eArgError, "%s", mesg);
          if (RTEST(ruby_verbose)) rb_warn("%s", mesg);
 diff --git a/vm_eval.c b/vm_eval.c
-index 34560d7..25f0a6f 100644
+index 74dfd40..1eccbe9 100644
 --- a/vm_eval.c
 +++ b/vm_eval.c
-@@ -843,7 +843,9 @@ rb_method_call_status(rb_execution_context_t *ec, const rb_callable_method_entry
+@@ -825,7 +825,9 @@ rb_method_call_status(rb_execution_context_t *ec, const rb_callable_method_entry
      rb_method_visibility_t visi = METHOD_ENTRY_VISI(me);
  
      /* receiver specified form for private method */
@@ -63,10 +63,10 @@ index 34560d7..25f0a6f 100644
              return MISSING_NONE;
          }
 diff --git a/vm_insnhelper.c b/vm_insnhelper.c
-index 35f3097..d88fc54 100644
+index 4082fa6..40bb7e8 100644
 --- a/vm_insnhelper.c
 +++ b/vm_insnhelper.c
-@@ -5018,36 +5018,10 @@ vm_call_method(rb_execution_context_t *ec, rb_control_frame_t *cfp, struct rb_ca
+@@ -4903,36 +4903,10 @@ vm_call_method(rb_execution_context_t *ec, rb_control_frame_t *cfp, struct rb_ca
  
      if (vm_cc_cme(cc) != NULL) {
          switch (METHOD_ENTRY_VISI(vm_cc_cme(cc))) {
@@ -105,7 +105,7 @@ index 35f3097..d88fc54 100644
              return vm_call_method_each_type(ec, cfp, calling);
  
            default:
-@@ -5858,18 +5832,7 @@ vm_check_if_class(ID id, rb_num_t flags, VALUE super, VALUE klass)
+@@ -5725,18 +5699,7 @@ vm_check_if_class(ID id, rb_num_t flags, VALUE super, VALUE klass)
      if (!RB_TYPE_P(klass, T_CLASS)) {
          return 0;
      }

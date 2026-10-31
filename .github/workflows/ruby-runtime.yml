@@ -1,10 +1,10 @@
-name: Embedded Ruby 4
+name: Embedded Ruby 3.4
 
 on:
   pull_request:
     branches: [dev]
   push:
-    branches: [dev, 'upgrade/ruby-4.0']
+    branches: [dev, 'fix/ruby-3.4']
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   runtime:
-    name: Ruby 4 / ${{ matrix.os }}
+    name: Ruby 3.4 / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -73,5 +73,5 @@ jobs:
           name: ruby-logs-${{ matrix.os }}
           path: |
             build/ruby/meson-logs/**
-            build/ruby/subprojects/ruby-4.0.9/build/config.log
-            build/ruby/subprojects/ruby-4.0.9/build/ext/**/mkmf.log
+            build/ruby/subprojects/ruby-3.4.12/build/config.log
+            build/ruby/subprojects/ruby-3.4.12/build/ext/**/mkmf.log
