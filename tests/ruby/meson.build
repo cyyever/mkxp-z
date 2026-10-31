@@ -4,7 +4,12 @@ test_cflags = []
 test_ldflags = []
 foreach name : ['libffi', 'yaml-0.1', 'zlib']
     dep = dependency(name, required: true)
-    test_cflags += '-I' + dep.get_variable(pkgconfig: 'includedir')
+    # Passing a system include dir (e.g. the macOS SDK's usr/include) with -I demotes it from system-header status;
+    # the resulting warnings make Ruby's configure probes fail (PRI_LL_PREFIX ends up undefined).
+    includedir = dep.get_variable(pkgconfig: 'includedir')
+    if not includedir.endswith('/usr/include')
+        test_cflags += '-I' + includedir
+    endif
     test_ldflags += '-L' + dep.get_variable(pkgconfig: 'libdir')
 endforeach
 ruby_project = subproject('ruby-3.4', default_options: {

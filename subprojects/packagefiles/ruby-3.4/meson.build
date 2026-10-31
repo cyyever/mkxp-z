@@ -24,6 +24,12 @@ if build_machine.system() in ['windows', 'cygwin']
     destdir = run_command(subproject('common').get_variable('cygpath'), '-m', destdir, check: true).stdout().strip()
 endif
 
+# MSYS2 exports PKG_CONFIG as a native Windows path; Ruby's Makefile expands it unquoted in sh, which strips the backslashes.
+ruby_env_extra = {}
+if build_machine.system() in ['windows', 'cygwin']
+    ruby_env_extra += {'PKG_CONFIG': run_command(subproject('common').get_variable('cygpath'), '-u', find_program('pkg-config').full_path(), check: true).stdout().strip()}
+endif
+
 baseruby = run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('ruby').cmd_array() : find_program('ruby')), check: true).stdout().strip()
 
 ruby_deps = [
@@ -98,7 +104,7 @@ ruby = declare_dependency(
                 'rb_cv_gcc_sync_builtins': 'no',
                 'rb_cv_prog_gnu_ld': subproject('common').get_variable('c_linker_is_gnu') ? 'yes' : 'no',
                 'rb_cv_symbol_prefix': meson.get_compiler('c').symbols_have_underscore_prefix() ? '_' : 'NONE',
-            },
+            } + ruby_env_extra,
             depends: [
                 # Force Meson to fully build all of our vendored dependencies that are required by Ruby before building Ruby itself
                 executable(
@@ -180,6 +186,7 @@ ruby = declare_dependency(
         meson.project_build_root() / 'build' / 'ext' / 'monitor' / 'monitor.a',
         meson.project_build_root() / 'build' / 'ext' / 'nkf' / 'nkf.a',
         meson.project_build_root() / 'build' / 'ext' / 'objspace' / 'objspace.a',
+        meson.project_build_root() / 'build' / 'ext' / 'pathname' / 'pathname.a',
         meson.project_build_root() / 'build' / 'ext' / 'psych' / 'psych.a',
         meson.project_build_root() / 'build' / 'ext' / 'racc' / 'cparse' / 'cparse.a',
         meson.project_build_root() / 'build' / 'ext' / 'rbconfig' / 'sizeof' / 'sizeof.a',
