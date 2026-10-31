@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "tilemapvx.h"
 
 #include "util/debugwriter.h"
@@ -51,7 +53,7 @@ static const uint8_t flashAlpha[] =
 	0xB4, 0xB4, 0xB4, 0xB4, 0x96, 0x96, 0x96, 0x96
 };
 
-static elementsN(flashAlpha);
+static constexpr auto flashAlphaN = std::size(flashAlpha);
 
 struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 {
@@ -274,8 +276,8 @@ struct TilemapVXPrivate : public ViewportElement, TileAtlasVX::Reader
 			allocQuads = totalQuads;
 		}
 
-		VBO::uploadSubData(0, quadBytes(groundQuads), dataPtr(groundVert));
-		VBO::uploadSubData(quadBytes(groundQuads), quadBytes(aboveQuads), dataPtr(aboveVert));
+		VBO::uploadSubData(0, quadBytes(groundQuads), groundVert.data());
+		VBO::uploadSubData(quadBytes(groundQuads), quadBytes(aboveQuads), aboveVert.data());
 
 		VBO::unbind();
 

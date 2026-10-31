@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "windowvx.h"
 
 #include "bitmap.h"
@@ -124,7 +126,7 @@ static const uint8_t cursorAlpha[] =
 	0xAF, 0xB7, 0xBF, 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7
 };
 
-static elementsN(cursorAlpha);
+static constexpr auto cursorAlphaN = std::size(cursorAlpha);
 
 static const uint8_t cursorAlphaResetIdx = 0x10;
 
@@ -135,7 +137,7 @@ static const uint8_t pauseAlpha[] =
 	0xFF
 };
 
-static elementsN(pauseAlpha);
+static constexpr auto pauseAlphaN = std::size(pauseAlpha);
 
 /* Cycling */
 static const uint8_t pauseQuad[] =
@@ -146,7 +148,7 @@ static const uint8_t pauseQuad[] =
 	3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
 };
 
-static elementsN(pauseQuad);
+static constexpr auto pauseQuadN = std::size(pauseQuad);
 
 struct WindowVXPrivate
 {
@@ -431,7 +433,7 @@ struct WindowVXPrivate
 
 		base.vert.resize(count);
 
-		Vertex *vert = dataPtr(base.vert.vertices);
+		Vertex *vert = base.vert.vertices.data();
 		size_t i = 0;
 
 		/* Stretched background */
@@ -575,7 +577,7 @@ struct WindowVXPrivate
 		};
 
 		size_t i = 0;
-		Vertex *vert = dataPtr(ctrlVert.vertices);
+		Vertex *vert = ctrlVert.vertices.data();
 
 		if (!nullOrDisposed(contents) && arrowsVisible)
 		{
@@ -657,7 +659,7 @@ struct WindowVXPrivate
 			quads += 1;
 
 		cursorVert.resize(quads);
-		Vertex *vert = dataPtr(cursorVert.vertices);
+		Vertex *vert = cursorVert.vertices.data();
 		size_t i = 0;
 
 		i += Quad::setTexPosRect(&vert[i*4], src.corners.tl, cornerPos.tl);

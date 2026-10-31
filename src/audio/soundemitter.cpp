@@ -224,7 +224,8 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 
 SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 {
-	SoundBuffer *buffer = bufferHash.value(filename, 0);
+	const auto found = bufferHash.find(filename);
+	SoundBuffer *buffer = found == bufferHash.end() ? nullptr : found->second;
 
 	if (buffer)
 	{
@@ -260,7 +261,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		while (wouldBeBytes > SE_CACHE_MEM && !buffers.isEmpty())
 		{
 			SoundBuffer *last = buffers.tail();
-			bufferHash.remove(last->key);
+			bufferHash.erase(last->key);
 			buffers.remove(last->link);
 
 			wouldBeBytes -= last->bytes;
@@ -268,7 +269,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 			SoundBuffer::deref(last);
 		}
 
-		bufferHash.insert(filename, buffer);
+		bufferHash.insert_or_assign(filename, buffer);
 		buffers.prepend(buffer->link);
 
 		bufferBytes = wouldBeBytes;

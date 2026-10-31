@@ -22,10 +22,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <stdio.h>
-#include <string>
 #include <algorithm>
-#include <vector>
 
 static inline int
 wrapRange(int value, int min, int max)
@@ -63,63 +60,6 @@ findNextPow2(int start)
 
 	return i;
 }
-
-/* Reads the contents of the file at 'path' and
- * appends them to 'out'. Returns false on failure */
-inline bool readFile(const char *path,
-                     std::string &out)
-{
-	FILE *f = fopen(path, "rb");
-
-	if (!f)
-		return false;
-
-	fseek(f, 0, SEEK_END);
-	long size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	size_t back = out.size();
-
-	out.resize(back+size);
-	size_t read = fread(&out[back], 1, size, f);
-	fclose(f);
-
-	if (read != (size_t) size)
-		out.resize(back+read);
-
-	return true;
-}
-
-inline void strReplace(std::string &str,
-                       char before, char after)
-{
-	for (size_t i = 0; i < str.size(); ++i)
-		if (str[i] == before)
-			str[i] = after;
-}
-
-/* Check if [C]ontainer contains [V]alue */
-template<typename C, typename V>
-inline bool contains(const C &c, const V &v)
-{
-	return std::find(c.begin(), c.end(), v) != c.end();
-}
-
-template<typename C>
-inline const C *dataPtr(const std::vector<C> &v)
-{
-	return v.empty() ? (C*)0 : &v[0];
-}
-
-template<typename C>
-inline C *dataPtr(std::vector<C> &v)
-{
-	return v.empty() ? (C*)0 : &v[0];
-}
-
-#define ARRAY_SIZE(obj) (sizeof(obj) / sizeof((obj)[0]))
-
-#define elementsN(obj) const size_t obj##N = ARRAY_SIZE(obj)
 
 #define DECL_ATTR_DETAILED(name, type, keyword1, keyword2) \
 	keyword1 type get##name() keyword2; \

@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "tilemap.h"
 
 #include "viewport.h"
@@ -170,7 +172,7 @@ static const size_t zlayersMax = viewpH + 5;
 //     7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
 // };
 
-// static elementsN(atAnimation);
+// static constexpr auto atAnimationN = std::size(atAnimation);
 
 /* Flash tiles pulsing opacity */
 static const uint8_t flashAlpha[] =
@@ -183,7 +185,7 @@ static const uint8_t flashAlpha[] =
 	0x5A, 0x5A, 0x5A, 0x5A, 0x4B, 0x4B, 0x4B, 0x4B
 };
 
-static elementsN(flashAlpha);
+static constexpr auto flashAlphaN = std::size(flashAlpha);
 
 struct GroundLayer : public ViewportElement
 {
@@ -863,7 +865,7 @@ struct TilemapPrivate
 		VBO::bind(tiles.vbo);
 		VBO::allocEmpty(quadDataSize(quadCount));
 
-		VBO::uploadSubData(0, quadDataSize(groundQuadCount), dataPtr(groundVert));
+		VBO::uploadSubData(0, quadDataSize(groundQuadCount), groundVert.data());
 
 		for (size_t i = 0; i < zlayersMax; ++i)
 		{
@@ -871,7 +873,7 @@ struct TilemapPrivate
 				continue;
 
 			VBO::uploadSubData(quadDataSize(zlayerBases[i]),
-			                   quadDataSize(zlayerSize(i)), dataPtr(zlayerVert[i]));
+			                   quadDataSize(zlayerSize(i)), zlayerVert[i].data());
 		}
 
 		VBO::unbind();

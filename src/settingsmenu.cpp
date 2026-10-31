@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "settingsmenu.h"
 
 #include <SDL_video.h>
@@ -77,7 +79,7 @@ struct VButton
   BTN_STRING(Z)
 };
 
-static elementsN(vButtons);
+static constexpr auto vButtonsN = std::size(vButtons);
 
 /* Human readable string representation */
 std::string sourceDescString(const SourceDesc &src)

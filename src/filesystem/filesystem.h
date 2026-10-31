@@ -25,9 +25,6 @@
 #include <SDL_rwops.h>
 #include <string>
 
-#include "filesystemImpl.h"
-
-namespace mkxp_fs = filesystemImpl;
 
 struct FileSystemPrivate;
 class SharedFontState;
@@ -71,8 +68,6 @@ public:
 	void openReadRaw(SDL_RWops &ops,
 	                 const char *filename,
 	                 bool freeOnClose = false);
-
-	std::string normalize(const char *pathname, bool preferred, bool absolute);
 
 	/* Does not perform extension supplementing */
 	bool exists(const char *filename);

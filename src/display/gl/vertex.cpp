@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "vertex.h"
 #include "util.h"
 
@@ -57,7 +59,7 @@ static const VertexAttribute VertexAttribs[] =
 	template<> \
 	const VertexAttribute *VertexTraits<VertType>::attr = VertType##Attribs; \
 	template<> \
-	const GLsizei VertexTraits<VertType>::attrCount = ARRAY_SIZE(VertType##Attribs)
+	const GLsizei VertexTraits<VertType>::attrCount = std::size(VertType##Attribs)
 
 DEF_TRAITS(SVertex);
 DEF_TRAITS(CVertex);

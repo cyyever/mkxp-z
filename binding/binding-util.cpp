@@ -19,6 +19,8 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iterator>
+
 #include "binding-util.h"
 
 #include "exception.h"
@@ -38,7 +40,7 @@ struct {
     {MKXP, "MKXPError"}, {PHYSFS, "PHYSFSError"}, {SDL, "SDLError"}};
 
 RbData::RbData() {
-  for (size_t i = 0; i < ARRAY_SIZE(customExc); ++i)
+  for (size_t i = 0; i < std::size(customExc); ++i)
     exc[customExc[i].id] = rb_define_class(customExc[i].name, rb_eException);
 
   exc[RGSS] = rb_define_class("RGSSError", rb_eStandardError);

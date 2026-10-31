@@ -19,6 +19,8 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "util/paths.h"
+
 #include "bitmap.h"
 
 #include <SDL.h>
@@ -2812,7 +2814,7 @@ void Bitmap::saveToFile(const char *filename)
         }
     }
     
-    std::string fn_normalized = shState->fileSystem().normalize(filename, 1, 1);
+    std::string fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
     int rc;
     switch (filetype) {
         case 2:

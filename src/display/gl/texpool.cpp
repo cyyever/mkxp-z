@@ -23,7 +23,7 @@
 #include "exception.h"
 #include "sharedstate.h"
 #include "glstate.h"
-#include "boost-hash.h"
+#include <map>
 #include "debugwriter.h"
 
 #include <list>
@@ -54,7 +54,7 @@ typedef std::list<CacheNode> CNodeList;
 struct TexPoolPrivate
 {
 	/* Contains all cached TexFBOs, grouped by size */
-	BoostHash<Size, CNodeList> poolHash;
+	std::map<Size, CNodeList> poolHash;
 
 	/* Contains all cached TexFBOs, sorted by release time */
 	std::list<TEXFBO> priorityQueue;

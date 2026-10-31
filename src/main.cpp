@@ -23,6 +23,9 @@
 #  define VK_NO_PROTOTYPES
 #endif
 
+#include "util/paths.h"
+#include <cstdlib>
+
 #include "icon.png.xxd"
 
 #include <alc.h>
@@ -259,18 +262,19 @@ int main(int argc, char *argv[]) {
     );
 
 #ifndef WORKDIR_CURRENT
-    char dataDir[512]{};
+    std::string dataDir;
 #if defined(__linux__)
-    char *tmp{};
-    tmp = getenv("SRCDIR");
-    if (tmp) {
-      std::strncpy(dataDir, tmp, sizeof(dataDir));
-    }
+    if (const char *sourceDir = std::getenv("SRCDIR"))
+        dataDir = sourceDir;
 #endif
-    if (!dataDir[0]) {
-      std::strncpy(dataDir, mkxp_fs::getDefaultGameRoot().c_str(), sizeof(dataDir));
+    if (dataDir.empty())
+        dataDir = mkxp_sys::getDefaultGameRoot();
+    std::error_code directoryError;
+    std::filesystem::current_path(paths::fromUtf8(dataDir), directoryError);
+    if (directoryError) {
+        showInitError("Unable to switch into game folder: " + dataDir);
+        return 1;
     }
-    mkxp_fs::setCurrentDirectory(dataDir);
 #endif
 
     /* now we load the config */
@@ -620,7 +624,7 @@ int main(int argc, char *argv[]) {
     {
         std::string downloadsPath = "/Users/" + mkxp_sys::getUserName() + "/Downloads";
         
-        if (mkxp_fs::getCurrentDirectory().find(downloadsPath) == 0) {
+        if (paths::toUtf8(std::filesystem::current_path().u8string()).find(downloadsPath) == 0) {
             showInitError(conf.game.title +
                           " cannot run from the Downloads directory.\n\n" +
                           "Please move the application to the Applications folder (or anywhere else) " +
@@ -637,10 +641,15 @@ int main(int argc, char *argv[]) {
 #define DEBUG_FSELECT_MSG "Select the folder from which to load game files. This is the folder containing the game's INI."
 #define DEBUG_FSELECT_PROMPT "Load Game"
     if (conf.manualFolderSelect) {
-        std::string dataDirStr = mkxp_fs::selectPath(win, DEBUG_FSELECT_MSG, DEBUG_FSELECT_PROMPT);
+        std::string dataDirStr = mkxp_sys::selectPath(win, DEBUG_FSELECT_MSG, DEBUG_FSELECT_PROMPT);
         if (!dataDirStr.empty()) {
             conf.gameFolder = dataDirStr;
-            mkxp_fs::setCurrentDirectory(dataDirStr.c_str());
+            std::error_code error;
+            std::filesystem::current_path(paths::fromUtf8(dataDirStr), error);
+            if (error) {
+                showInitError("Unable to switch into game folder: " + dataDirStr);
+                return 1;
+            }
             Debug() << "Current directory set to" << dataDirStr;
             conf.read(argc, argv);
             conf.readGameINI();

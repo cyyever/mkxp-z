@@ -24,7 +24,7 @@
 
 #include "intrulist.h"
 #include "al-util.h"
-#include "boost-hash.h"
+#include <map>
 
 #include <string>
 #include <vector>
@@ -34,7 +34,7 @@ struct Config;
 
 struct SoundEmitter
 {
-	typedef BoostHash<std::string, SoundBuffer*> BufferHash;
+	typedef std::map<std::string, SoundBuffer*> BufferHash;
 
 	IntruList<SoundBuffer> buffers;
 	BufferHash bufferHash;

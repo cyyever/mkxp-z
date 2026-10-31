@@ -6,6 +6,9 @@
 //
 
 #include "system.h"
+#include "util/exception.h"
+#include <SDL_filesystem.h>
+#include <memory>
 
 #if defined(__WIN32__)
 #include <stdlib.h>
@@ -101,4 +104,11 @@ systemImpl::WineHostType systemImpl::getRealHostType() {
 // HiDPI scaling not supported outside of macOS for now
 int systemImpl::getScalingFactor() {
     return 1;
+}
+
+std::string systemImpl::getDefaultGameRoot() {
+    const std::unique_ptr<char, decltype(&SDL_free)> path(SDL_GetBasePath(), SDL_free);
+    if (!path)
+        throw Exception(Exception::MKXPError, "Failed to retrieve executable path");
+    return path.get();
 }

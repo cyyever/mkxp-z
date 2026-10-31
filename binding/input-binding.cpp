@@ -19,6 +19,8 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iterator>
+
 #include <SDL_joystick.h>
 #include <string>
 
@@ -568,7 +570,7 @@ struct {
     {"MOUSEX2", Input::MouseX2}
 };
 
-static elementsN(buttonCodes);
+static constexpr auto buttonCodesN = std::size(buttonCodes);
 
 void inputBindingInit() {
     VALUE module = rb_define_module("Input");

@@ -1,4 +1,4 @@
-#include "filesystem/filesystemImpl.h"
+#include "util/paths.h"
 #include "util/exception.h"
 #include "util/serial-util.h"
 
@@ -11,7 +11,6 @@
 #include <string_view>
 
 namespace fs = std::filesystem;
-namespace impl = filesystemImpl;
 
 void check(bool condition, const char *message) {
     if (!condition)
@@ -42,8 +41,10 @@ struct TempDirectory {
 
 void testFilesystem() {
     TempDirectory temp;
-    const fs::path folder = temp.root / u8"\u96e8\u8840 \U0001f3ae";
-    const fs::path filename = folder / u8"\u5b58\u6a94.bin";
+    const auto directoryText = utf8(u8"\u96e8\u8840 \U0001f3ae");
+    const auto fileText = utf8(u8"\u5b58\u6a94.bin");
+    const auto folder = temp.root / paths::fromUtf8(directoryText);
+    const auto filename = folder / paths::fromUtf8(fileText);
     fs::create_directory(folder);
     const std::string payload("abc\r\ndef\0ghi", 12);
     {
@@ -51,45 +52,34 @@ void testFilesystem() {
         stream.write(payload.data(), static_cast<std::streamsize>(payload.size()));
         check(stream.good(), "write Unicode file");
     }
-    const auto name = utf8(filename.u8string());
-    const auto dirname = utf8(folder.u8string());
-    check(impl::fileExists(name.c_str()), "Unicode file exists");
-    check(!impl::fileExists(dirname.c_str()), "directory is not a file");
-    check(impl::contentsOfFileAsString(name.c_str()) == payload, "read binary bytes unchanged");
-    check(impl::setCurrentDirectory(dirname.c_str()), "chdir to Unicode path");
-    const auto cwd = impl::getCurrentDirectory();
-    check(fs::equivalent(folder, fs::path(std::u8string(cwd.begin(), cwd.end()))),
-          "UTF-8 current directory round trip");
+    check(paths::readFile(filename) == payload, "read binary bytes unchanged");
+    const auto encoded = paths::toUtf8(filename.u8string());
+    check(fs::equivalent(paths::fromUtf8(encoded), filename), "UTF-8/native path round trip");
+    fs::current_path(folder);
+    const auto cwd = paths::toUtf8(fs::current_path().u8string());
+    check(fs::equivalent(paths::fromUtf8(cwd), folder), "UTF-8 current directory round trip");
 
-    fs::create_directory("child");
-    check(impl::setCurrentDirectory("child"), "relative chdir succeeds");
-    check(fs::equivalent(fs::current_path(), folder / "child"), "relative chdir changes directory once");
-    const auto before = fs::current_path();
-    check(!impl::setCurrentDirectory("missing"), "missing chdir returns false");
-    check(fs::current_path() == before, "failed chdir preserves directory");
-    check(!impl::fileExists("missing"), "missing file does not exist");
     bool missingThrew = false;
     try {
-        (void)impl::contentsOfFileAsString("missing");
+        (void)paths::readFile("missing");
     } catch (const Exception &error) {
         missingThrew = error.type == Exception::NoFileError;
     }
     check(missingThrew, "missing read raises NoFileError");
     std::ofstream("empty", std::ios::binary).close();
-    check(impl::contentsOfFileAsString("empty").empty(), "empty file is valid");
-    check(!impl::setCurrentDirectory("empty"), "file is not a directory");
-    check(impl::normalizePath("a\\b\\..\\c", false, false) == "a/c", "Windows separators normalize on every host");
-    check(impl::normalizePath("a/./b/../c", false, false) == "a/c", "dot components normalize");
-    check(impl::normalizePath("../child/file", false, true) == utf8((before / "file").generic_u8string()),
-          "absolute normalization");
-    check(impl::normalizePath(name.c_str(), false, false) == utf8(filename.generic_u8string()),
-          "absolute input stays absolute and Unicode survives");
-    check(impl::normalizePath("a/b", true, false) == utf8(fs::path("a/b").make_preferred().u8string()),
-          "native path separators");
-    check(impl::normalizePath("", false, false).empty(), "empty relative path");
+    check(paths::readFile("empty").empty(), "empty file is valid");
+    check(paths::fromRgss("a\\b\\..\\c").generic_u8string() == u8"a/c",
+          "Windows separators normalize on every host");
+    check(paths::fromRgss("a/./b/../c").generic_u8string() == u8"a/c", "dot components normalize");
+    check(paths::fromRgss(encoded).is_absolute(), "absolute input stays absolute");
+    check(paths::fromRgss(encoded).generic_u8string() == filename.generic_u8string(), "absolute Unicode path survives");
+    check(paths::fromRgss("").empty(), "empty relative path");
     const auto unicodeRelative = utf8(u8"\u96e8\u8840\\..\\\u5b58\u6a94");
-    check(impl::normalizePath(unicodeRelative.c_str(), false, false) == utf8(u8"\u5b58\u6a94"),
-          "Unicode dot normalization");
+    check(paths::fromRgss(unicodeRelative).generic_u8string() == u8"\u5b58\u6a94", "Unicode dot normalization");
+    const auto native = fs::absolute(paths::fromRgss("a\\..\\file")).lexically_normal().make_preferred();
+    // macOS temp paths may use /var while current_path resolves /private/var.
+    check(fs::equivalent(native.parent_path(), folder) && native.filename() == "file",
+          "absolute native path for SDL/Ruby");
 }
 
 void testSerialization() {

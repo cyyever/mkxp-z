@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "filesystem/filesystem.h"
+#include "util/paths.h"
 #include "util/exception.h"
 #include "util/debugwriter.h"
 #include "util/sdl-util.h"
@@ -100,12 +100,14 @@ bool getEnvironmentBool(const char *env, bool defaultValue) {
 json::value readConfFile(const char *path) {
     
     json::value ret(0);
-    if (!mkxp_fs::fileExists(path)) {
+    std::error_code error;
+    const auto status = std::filesystem::status(paths::fromUtf8(path), error);
+    if (error || !std::filesystem::exists(status) || std::filesystem::is_directory(status)) {
         return json::object({});
     }
     
     try {
-        std::string cfg = mkxp_fs::contentsOfFileAsString(path);
+        std::string cfg = paths::readFile(paths::fromUtf8(path));
         ret = json::parse5(Encoding::convertString(cfg));
     }
     catch (const std::exception &e) {
@@ -256,14 +258,17 @@ try { exp } catch (...) {}
     SET_OPT(defScreenH, integer);
     
     // Take a break real quick and witch to set game folder and read the game's ini
-    if (!gameFolder.empty() && !mkxp_fs::setCurrentDirectory(gameFolder.c_str())) {
-        throw Exception(Exception::MKXPError, "Unable to switch into gameFolder %s", gameFolder.c_str());
+    if (!gameFolder.empty()) {
+        std::error_code error;
+        std::filesystem::current_path(paths::fromUtf8(gameFolder), error);
+        if (error)
+            throw Exception(Exception::MKXPError, "Unable to switch into gameFolder %s", gameFolder.c_str());
     }
     
     readGameINI();
     
     // Now check for an extra mkxp.conf in the user's save directory and merge anything else from that
-    userConfPath = mkxp_fs::normalizePath(std::string(customDataPath + "/" CONF_FILE).c_str(), 0, 1);
+    userConfPath = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(customDataPath + "/" CONF_FILE)).lexically_normal().generic_u8string());
     json::value userConf = readConfFile(userConfPath.c_str());
     copyObject(optsJ, userConf);
     
@@ -397,7 +402,7 @@ void Config::readGameINI() {
             GUARD(game.title = ic.getStringProperty("Game", "Title"););
             GUARD(game.scripts = ic.getStringProperty("Game", "Scripts"););
             
-            strReplace(game.scripts, '\\', '/');
+            std::ranges::replace(game.scripts, '\\', '/');
             
             if (game.title.empty()) {
                 Debug() << iniFileName + ": Could not find Game.Title";
@@ -427,7 +432,7 @@ void Config::readGameINI() {
     if (dataPathApp.empty())
         dataPathApp = game.title;
     
-    customDataPath = mkxp_fs::normalizePath(prefPath(dataPathOrg.c_str(), dataPathApp.c_str()).c_str(), 0, 1);
+    customDataPath = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(prefPath(dataPathOrg.c_str(), dataPathApp.c_str()))).lexically_normal().generic_u8string());
     
     if (rgssVersion == 0) {
         /* Try to guess RGSS version based on Data/Scripts extension */
