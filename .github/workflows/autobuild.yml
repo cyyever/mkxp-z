@@ -81,6 +81,8 @@ jobs:
           sudo apt install -y ninja-build python3-pip
           pip3 install meson
           sudo apt install -y gcc g++
+          # SDL3 is built with CMake and needs system video/audio headers (libraries are loaded at runtime)
+          sudo apt install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev
 
           sudo apt install -y gzip tar zstd
 
@@ -109,113 +111,6 @@ jobs:
           path: mkxp-z.${{ matrix.artifact-name }}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}.tar.zst
           archive: false
 
-  build-windows-msys2:
-    name: Windows MSYS2
-    runs-on: windows-latest
-    steps:
-      - uses: benjlevesque/short-sha@v4.0
-        id: short-sha
-        with:
-          length: 7
-
-      - name: Install dependencies
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: mingw64
-          install: >-
-            bison mingw-w64-x86_64-ccache mingw-w64-x86_64-cmake diffutils mingw-w64-x86_64-git make mingw-w64-x86_64-meson mingw-w64-x86_64-ruby
-            mingw-w64-x86_64-gcc
-
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Restore from cache
-        if: false
-        uses: actions/cache/restore@v6
-        with:
-          path: ccache
-          key: windows-msys2-x86_64-
-          restore-keys: windows-msys2-x86_64-
-
-      - name: Set up ccache
-        shell: msys2 {0}
-        run: |
-          ccache --set-config=cache_dir="$(pwd)/ccache"
-          ccache --set-config=compiler_check=content
-          ccache --set-config=max_size=1280MiB
-          ccache --zero-stats
-
-      - name: Configure
-        shell: msys2 {0}
-        run: |
-          meson setup --prefix "$(pwd)/build/artifact" --buildtype release -Dstrip=true -Db_lto=true build
-
-      - name: Build
-        id: build
-        shell: msys2 {0}
-        run: |
-          exit_code=0
-          CLICOLOR_FORCE=1 ninja -C build -v || exit_code=$?
-          echo exit-code=$exit_code >> "$GITHUB_OUTPUT"
-          date -u +time=%Y-%m-%dT%H:%M:%SZ >> "$GITHUB_OUTPUT"
-
-      - name: Save to cache
-        if: false
-        uses: actions/cache/save@v6
-        with:
-          path: ccache
-          key: windows-msys2-x86_64-${{ github.sha }}-${{ steps.build.outputs.time }}
-
-      - name: Show ccache statistics
-        shell: msys2 {0}
-        run: |
-          ccache --show-stats --verbose
-
-      - name: Check build status
-        shell: msys2 {0}
-        run: |
-          exit ${{ steps.build.outputs.exit-code }}
-
-      - name: Prepare artifact
-        shell: msys2 {0}
-        run: |
-          meson install -C build --no-rebuild --tags mkxp-z
-
-      - name: Check for DLLs missing from the artifact
-        shell: msys2 {0}
-        run: |
-          cd build/artifact
-          error_flag=
-
-          for file in *.exe
-          do
-            ldd_output="$(ldd "$file")"
-            echo "$file"
-            echo "$ldd_output"
-
-            while IFS= read -r line
-            do
-              dll_name="$(echo "$line" | sed -e 's/=>/|/g' | cut -d '|' -f 1 | sed -e 's/^[ \t]*//g' -e 's/[ \t]*$//g')"
-              dll_location="$(echo "$line" | sed -e 's/=>/|/g' | cut -d '|' -f 2 | sed -e 's/^[ \t]*//g' -e 's/[ \t]*$//g')"
-              if [[ "$dll_location" = 'not found'* ]] || [[ "$dll_location" = '/mingw64/bin/'* ]] || [[ "$dll_location" = '/mingw64/lib/'* ]] || [[ "$dll_location" = '/mingw64/usr/bin/'* ]] || [[ "$dll_location" = '/mingw64/usr/lib/'* ]]
-              then
-                error_flag=1
-                echo "::error::$dll_name is missing from the artifact"
-              fi
-            done <<< "$ldd_output"
-          done
-
-          if [ -n "$error_flag" ]
-          then
-            exit 1
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: mkxp-z.windows.msys2.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
-          path: build/artifact
-
   build-windows-cross:
     name: Windows ${{ matrix.arch_mkxpz }}
     runs-on: ubuntu-latest
@@ -223,9 +118,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch_mkxpz: i686
-            clang: true
-            cache: false
           - arch_mkxpz: x86_64
             clang: true
             cache: true
@@ -352,22 +244,6 @@ jobs:
             endian: big
             distro: debian
             suite: sid
-            cache: false
-          - arch_mkxpz: power8le
-            arch_debian: ppc64el
-            cpu-family: ppc64
-            cpu: powerpc64le
-            endian: little
-            distro: ubuntu
-            suite: xenial
-            cache: false
-          - arch_mkxpz: riscv64
-            arch_debian: riscv64
-            cpu-family: riscv64
-            cpu: riscv64
-            endian: little
-            distro: ubuntu
-            suite: jammy
             cache: false
           - arch_mkxpz: x86_64
             arch_debian: amd64
@@ -570,6 +446,8 @@ jobs:
           /opt/meson/bin/pip install 'meson>=1.10'
           echo '/opt/meson/bin' >> "$GITHUB_PATH"
           apt install -y gcc g++
+          # SDL3 is built with CMake and needs system video/audio headers (libraries are loaded at runtime)
+          apt install -y libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev libegl-dev libdrm-dev libgbm-dev libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev
 
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -626,106 +504,6 @@ jobs:
           name: mkxp-z.linux.debian.trixie.x86_64.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
           path: build/artifact
 
-  build-linux-cross-container:
-    name: Debian Trixie ${{matrix.arch_mkxpz}}
-    runs-on: ubuntu-latest
-    container: debian:trixie
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch_mkxpz: power8le
-            arch_debian: ppc64el
-            arch_gcc: powerpc64le-linux-gnu
-            cache: false
-          - arch_mkxpz: riscv64
-            arch_debian: riscv64
-            arch_gcc: riscv64-linux-gnu
-            cache: false
-    steps:
-      - uses: benjlevesque/short-sha@v4.0
-        id: short-sha
-        with:
-          length: 7
-
-      - name: Install dependencies
-        run: |
-          dpkg --add-architecture ${{matrix.arch_debian}}
-          apt update
-          apt install -y bison ccache cmake diffutils git make ninja-build python3-venv ruby
-          python3 -m venv /opt/meson
-          /opt/meson/bin/pip install 'meson>=1.10'
-          echo '/opt/meson/bin' >> "$GITHUB_PATH"
-          apt install -y gcc g++
-          if [ '${{matrix.arch_mkxpz}}' = 'x86_64' ]; then
-            apt install -y libx11-dev
-          fi
-          apt install -y gcc-${{matrix.arch_gcc}} g++-${{matrix.arch_gcc}}
-
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Restore from cache
-        if: ${{ matrix.cache }}
-        uses: actions/cache/restore@v6
-        with:
-          path: ccache
-          key: debian-trixie-${{ matrix.arch_mkxpz }}-
-          restore-keys: debian-trixie-${{ matrix.arch_mkxpz }}-
-
-      - name: Set up ccache
-        run: |
-          ccache --set-config=cache_dir="$(pwd)/ccache"
-          ccache --set-config=compiler_check=content
-          ccache --set-config=max_size=1280MiB
-          ccache --zero-stats
-
-      - name: Configure
-        run: |
-          if [ '${{ matrix.arch_mkxpz }}' = 'armv7-neon' ]
-          then
-            arm_neon=auto
-          else
-            arm_neon=disabled
-          fi
-          meson setup --prefix "$(pwd)/build/artifact" --cross-file linux/meson-${{ matrix.arch_mkxpz }}.txt -Darm_neon=$arm_neon --buildtype release -Dstrip=true -Db_lto=true build
-
-      - name: Build
-        id: build
-        run: |
-          exit_code=0
-          CLICOLOR_FORCE=1 ninja -C build -v || exit_code=$?
-          echo exit-code=$exit_code >> "$GITHUB_OUTPUT"
-          date -u +time=%Y-%m-%dT%H:%M:%SZ >> "$GITHUB_OUTPUT"
-
-      - name: Save to cache
-        if: ${{ matrix.cache }}
-        uses: actions/cache/save@v6
-        with:
-          path: ccache
-          key: debian-trixie-${{ matrix.arch_mkxpz }}-${{ github.sha }}-${{ steps.build.outputs.time }}
-
-      - name: Show ccache statistics
-        run: |
-          ccache --show-stats --verbose
-
-      - name: Check build status
-        run: |
-          exit ${{ steps.build.outputs.exit-code }}
-
-      - name: Prepare artifact
-        run: |
-          meson install -C build --no-rebuild --tags mkxp-z
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: mkxp-z.linux.debian.trixie.${{matrix.arch_mkxpz}}.${{github.event_name == 'pull_request' && format('PR{0}', github.event.number) || github.ref_name}}-${{steps.short-sha.outputs.sha}}
-          path: build/artifact
-
   build-freebsd:
     # Archived FreeBSD sysroots need a toolchain refresh before C++26 builds.
     if: github.event_name == 'workflow_dispatch'
@@ -774,11 +552,6 @@ jobs:
             cpu-family: ppc
             cpu: powerpcspe
             endian: big
-            cache: false
-          - arch: riscv64
-            cpu-family: riscv64
-            cpu: riscv64
-            endian: little
             cache: false
     steps:
       - uses: benjlevesque/short-sha@v4.0
