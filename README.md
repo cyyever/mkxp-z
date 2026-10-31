@@ -24,7 +24,10 @@ Run these commands from a Visual Studio developer shell when using MSVC.
 The core test workflow covers Linux GCC/Clang, macOS C++/Objective-C++, and
 Windows MSVC. These tests cover the production filesystem and serialization
 code; they do not establish full MSVC engine support or test game rendering.
-The full engine still uses the upstream dependency build pipeline below.
+Full engine CI builds Windows with current MinGW/LLVM, macOS on Intel and Apple
+Silicon, and Linux on Debian Trixie. Historical Linux and FreeBSD sysroot
+recipes are retained for manual toolchain-porting runs; they need updated
+standard libraries before they can support this fork's C++26 baseline.
 The obsolete `cxx11_experimental` build option has been removed.
 
 <p align="center"><b>
