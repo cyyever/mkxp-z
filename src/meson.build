@@ -197,6 +197,7 @@ if not sdl3.found()
         'SDL_INSTALL': false,
     })
     sdl3 = cmake.subproject('sdl3', options: sdl3_options).dependency('SDL3-static')
+    meson.override_dependency('sdl3', sdl3, static: true)
     sdl3_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('SDL3-' + sdl3.version()) / 'include']
 else
     sdl3_includes = ['-I' + sdl3.get_variable(pkgconfig: 'includedir')]

@@ -660,6 +660,9 @@ jobs:
           /opt/meson/bin/pip install 'meson>=1.10'
           echo '/opt/meson/bin' >> "$GITHUB_PATH"
           apt install -y gcc g++
+          if [ '${{matrix.arch_mkxpz}}' = 'x86_64' ]; then
+            apt install -y libx11-dev
+          fi
           apt install -y gcc-${{matrix.arch_gcc}} g++-${{matrix.arch_gcc}}
 
       - name: Checkout repository
