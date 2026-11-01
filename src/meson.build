@@ -134,7 +134,8 @@ if not sdl3.found()
         'SDL_RENDER': false,
         'SDL_SENSOR': false,
         'SDL_TRAY': false,
-        'SDL_VULKAN': false,
+        'SDL_OPENGL': false,
+        'SDL_OPENGLES': false,
     })
     sdl3 = cmake.subproject('sdl3', options: sdl3_options).dependency('SDL3-static')
     meson.override_dependency('sdl3', sdl3, static: true)
@@ -144,7 +145,7 @@ else
 endif
 global_dependencies += sdl3
 
-# SDL3 owns the platform backends. Native OpenGL remains until the GPU port.
+# SDL3_GPU owns the platform rendering backends.
 
 sdl3_sound = dependency('sdl3_sound', allow_fallback: false,
     required: get_option('sdl_sound_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
@@ -399,7 +400,7 @@ endif
 
 global_include_dirs += include_directories('.',
     'audio',
-    'display', 'display/gl',
+    'display', 'display/render',
     'etc',
     'filesystem',
     'input',
@@ -436,16 +437,20 @@ main_source = files(
     'display/window.cpp',
 
 
-    'display/gl/gl-debug.cpp',
-    'display/gl/gl-fun.cpp',
-    'display/gl/gl-meta.cpp',
-    'display/gl/glstate.cpp',
-    'display/gl/scene.cpp',
-    'display/gl/shader.cpp',
-    'display/gl/texpool.cpp',
-    'display/gl/tileatlas.cpp',
-    'display/gl/tilequad.cpp',
-    'display/gl/vertex.cpp',
+    'display/gpu-device.cpp',
+    'display/gpu-shader.cpp',
+    'display/gpu-frame.cpp',
+    'display/gpu-render-context.cpp',
+    'display/gpu-resources.cpp',
+    'display/gpu-embedded.cpp',
+    'display/render/render-ops.cpp',
+    'display/render/render-state.cpp',
+    'display/render/scene.cpp',
+    'display/render/shader.cpp',
+    'display/render/texpool.cpp',
+    'display/render/tileatlas.cpp',
+    'display/render/tilequad.cpp',
+    'display/render/vertex.cpp',
 
     'util/iniconfig.cpp',
     'util/win-consoleutils.cpp',

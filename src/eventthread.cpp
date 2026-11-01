@@ -33,6 +33,7 @@
 
 #include "sharedstate.h"
 #include "graphics.h"
+#include "display/gpu-frame-handoff.h"
 
 #ifndef SDL_PLATFORM_APPLE
 #include "settingsmenu.h"
@@ -44,7 +45,6 @@
 
 #include "gamecontrollerdb.txt.xxd"
 
-#include "audio-util.h"
 #include "debugwriter.h"
 
 #ifndef SDL_PLATFORM_APPLE
@@ -76,6 +76,7 @@ enum
     
     UPDATE_FPS,
     UPDATE_SCREEN_RECT,
+    REQUEST_GPU_PRESENT,
     
     EVENT_COUNT
 };
@@ -120,11 +121,6 @@ void EventThread::process(RGSSThreadData &rtData)
     UnidirMessage<Vec2i> &windowSizeMsg = rtData.windowSizeMsg;
     UnidirMessage<Vec2i> &drawableSizeMsg = rtData.drawableSizeMsg;
     
-    
-    // XXX this function breaks input focus on OSX
-#ifndef SDL_PLATFORM_APPLE
-    SDL_SetEventFilter(eventFilter, &rtData);
-#endif
     
     fullscreen = rtData.config.fullscreen;
     int toggleFSMod = rtData.config.anyAltToggleFS ? SDL_KMOD_ALT : SDL_KMOD_LALT;
@@ -179,12 +175,56 @@ void EventThread::process(RGSSThreadData &rtData)
     void *sMenu = 0;
 #endif
     
+    // Only the SDL window thread acquires/presents swapchain textures. Keep
+    // the last completed snapshot here for expose events and modal repaint.
+    std::optional<gpu::CompletedFrame> lastGpuFrame;
+    auto presentGpuFrame = [&]() {
+        try {
+            if (!rtData.gpuDevice || !rtData.gpuPresentation) return true;
+            if (auto next = rtData.gpuPresentation->tryTake()) {
+                next->ready.wait();
+                lastGpuFrame = std::move(next);
+            }
+            if (!lastGpuFrame) return true;
+            gpu::CommandBuffer command(rtData.gpuDevice->native());
+            Uint32 width = 0, height = 0;
+            auto *swapchain = rtData.gpuDevice->acquireFrame(command, width, height);
+            if (swapchain) {
+                SDL_GPUBlitInfo blit{};
+                blit.source.texture = lastGpuFrame->texture.native();
+                blit.source.w = lastGpuFrame->texture.width();
+                blit.source.h = lastGpuFrame->texture.height();
+                blit.destination.texture = swapchain;
+                blit.destination.w = width;
+                blit.destination.h = height;
+                blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+                blit.filter = SDL_GPU_FILTER_NEAREST;
+                SDL_BlitGPUTexture(command.native(), &blit);
+            }
+            command.submit();
+            return true;
+        } catch (const std::exception &error) {
+            Debug() << "GPU presentation failed:" << error.what();
+            rtData.rqTerm = true;
+            rtData.gpuPresentation->close();
+            return false;
+        }
+    };
+
     while (true)
     {
         if (!SDL_WaitEvent(&event))
         {
             Debug() << "EventThread: Event error";
             break;
+        }
+        if (event.type == usrIdStart + REQUEST_GPU_PRESENT) {
+            gpuPresentQueued = false;
+            if (!presentGpuFrame()) break;
+            continue;
+        }
+        if (event.type == SDL_EVENT_WINDOW_EXPOSED && event.window.windowID == SDL_GetWindowID(win)) {
+            if (!presentGpuFrame()) break;
         }
 #ifndef SDL_PLATFORM_APPLE
         if (sMenu && sMenu->onEvent(event))
@@ -224,9 +264,8 @@ void EventThread::process(RGSSThreadData &rtData)
                     case SDL_EVENT_WINDOW_RESIZED :
                     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED :
                     {
-                        winW = event.window.data1;
-                        winH = event.window.data2;
-                        
+                        // PIXEL_SIZE_CHANGED payloads are not logical window units.
+                        SDL_GetWindowSize(win, &winW, &winH);
                         int drwW, drwH;
                         SDL_GetWindowSizeInPixels(win, &drwW, &drwH);
                         
@@ -555,67 +594,12 @@ void EventThread::process(RGSSThreadData &rtData)
             break;
     }
     
-    /* Just in case */
-    rtData.syncPoint.resumeThreads();
-    
     if (SDL_GamepadConnected(ctrl))
         SDL_CloseGamepad(ctrl);
     
 #ifndef SDL_PLATFORM_APPLE
     sMenu.reset();
 #endif
-}
-
-bool EventThread::eventFilter(void *data, SDL_Event *event)
-{
-    RGSSThreadData &rtData = *static_cast<RGSSThreadData*>(data);
-    
-    switch (event->type)
-    {
-        case SDL_EVENT_WILL_ENTER_BACKGROUND :
-            Debug() << "SDL_EVENT_WILL_ENTER_BACKGROUND";
-            
-            SDL_PauseAudioDevice(audioDevice);
-            
-            rtData.syncPoint.haltThreads();
-            
-            return 0;
-            
-        case SDL_EVENT_DID_ENTER_BACKGROUND :
-            Debug() << "SDL_EVENT_DID_ENTER_BACKGROUND";
-            return 0;
-            
-        case SDL_EVENT_WILL_ENTER_FOREGROUND :
-            Debug() << "SDL_EVENT_WILL_ENTER_FOREGROUND";
-            return 0;
-            
-        case SDL_EVENT_DID_ENTER_FOREGROUND :
-            Debug() << "SDL_EVENT_DID_ENTER_FOREGROUND";
-            
-            SDL_ResumeAudioDevice(audioDevice);
-            
-            rtData.syncPoint.resumeThreads();
-            
-            return 0;
-            
-        case SDL_EVENT_TERMINATING :
-            Debug() << "SDL_EVENT_TERMINATING";
-            return 0;
-            
-        case SDL_EVENT_LOW_MEMORY :
-            Debug() << "SDL_EVENT_LOW_MEMORY";
-            return 0;
-            
-            //	case SDL_EVENT_RENDER_TARGETS_RESET :
-            //		Debug() << "****** SDL_EVENT_RENDER_TARGETS_RESET";
-            //		return 0;
-            
-            //	case SDL_EVENT_RENDER_DEVICE_RESET :
-            //		Debug() << "****** SDL_EVENT_RENDER_DEVICE_RESET";
-            //		return 0;
-    }
-    
-    return 1;
 }
 
 void EventThread::cleanup()
@@ -652,6 +636,16 @@ void EventThread::updateCursorState(bool inWindow,
         (showCursor || hideCursorTimerID) ? SDL_ShowCursor() : SDL_HideCursor();
     else
         SDL_ShowCursor();
+}
+
+bool EventThread::requestGpuPresent()
+{
+    if (gpuPresentQueued.exchange(true)) return true;
+    SDL_Event event{};
+    event.type = usrIdStart + REQUEST_GPU_PRESENT;
+    if (SDL_PushEvent(&event)) return true;
+    gpuPresentQueued = false;
+    return false;
 }
 
 void EventThread::requestTerminate()
@@ -794,76 +788,4 @@ void EventThread::notifyGameScreenChange(const SDL_Rect &screen)
     event.user.data1 = reinterpret_cast<void*>(screen.w);
     event.user.data2 = reinterpret_cast<void*>(screen.h);
     SDL_PushEvent(&event);
-}
-
-void SyncPoint::haltThreads()
-{
-    if (mainSync.locked)
-        return;
-    
-    /* Lock the reply sync first to avoid races */
-    reply.lock();
-    
-    /* Lock main sync and sleep until RGSS thread
-     * reports back */
-    mainSync.lock();
-    reply.waitForUnlock();
-    
-    /* Now that the RGSS thread is asleep, we can
-     * safely put the other threads to sleep as well
-     * without causing deadlocks */
-    secondSync.lock();
-}
-
-void SyncPoint::resumeThreads()
-{
-    if (!mainSync.locked)
-        return;
-    
-    mainSync.unlock(false);
-    secondSync.unlock(true);
-}
-
-bool SyncPoint::mainSyncLocked()
-{
-    return mainSync.locked;
-}
-
-void SyncPoint::waitMainSync()
-{
-    reply.unlock(false);
-    mainSync.waitForUnlock();
-}
-
-void SyncPoint::passSecondarySync()
-{
-    if (!secondSync.locked)
-        return;
-    
-    secondSync.waitForUnlock();
-}
-
-void SyncPoint::Util::lock()
-{
-    locked = true;
-}
-
-void SyncPoint::Util::unlock(bool multi)
-{
-    {
-        /* Clear under the mutex so a waiter cannot miss the wakeup */
-        std::scoped_lock guard(mut);
-        locked = false;
-    }
-    
-    if (multi)
-        cond.notify_all();
-    else
-        cond.notify_one();
-}
-
-void SyncPoint::Util::waitForUnlock()
-{
-    std::unique_lock guard(mut);
-    cond.wait(guard, [this] { return !locked; });
 }

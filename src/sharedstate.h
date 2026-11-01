@@ -25,7 +25,7 @@
 #include "util/engine-signal.h"
 
 #define shState SharedState::instance
-#define glState shState->_glState()
+#define renderState shState->_renderState()
 
 struct SharedStatePrivate;
 struct RGSSThreadData;
@@ -41,7 +41,7 @@ class EventThread;
 class Graphics;
 class Input;
 class Audio;
-class GLState;
+class RenderState;
 class TexPool;
 class Font;
 class SharedFontState;
@@ -69,7 +69,7 @@ struct SharedState
 	Input &input() const;
 	Audio &audio() const;
 
-	GLState &_glState() const;
+	RenderState &_renderState() const;
 
 	ShaderSet &shaders() const;
 
