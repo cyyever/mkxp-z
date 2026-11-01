@@ -7,13 +7,15 @@ if host_machine.system() == 'windows'
     hlsl_checker = files('../../tools/shaders/lint-hlsl.py')
     fxc_path = run_command(hlsl_python, hlsl_checker, '--find-compiler', check: true).stdout().strip()
     fxc = find_program(fxc_path)
-    entry_points = run_command(hlsl_python, hlsl_checker, '--list', check: true).stdout().strip().split('\n')
+    extra_shader_args = get_variable('have_extra_shaders', false) ? ['--extra-shaders'] : []
+    entry_points = run_command(hlsl_python, hlsl_checker, '--list', extra_shader_args, check: true).stdout().strip().split('\n')
     foreach specification : entry_points
         entry = specification.split(':')[0]
         profile = specification.split(':')[1]
         compiled_shader = custom_target(
             'gpu-' + entry,
-            input: 'quad.hlsl',
+            input: entry == 'xbrzMain' ? 'xbrz.hlsl' : 'quad.hlsl',
+            depend_files: files('quad.hlsl'),
             output: entry + '.dxbc',
             command: [fxc, '/nologo', '/Ges', '/WX', '/T', profile,
                       '/E', entry, '/Fo', '@OUTPUT@', '@INPUT@'],
@@ -21,6 +23,6 @@ if host_machine.system() == 'windows'
         gpu_shader_binaries += {entry: compiled_shader}
         gpu_shader_targets += compiled_shader
     endforeach
-    run_target('hlsl-lint', command: [hlsl_python, hlsl_checker, '--verify'] + gpu_shader_targets,
+    run_target('hlsl-lint', command: [hlsl_python, hlsl_checker, extra_shader_args, '--verify'] + gpu_shader_targets,
         depends: gpu_shader_targets)
 endif

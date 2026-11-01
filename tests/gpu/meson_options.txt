@@ -1,0 +1,1 @@
+option('extra_shaders', type: 'boolean', value: false, description: 'Validate optional GPLv3+ xBRZ shader')

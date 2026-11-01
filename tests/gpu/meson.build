@@ -11,7 +11,8 @@ test('gpu-device', device_tests, timeout: 30)
 if host_machine.system() == 'windows'
     hlsl_python = find_program('python3', 'python')
     hlsl_checker = files('../../tools/shaders/lint-hlsl.py')
-    entry_points = run_command(hlsl_python, hlsl_checker, '--list', check: true).stdout().strip().split('\n')
+    extra_shader_args = get_option('extra_shaders') ? ['--extra-shaders'] : []
+    entry_points = run_command(hlsl_python, hlsl_checker, '--list', extra_shader_args, check: true).stdout().strip().split('\n')
     shader_outputs = []
     foreach specification : entry_points
         shader_outputs += specification.split(':')[0] + '.dxbc'
@@ -19,17 +20,17 @@ if host_machine.system() == 'windows'
     shaders = custom_target('gpu-test-shaders',
         input: '../../shader/gpu/quad.hlsl',
         output: shader_outputs,
-        depend_files: hlsl_checker,
-        command: [hlsl_python, hlsl_checker, '--source', '@INPUT@',
+        depend_files: hlsl_checker + files('../../shader/gpu/xbrz.hlsl'),
+        command: [hlsl_python, hlsl_checker, extra_shader_args, '--source', '@INPUT@',
                   '--output-dir', meson.current_build_dir()],
     )
-    run_target('hlsl-lint', command: [hlsl_python, hlsl_checker, '--verify'] + shaders,
+    run_target('hlsl-lint', command: [hlsl_python, hlsl_checker, extra_shader_args, '--verify'] + shaders,
         depends: shaders)
     shader_tests = executable('gpu-shader-tests',
         'shader-pixels.cpp', '../../src/display/gpu-device.cpp', '../../src/display/gpu-shader.cpp',
         include_directories: include_directories('../../src'),
         dependencies: sdl,
     )
-    test('gpu-shader-pixels', shader_tests, args: [meson.current_build_dir()],
+    test('gpu-shader-pixels', shader_tests, args: [meson.current_build_dir()] + extra_shader_args,
         depends: shaders, timeout: 30)
 endif

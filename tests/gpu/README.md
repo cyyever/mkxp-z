@@ -38,7 +38,7 @@ SDL API requirements:
 ## Quad pipeline pixels (Windows/D3D12)
 
 `gpu-shader-pixels` uses offline FXC DXBC and the production `gpu-shader.cpp`
-pipeline cache. All ten fragment programs are rendered to an RGBA8 target and
+pipeline cache. All supplied fragment programs are rendered to an RGBA8 target and
 read back: textured/flat/vertex colors, vertex/uniform alpha, normal/add/subtract/
 kept-destination alpha, plane grayscale/tone/flash/opacity, masked/simple
 transitions, bitmap source-over composition, and hue rotation. Expected channel
@@ -50,3 +50,11 @@ The Meson test depends on strict compilation of every HLSL entry point.
 outputs without runtime compiler dependencies. It caches by program, blend and
 render-target format; callers retain render-pass, buffer, viewport and scissor
 ownership. The full vertex stride is 32 bytes; uniform blocks are 144 and 80 bytes.
+
+Extended tests cover sprite normal/additive pattern blending with bush opacity,
+animated autotile atlas frame selection, tilemap tint, flash/gray, KGL operations
+and shadow cutouts. Nonuniform checkerboards verify horizontal three-tap blur and
+identity Catmull-Rom/Lanczos sampling; constant color verifies filter normalization
+and optional xBRZ. These checks do not yet compare xBRZ edges or whole scenes
+against OpenGL. Use `-Dextra_shaders=true` in this standalone test project to
+compile/test the separately licensed optional GPLv3+ shader.

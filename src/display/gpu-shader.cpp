@@ -7,9 +7,9 @@
 
 namespace gpu {
 namespace {
-constexpr std::array names = {"simpleMain", "flatColorMain", "vertexColorMain", "vertexAlphaMain", "uniformAlphaMain", "planeMain", "transitionMain", "simpleTransitionMain", "bitmapBlendMain", "hueMain"};
-constexpr std::array<Uint32, 10> samplers = {1,0,0,1,1,1,3,2,2,1};
-constexpr std::array<Uint32, 10> uniforms = {0,1,0,0,1,1,1,1,1,1};
+constexpr std::array names = {"simpleMain", "flatColorMain", "vertexColorMain", "vertexAlphaMain", "uniformAlphaMain", "planeMain", "transitionMain", "simpleTransitionMain", "bitmapBlendMain", "hueMain", "spriteMain", "tilemapMain", "flashMapMain", "grayMain", "blurMain", "invertMain", "compressAlphaMain", "subtractMain", "bicubicMain", "lanczosMain", "shadowHorizontalMain", "shadowVerticalMain", "xbrzMain"};
+constexpr std::array<Uint32, 23> samplers = {1,0,0,1,1,1,3,2,2,1,2,1,0,1,1,1,1,2,1,1,1,1,1};
+constexpr std::array<Uint32, 23> uniforms = {0,1,0,0,1,1,1,1,1,1,2,1,1,1,2,0,0,1,2,2,2,2,2};
 size_t index(Program program) {
     const auto value = static_cast<size_t>(program);
     if (value >= names.size()) throw std::invalid_argument("Invalid GPU quad program");
@@ -57,16 +57,19 @@ Shader::Shader(SDL_GPUDevice *d, std::span<const Uint8> code, const char *entry,
 }
 Shader::~Shader() { SDL_ReleaseGPUShader(device, shader); }
 const char *QuadPipeline::entryPoint(Program program) { return names[index(program)]; }
-QuadPipeline::QuadPipeline(SDL_GPUDevice *d, std::span<const Uint8> vertexCode, const FragmentBytecode &code)
+QuadPipeline::QuadPipeline(SDL_GPUDevice *d, std::span<const Uint8> vertexCode, const FragmentBytecode &code, std::span<const Uint8> tilemapVertexCode)
     : device(d), vertex(d, vertexCode, "vertexMain", SDL_GPU_SHADERSTAGE_VERTEX, 0, 1) {
+    if (!tilemapVertexCode.empty())
+        tilemapVertex = std::make_unique<Shader>(device, tilemapVertexCode, "tilemapVertexMain", SDL_GPU_SHADERSTAGE_VERTEX, 0, 2);
     for (size_t i = 0; i < fragments.size(); ++i)
-        fragments[i] = std::make_unique<Shader>(device, code[i], names[i], SDL_GPU_SHADERSTAGE_FRAGMENT, samplers[i], uniforms[i]);
+        if (!code[i].empty()) fragments[i] = std::make_unique<Shader>(device, code[i], names[i], SDL_GPU_SHADERSTAGE_FRAGMENT, samplers[i], uniforms[i]);
 }
 QuadPipeline::~QuadPipeline() {
     for (auto &[key, pipeline] : cache) SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
 }
 SDL_GPUGraphicsPipeline *QuadPipeline::get(Program program, Blend blend, SDL_GPUTextureFormat format) {
     const auto i = index(program);
+    if (!fragments[i]) throw std::logic_error("GPU effect bytecode was not supplied");
     const auto key = std::tuple(program, blend, format);
     if (const auto found = cache.find(key); found != cache.end()) return found->second;
     SDL_GPUVertexBufferDescription buffer{};
@@ -79,7 +82,7 @@ SDL_GPUGraphicsPipeline *QuadPipeline::get(Program program, Blend blend, SDL_GPU
     SDL_GPUColorTargetDescription target{};
     target.format = format; target.blend_state = blendState(blend);
     SDL_GPUGraphicsPipelineCreateInfo info{};
-    info.vertex_shader = vertex.native(); info.fragment_shader = fragments[i]->native();
+    info.vertex_shader = program == Program::Tilemap && tilemapVertex ? tilemapVertex->native() : vertex.native(); info.fragment_shader = fragments[i]->native();
     info.vertex_input_state.vertex_buffer_descriptions = &buffer;
     info.vertex_input_state.num_vertex_buffers = 1;
     info.vertex_input_state.vertex_attributes = attributes;
@@ -97,12 +100,16 @@ SDL_GPUGraphicsPipeline *QuadPipeline::get(Program program, Blend blend, SDL_GPU
 }
 void QuadPipeline::bind(SDL_GPUCommandBuffer *command, SDL_GPURenderPass *pass,
     Program program, Blend blend, SDL_GPUTextureFormat format, const SDL_GPUBufferBinding &vertices,
-    std::span<const SDL_GPUTextureSamplerBinding> textures, const VertexParameters &vp, const FragmentParameters &fp) {
+    std::span<const SDL_GPUTextureSamplerBinding> textures, const VertexParameters &vp, const FragmentParameters &fp, const EffectParameters &effects, const TilemapParameters &tilemap) {
     const auto i = index(program);
+    if (program == Program::Tilemap && tilemapVertex && tilemap.animation[0] < 0)
+        throw std::invalid_argument("Tilemap animation index must be nonnegative");
     if (textures.size() != samplers[i]) throw std::invalid_argument("GPU quad sampler count mismatch");
     SDL_BindGPUGraphicsPipeline(pass, get(program, blend, format));
     SDL_BindGPUVertexBuffers(pass, 0, &vertices, 1);
     SDL_PushGPUVertexUniformData(command, 0, &vp, sizeof(vp));
+    if (program == Program::Tilemap && tilemapVertex) SDL_PushGPUVertexUniformData(command, 1, &tilemap, sizeof(tilemap));
+    if (uniforms[i] > 1) SDL_PushGPUFragmentUniformData(command, 1, &effects, sizeof(effects));
     if (uniforms[i]) SDL_PushGPUFragmentUniformData(command, 0, &fp, sizeof(fp));
     if (!textures.empty()) SDL_BindGPUFragmentSamplers(pass, 0, textures.data(), static_cast<Uint32>(textures.size()));
 }
