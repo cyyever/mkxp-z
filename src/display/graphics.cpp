@@ -866,10 +866,11 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         shader.applyViewportProj();
         shader.setFrozenScene(p->frozenScene.tex);
         shader.setCurrentScene(currentScene.tex);
-        if (transMap->hasHires()) {
-            Debug() << "BUG: High-res Graphics transMap not implemented";
-        }
-        shader.setTransMap(transMap->getRenderTarget().tex);
+        /* Thresholds are sampled by normalized screen coordinates, so a
+         * high-resolution mask (Hires/Graphics/Transitions/...) drops in
+         * unchanged and gives per-physical-row thresholds. */
+        Bitmap *maskSource = transMap->hasHires() ? transMap->getHires() : transMap;
+        shader.setTransMap(maskSource->getRenderTarget().tex);
         shader.setVague(vague / 256.0f);
         shader.setTexSize(transSize);
     } else {
