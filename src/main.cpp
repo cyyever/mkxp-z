@@ -23,6 +23,7 @@
 #include <SDL3/SDL_main.h>
 #include <cstdlib>
 #include <format>
+#include <exception>
 #include <thread>
 
 #include "icon.png.xxd"
@@ -255,7 +256,13 @@ int main(int argc, char *argv[]) {
 #define DEBUG_FSELECT_MSG "Select the folder from which to load game files. This is the folder containing the game's INI."
 #define DEBUG_FSELECT_PROMPT "Load Game"
     if (conf.manualFolderSelect) {
-        std::string dataDirStr = mkxp_sys::selectPath(win, DEBUG_FSELECT_MSG, DEBUG_FSELECT_PROMPT);
+        std::string dataDirStr;
+        try {
+            dataDirStr = mkxp_sys::selectPath(win, DEBUG_FSELECT_MSG, DEBUG_FSELECT_PROMPT);
+        } catch (const std::exception &error) {
+            showInitError(error.what());
+            return 1;
+        }
         if (!dataDirStr.empty()) {
             conf.gameFolder = dataDirStr;
             std::error_code error;

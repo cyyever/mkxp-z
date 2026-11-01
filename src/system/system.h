@@ -40,9 +40,8 @@ enum WineHostType {
 std::string getSystemLanguage();
 std::string getUserName();
 std::string getDefaultGameRoot();
-#ifdef SDL_PLATFORM_APPLE
+// Startup-only: main thread; an empty string means cancellation.
 std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);
-#endif
 
 bool isWine();
 bool isRosetta();
