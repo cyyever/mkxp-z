@@ -48,7 +48,7 @@ static void parseArgsTableSizes(int argc, VALUE *argv, int *x, int *y, int *z) {
 }
 DEF_TYPE(Table);
 
-RB_METHOD(tableInitialize) {
+RB_METHOD_GUARD(tableInitialize) {
   int x, y, z;
 
   parseArgsTableSizes(argc, argv, &x, &y, &z);
@@ -64,8 +64,9 @@ RB_METHOD(tableInitialize) {
 
   return self;
 }
+RB_METHOD_GUARD_END
 
-RB_METHOD(tableResize) {
+RB_METHOD_GUARD(tableResize) {
   Table *t = getPrivateData<Table>(self);
 
   int x, y, z;
@@ -75,6 +76,7 @@ RB_METHOD(tableResize) {
 
   return Qnil;
 }
+RB_METHOD_GUARD_END
 
 #define TABLE_SIZE(d, D)                                                       \
   RB_METHOD(table##D##Size) {                                                  \
