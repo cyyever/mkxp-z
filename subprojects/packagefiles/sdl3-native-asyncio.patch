@@ -1,0 +1,132 @@
+--- a/src/io/SDL_sysasyncio.h
++++ b/src/io/SDL_sysasyncio.h
+@@ -23,6 +23,13 @@
+ 
+ #ifndef SDL_sysasyncio_h_
+ #define SDL_sysasyncio_h_
++
++#if defined(SDL_PLATFORM_WINDOWS)
++#include <sdkddkver.h>
++#if !defined(NTDDI_WIN10_NI) || NTDDI_VERSION < NTDDI_WIN10_NI
++#error Windows asynchronous I/O requires a Windows 11 SDK and target
++#endif
++#endif
+ 
+ #if defined(SDL_PLATFORM_WINDOWS) && defined(NTDDI_WIN10_NI)
+ #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_APP) && NTDDI_VERSION >= NTDDI_WIN10_NI
+--- a/src/io/windows/SDL_asyncio_windows_ioring.c
++++ b/src/io/windows/SDL_asyncio_windows_ioring.c
+@@ -19,9 +19,8 @@
+   3. This notice may not be removed or altered from any source distribution.
+ */
+ 
+-// The Windows backend uses IoRing for asynchronous i/o, and falls back to
+-// the "generic" threadpool implementation if it isn't available or
+-// fails for some other reason. IoRing was introduced in Windows 11.
++// Windows asynchronous I/O requires the native IoRing backend.
++// Initialization errors are reported to the caller; no threadpool is selected.
+ 
+ #include "SDL_internal.h"
+ #include "../SDL_sysasyncio.h"
+@@ -37,9 +36,6 @@
+ static SDL_InitState ioring_init;
+ 
+ // We could add a whole bootstrap thing like the audio/video/etc subsystems use, but let's keep this simple for now.
+-static bool (*CreateAsyncIOQueue)(SDL_AsyncIOQueue *queue);
+-static void (*QuitAsyncIO)(void);
+-static bool (*AsyncIOFromFile)(const char *file, const char *mode, SDL_AsyncIO *asyncio);
+ 
+ // we never link directly to ioring.
+ static const char *ioring_library = "KernelBase.dll";
+@@ -85,9 +81,9 @@
+ 
+ static void UnloadWinIoRingLibrary(void)
+ {
+-    if (ioring_library) {
++    if (ioring_handle) {
+         SDL_UnloadObject(ioring_handle);
+-        ioring_library = NULL;
++        ioring_handle = NULL;
+     }
+     SDL_zero(ioring);
+ }
+@@ -120,8 +116,10 @@
+                 IORING_CAPABILITIES caps;
+                 HRESULT hr = ioring.QueryIoRingCapabilities(&caps);
+                 if (FAILED(hr)) {
++                    WIN_SetErrorFromHRESULT("QueryIoRingCapabilities", hr);
+                     result = false;
+                 } else if (caps.MaxVersion < SDL_REQUIRED_IORING_VERSION) {
++                    SDL_SetError("Windows asynchronous I/O requires IoRing version %u (maximum supported: %u)", (unsigned int) SDL_REQUIRED_IORING_VERSION, (unsigned int) caps.MaxVersion);
+                     result = false;
+                 }
+             }
+@@ -490,7 +488,7 @@
+ 
+     HANDLE handle = CreateFileW(wstr, access_mode, FILE_SHARE_READ, NULL, create_mode, FILE_ATTRIBUTE_NORMAL, NULL);
+     SDL_free(wstr);
+-    if (!handle) {
++    if (handle == INVALID_HANDLE_VALUE) {
+         return WIN_SetError("CreateFileW");
+     }
+ 
+@@ -508,48 +506,33 @@
+     return true;
+ }
+ 
+-static void SDL_SYS_QuitAsyncIO_ioring(void)
+-{
+-    UnloadWinIoRingLibrary();
+-}
+-
+-static void MaybeInitializeWinIoRing(void)
++static bool MaybeInitializeWinIoRing(void)
+ {
+     if (SDL_ShouldInit(&ioring_init)) {
+-        if (LoadWinIoRing()) {
+-            SDL_DebugLogBackend("asyncio", "ioring");
+-            CreateAsyncIOQueue = SDL_SYS_CreateAsyncIOQueue_ioring;
+-            QuitAsyncIO = SDL_SYS_QuitAsyncIO_ioring;
+-            AsyncIOFromFile = SDL_SYS_AsyncIOFromFile_ioring;
+-        } else {  // can't use ioring? Use the "generic" threadpool implementation instead.
+-            SDL_DebugLogBackend("asyncio", "generic");
+-            CreateAsyncIOQueue = SDL_SYS_CreateAsyncIOQueue_Generic;
+-            QuitAsyncIO = SDL_SYS_QuitAsyncIO_Generic;
+-            AsyncIOFromFile = SDL_SYS_AsyncIOFromFile_Generic;
++        const bool initialized = LoadWinIoRing();
++        SDL_SetInitialized(&ioring_init, initialized);
++        if (!initialized) {
++            return false;
+         }
+-        SDL_SetInitialized(&ioring_init, true);
+-    }
++        SDL_DebugLogBackend("asyncio", "ioring");
++    }
++    return true;
+ }
+ 
+ bool SDL_SYS_CreateAsyncIOQueue(SDL_AsyncIOQueue *queue)
+ {
+-    MaybeInitializeWinIoRing();
+-    return CreateAsyncIOQueue(queue);
++    return MaybeInitializeWinIoRing() && SDL_SYS_CreateAsyncIOQueue_ioring(queue);
+ }
+ 
+ bool SDL_SYS_AsyncIOFromFile(const char *file, const char *mode, SDL_AsyncIO *asyncio)
+ {
+-    MaybeInitializeWinIoRing();
+-    return AsyncIOFromFile(file, mode, asyncio);
++    return MaybeInitializeWinIoRing() && SDL_SYS_AsyncIOFromFile_ioring(file, mode, asyncio);
+ }
+ 
+ void SDL_SYS_QuitAsyncIO(void)
+ {
+     if (SDL_ShouldQuit(&ioring_init)) {
+-        QuitAsyncIO();
+-        CreateAsyncIOQueue = NULL;
+-        QuitAsyncIO = NULL;
+-        AsyncIOFromFile = NULL;
++        UnloadWinIoRingLibrary();
+         SDL_SetInitialized(&ioring_init, false);
+     }
+ }

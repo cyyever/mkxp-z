@@ -67,7 +67,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: build/sdk
-          key: sdl3-sdk-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.github/scripts/build-sdl3-sdk.py', 'subprojects/sdl3.wrap', 'subprojects/packagefiles/sdl3-gpu-mip-extents.patch', 'subprojects/sdl3_image.wrap', 'subprojects/sdl3_ttf.wrap', 'subprojects/freetype.wrap') }}
+          key: sdl3-sdk-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.github/scripts/build-sdl3-sdk.py', 'subprojects/sdl3.wrap', 'subprojects/packagefiles/sdl3-*.patch', 'subprojects/sdl3_image.wrap', 'subprojects/sdl3_ttf.wrap', 'subprojects/freetype.wrap') }}
       - name: Build pinned SDL3 SDK
         if: steps.sdk.outputs.cache-hit != 'true'
         run: python .github/scripts/build-sdl3-sdk.py
