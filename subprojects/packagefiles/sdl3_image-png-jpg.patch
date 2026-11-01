@@ -1,0 +1,30 @@
+--- a/meson.build
++++ b/meson.build
+@@ -3,23 +3,16 @@
+ 
+ sdl_dep = dependency('sdl3', version: '>=3.2.4')
+ 
+-png_dep = dependency('libpng')
+-jpg_dep = dependency('libjpeg', required: false)
+-
+-img_args = []
+-
+-# These are enabled by default it seems.
+-#img_args = ['-DWANT_LIBPNG']
+-#if jpg_dep.found()
+-#  img_args += '-DWANT_JPEGLIB'
+-#endif
++# mkxp-z: only PNG and JPG are needed. Decode with the bundled stb_image and
++# encode with the built-in writers, so neither libpng nor libjpeg is required.
++img_args = ['-DSDL_IMAGE_USE_COMMON_BACKEND', '-DUSE_STBIMAGE', '-DLOAD_PNG', '-DLOAD_JPG']
+ 
+ subdir('src')
+ img_lib = library('sdl3_image',
+   img_src,
+   c_args: img_args,
+   include_directories: 'include',
+-  dependencies: [png_dep, sdl_dep])
++  dependencies: [sdl_dep])
+ 
+ sdl3_image_dep = declare_dependency(include_directories: 'include',
+   link_with: img_lib)

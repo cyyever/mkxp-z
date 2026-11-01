@@ -660,9 +660,7 @@ global_dependencies += uchardet
 sdl3_image = dependency('sdl3_image', allow_fallback: false,
     required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_image.found()
-    # The SDL3_image port requires libpng; resolve it here so it is built static like our other vendored libraries
-    # instead of as a nested default (shared) fallback, which cannot link our non-PIC static zlib.
-    dependency('libpng', required: true, default_options: meson_base_options)
+    # Built with PNG and JPG only (stb_image decoders, built-in writers); see sdl3_image-png-jpg.patch.
     sdl3_image = subproject('sdl3_image', default_options: meson_base_options).get_variable('sdl3_image_dep')
 endif
 global_dependencies += sdl3_image
