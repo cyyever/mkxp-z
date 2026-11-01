@@ -87,8 +87,11 @@ static std::unique_ptr<FontMetrics> loadFontMetrics(SDL_IOStream *stream) {
         return nullptr;
     size_t size = 0;
     metrics->data.reset(SDL_LoadFile_IO(stream, &size, false));
-    const bool restored = SDL_SeekIO(stream, offset, SDL_IO_SEEK_SET) >= 0;
-    if (!metrics->data || !restored || FT_Init_FreeType(&metrics->library) ||
+    const auto status = SDL_GetIOStatus(stream);
+    const bool restored = SDL_SeekIO(stream, offset, SDL_IO_SEEK_SET) == offset;
+    if (!metrics->data || !restored ||
+        (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF) ||
+        FT_Init_FreeType(&metrics->library) ||
         FT_New_Memory_Face(metrics->library,
             static_cast<const FT_Byte *>(metrics->data.get()), size, 0, &metrics->face))
         return nullptr;
