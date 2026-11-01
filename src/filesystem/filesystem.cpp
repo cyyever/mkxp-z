@@ -83,7 +83,7 @@ void FileSystem::initFontSets(SharedFontState &sfs) {
       if (DirectorySearch::key(folder) != "fonts" || (!actual.empty() && !fs::is_directory(actual))) continue;
       for (const auto &[name, path] : p->search.list(paths::fromUtf8(folder))) {
         const auto ext = DirectorySearch::key(paths::toUtf8(path.extension().u8string()));
-        if (ext != ".ttf" && ext != ".otf") continue;
+        if (ext != ".ttf" && ext != ".otf" && ext != ".ttc") continue;
         std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(openStream(path), SDL_CloseIO);
         const auto filename = folder + "/" + name;
         sfs.initFontSetCB(stream.get(), filename.c_str());
