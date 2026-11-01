@@ -105,11 +105,6 @@ systemImpl::WineHostType systemImpl::getRealHostType() {
 #endif
 }
 
-// HiDPI scaling not supported outside of macOS for now
-int systemImpl::getScalingFactor() {
-    return 1;
-}
-
 std::string systemImpl::getDefaultGameRoot() {
     const char *path = SDL_GetBasePath();
     if (!path)

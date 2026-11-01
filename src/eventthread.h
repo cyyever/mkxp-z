@@ -226,7 +226,6 @@ struct RGSSThreadData
 
 	Vec2 sizeResoRatio;
 	Vec2i screenOffset;
-    int scale;
 	const int refreshRate;
 
 	Config config;
@@ -237,14 +236,13 @@ struct RGSSThreadData
 	               const char *argv0,
 	               SDL_Window *window,
 	               int refreshRate,
-                   int scalingFactor,
 	               const Config& newconf,
                    gpu::Device *device, gpu::FrameHandoff *presentation)
 	    : ethread(ethread),
 	      argv0(argv0),
           window(window),
           gpuDevice(device), gpuPresentation(presentation),
-          sizeResoRatio(1, 1), scale(scalingFactor), refreshRate(refreshRate),
+          sizeResoRatio(1, 1), refreshRate(refreshRate),
           config(newconf)
 	{
 		rqResetFinish = true;

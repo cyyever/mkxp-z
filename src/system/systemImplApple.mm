@@ -26,10 +26,6 @@ std::string systemImpl::getUserName() {
     }
 }
 
-int systemImpl::getScalingFactor() {
-    return NSApplication.sharedApplication.mainWindow.backingScaleFactor;
-}
-
 bool systemImpl::isWine() {
     return false;
 }

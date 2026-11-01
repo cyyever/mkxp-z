@@ -310,7 +310,7 @@ int main(int argc, char *argv[]) {
     }
     gpu::FrameHandoff gpuPresentation;
     RGSSThreadData rtData(&eventThread, argv[0], win, mode.refresh_rate,
-                          mkxp_sys::getScalingFactor(), conf, gpuDevice.get(), &gpuPresentation);
+                          conf, gpuDevice.get(), &gpuPresentation);
 
     int winW{}, winH{}, drwW{}, drwH{};
     SDL_GetWindowSize(win, &winW, &winH);

@@ -43,7 +43,6 @@ std::string getDefaultGameRoot();
 #ifdef SDL_PLATFORM_APPLE
 std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);
 #endif
-int getScalingFactor();
 
 bool isWine();
 bool isRosetta();

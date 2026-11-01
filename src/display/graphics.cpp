@@ -394,10 +394,6 @@ struct GraphicsPrivate {
      * is blitted inside the game window */
     Vec2i scOffset;
     
-    // Scaling factor, used to display the screen properly
-    // on Retina displays
-    int scalingFactor;
-    
     ScreenScene screen;
     RGSSThreadData *threadData;
     TEXFBO windowCanvas;
