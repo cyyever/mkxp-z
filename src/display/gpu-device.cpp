@@ -70,15 +70,30 @@ void CommandBuffer::submit() {
     auto *pending = std::exchange(command, nullptr);
     if (!SDL_SubmitGPUCommandBuffer(pending)) fail("SDL_SubmitGPUCommandBuffer");
 }
-void CommandBuffer::submitAndWait() {
+Fence::Fence(SDL_GPUDevice *d, SDL_GPUFence *f) : device(d), fence(f) {}
+Fence::~Fence() { if (fence) SDL_ReleaseGPUFence(device, fence); }
+Fence::Fence(Fence &&other) noexcept { *this = std::move(other); }
+Fence &Fence::operator=(Fence &&other) noexcept {
+    if (this != &other) {
+        if (fence) SDL_ReleaseGPUFence(device, fence);
+        device = other.device;
+        fence = std::exchange(other.fence, nullptr);
+    }
+    return *this;
+}
+void Fence::wait() const {
+    if (!fence) throw std::logic_error("GPU fence is empty or was moved");
+    auto *pending = fence;
+    if (!SDL_WaitForGPUFences(device, true, &pending, 1)) fail("SDL_WaitForGPUFences");
+}
+Fence CommandBuffer::submitWithFence() {
     checkThread();
     auto *pending = std::exchange(command, nullptr);
     auto *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(pending);
     if (!fence) fail("SDL_SubmitGPUCommandBufferAndAcquireFence");
-    const bool success = SDL_WaitForGPUFences(device, true, &fence, 1);
-    SDL_ReleaseGPUFence(device, fence);
-    if (!success) fail("SDL_WaitForGPUFences");
+    return Fence(device, fence);
 }
+void CommandBuffer::submitAndWait() { submitWithFence().wait(); }
 Device::Device(SDL_Window *w, SDL_GPUShaderFormat formats, bool debug, const char *driver)
     : window(w), windowThread(std::this_thread::get_id()) {
     if (!window) throw std::invalid_argument("GPU device requires a window");
