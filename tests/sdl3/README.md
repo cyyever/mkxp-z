@@ -34,3 +34,6 @@ HiRes snapshot regression. It checks logical and physical RGBA pixels, their
 Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/hires-readback.rb`
 to check lazy logical readback after HiRes stretch, text, hue and direct-child
 mutations, exact raw replacement bytes, and replacement/disposal lifetime.
+
+Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/mega-surface-flip.rb --no-hires`
+to verify SDL mega-surface crop/flips, clipping, nearest scaling and RGBA opacity.
