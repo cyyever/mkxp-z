@@ -4,7 +4,6 @@
 #include <istream>
 #include <string>
 #include <map>
-#include <string>
 
 class INIConfiguration
 {

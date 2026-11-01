@@ -5,7 +5,10 @@
 static std::string toLowerCase(const std::string& str)
 {
 	std::string lower = str;
-	std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+	// INI names use the same locale-independent ASCII fold as asset paths.
+	std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+		return static_cast<char>(c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c);
+	});
 	return lower;
 }
  
@@ -27,21 +30,17 @@ bool INIConfiguration::load (std::istream& is)
 	std::string currSectionName;
 
 	std::string line;
-	std::getline (is, line);
-
-	while (!is.eof() && !is.bad())
+	while (std::getline(is, line))
 	{
+		if (line.empty())
+			continue;
+
 		if (line[0] == '[')
 		{
 			currSectionName = line.substr (1, line.find_last_of (']') - 1);
 		}
-		else if (line[0] != '#' && line.length() > 2)
+		else if (line[0] != '#')
 		{
-			int crloc = line.length() - 1;
-
-			if (crloc >= 0  && line[crloc] == '\r') //check for Windows-style newline
-				line.resize (crloc);                //and correct
-
 			size_t equalsPos = line.find_first_of ("=");
 
 			if (equalsPos != std::string::npos)
@@ -53,7 +52,6 @@ bool INIConfiguration::load (std::istream& is)
 			}
 		}
 
-		std::getline (is, line);
 	}
 
 	if (is.bad())

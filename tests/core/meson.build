@@ -69,3 +69,11 @@ directory_cache_tests = executable(
     override_options: engine_standards + {'warning_level': '3', 'werror': true},
 )
 test('directory-cache', directory_cache_tests)
+
+ini_tests = executable(
+    'ini-configuration-tests',
+    'ini-configuration.cpp', '../../src/util/iniconfig.cpp',
+    include_directories: include_directories('../../src'),
+    override_options: engine_standards + {'warning_level': '3', 'werror': true},
+)
+test('ini-configuration', ini_tests)
