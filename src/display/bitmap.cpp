@@ -515,7 +515,7 @@ Bitmap::Bitmap(int width, int height, bool isHires)
     if (width > renderState.caps.maxTexSize || height > renderState.caps.maxTexSize || (hiresBitmap && hiresBitmap->isMega()))
     {
         p = new BitmapPrivate(this);
-        SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+        SDL_Surface *surface = SDL_CreateSurface(width, height, p->format->format);
         if (!surface)
             throw Exception(Exception::SDLError, "Error creating Bitmap: %s",
                             SDL_GetError());
@@ -1579,7 +1579,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         if (destRect.w < 0 || destRect.h < 0)
         {
             // SDL can't handle negative dimensions when blitting, so we have to do it manually
-            blitTemp = SDL_CreateSurface(sourceRect.w, sourceRect.h, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+            blitTemp = SDL_CreateSurface(sourceRect.w, sourceRect.h, p->format->format);
 
             ownedBlitTemp.reset(blitTemp);
             if (!blitTemp)
@@ -1650,7 +1650,7 @@ void Bitmap::stretchBlt(IntRect destRect,
 
                     /* We have to resize it here anyway, so use software resizing */
                     blitTemp =
-                        SDL_CreateSurface(abs(destRect.w), abs(destRect.h), SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+                        SDL_CreateSurface(abs(destRect.w), abs(destRect.h), p->format->format);
                     ownedBlitTemp.reset(blitTemp);
                     if (!blitTemp)
                         throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s",
@@ -2279,8 +2279,7 @@ void Bitmap::createSurface() const
     const auto &target = p->getRenderTarget();
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
         SDL_CreateSurface(target.width, target.height,
-                          SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask,
-                                                     p->format->Gmask, p->format->Bmask, p->format->Amask)),
+                          p->format->format),
         SDL_DestroySurface);
     if (!surface)
         throw Exception(Exception::SDLError, "Failed to prepare bitmap readback: %s", SDL_GetError());
@@ -2497,7 +2496,7 @@ void Bitmap::saveToFile(const char *filename)
         surf = (p->surface) ? p->surface : p->megaSurface;
     }
     else {
-        surf = SDL_CreateSurface(width(), height(), SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+        surf = SDL_CreateSurface(width(), height(), p->format->format);
 
         if (!surf)
             throw Exception(Exception::SDLError, "Failed to prepare bitmap for saving: %s", SDL_GetError());
@@ -2630,7 +2629,7 @@ static std::string fixupString(const char *str)
 
 static void applyShadow(SDL_Surface *&in, const SDL_PixelFormatDetails &fm, const SDL_Color &c, int offset)
 {
-    SDL_Surface *out = SDL_CreateSurface(in->w+offset, in->h+offset, SDL_GetPixelFormatForMasks(fm.bits_per_pixel, fm.Rmask, fm.Gmask, fm.Bmask, fm.Amask));
+    SDL_Surface *out = SDL_CreateSurface(in->w+offset, in->h+offset, fm.format);
 
     float fr = c.r / 255.0f;
     float fg = c.g / 255.0f;
