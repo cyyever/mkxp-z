@@ -22,7 +22,6 @@
 #include "alstream.h"
 
 #include "sharedstate.h"
-#include "eventthread.h"
 #include "filesystem.h"
 #include "exception.h"
 #include "aldatasource.h"
@@ -309,7 +308,6 @@ void ALStream::streamData(std::stop_token stop)
 
 	while (!stop.stop_requested())
 	{
-		shState->rtData().syncPoint.passSecondarySync();
 
 		/* Top up the queue, then sleep until it drains a bit */
 		while (!stop.stop_requested() && SDL_GetAudioStreamQueued(stream.get()) < QUEUE_AHEAD_BYTES)
