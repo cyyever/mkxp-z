@@ -28,12 +28,18 @@ FragmentInput vertexMain(VertexInput input) {
     return output;
 }
 
-Texture2D<float4> sourceTexture : register(t0, space2);
-SamplerState sourceSampler : register(s0, space2);
-Texture2D<float4> secondTexture : register(t1, space2);
-SamplerState secondSampler : register(s1, space2);
-Texture2D<float4> transitionTexture : register(t2, space2);
-SamplerState transitionSampler : register(s2, space2);
+#ifdef __spirv__
+#define COMBINED [[vk::combinedImageSampler]]
+#else
+#define COMBINED
+#endif
+
+COMBINED Texture2D<float4> sourceTexture : register(t0, space2);
+COMBINED SamplerState sourceSampler : register(s0, space2);
+COMBINED Texture2D<float4> secondTexture : register(t1, space2);
+COMBINED SamplerState secondSampler : register(s1, space2);
+COMBINED Texture2D<float4> transitionTexture : register(t2, space2);
+COMBINED SamplerState transitionSampler : register(s2, space2);
 
 cbuffer FragmentParameters : register(b0, space3) {
     float4 color;
