@@ -65,6 +65,19 @@ begin
     assert_equal([1, 2, 3, 255], temporary.raw_data.bytes.first(4), 'repeated read/dispose')
     temporary.dispose
   end
+  # A pooled logical texture must not retain its previous bitmap's HiRes child.
+  pooled = Bitmap.new(16, 16)
+  pooled.fill_rect(0, 0, 16, 16, Color.new(17, 33, 65, 255))
+  pooled.to_file('pooled.png')
+  pooled.dispose
+  plain = Bitmap.new('pooled')
+  raise 'plain PNG acquired a HiRes replacement' if plain.hires
+  copied = plain.dup
+  assert_equal([17, 33, 65, 255], copied.raw_data.bytes.first(4), 'pooled PNG clone')
+  destination = Bitmap.new(8, 8)
+  destination.stretch_blt(destination.rect, plain, plain.rect)
+  assert_equal([17, 33, 65, 255], destination.raw_data.bytes.first(4), 'pooled PNG blit')
+  [destination, copied, plain].each(&:dispose)
   GC.start
   File.binwrite('result.txt', 'PASS')
 rescue Exception => error
