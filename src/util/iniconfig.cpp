@@ -1,10 +1,11 @@
 #include "iniconfig.h"
 
 #include <algorithm>
+#include <string_view>
 
-static std::string toLowerCase(const std::string& str)
+static std::string toLowerCase(std::string_view str)
 {
-	std::string lower = str;
+	std::string lower(str);
 	// INI names use the same locale-independent ASCII fold as asset paths.
 	std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
 		return static_cast<char>(c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c);
@@ -12,12 +13,11 @@ static std::string toLowerCase(const std::string& str)
 	return lower;
 }
  
-static std::string trim(const std::string& str, const std::string& chars = "\t\n\v\f\r ")
+static std::string_view trim(std::string_view str, std::string_view chars = "\t\n\v\f\r ")
 {
-	std::string trimmed = str;
-	trimmed.erase(trimmed.find_last_not_of(chars) + 1);
-	trimmed.erase(0, trimmed.find_first_not_of(chars));
-	return trimmed;
+	const auto first = str.find_first_not_of(chars);
+	return first == std::string_view::npos ? std::string_view{} :
+	       str.substr(first, str.find_last_not_of(chars) - first + 1);
 }
 
 bool INIConfiguration::load (std::istream& is)
@@ -41,7 +41,7 @@ bool INIConfiguration::load (std::istream& is)
 		}
 		else if (line[0] != '#')
 		{
-			size_t equalsPos = line.find_first_of ("=");
+			size_t equalsPos = line.find ('=');
 
 			if (equalsPos != std::string::npos)
 			{
