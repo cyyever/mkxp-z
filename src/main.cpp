@@ -238,9 +238,13 @@ int main(int argc, char *argv[]) {
     
 #ifdef SDL_PLATFORM_APPLE
     {
-        const auto downloadsPath = std::format("/Users/{}/Downloads", mkxp_sys::getUserName());
+        const char *downloadsPath = SDL_GetUserFolder(SDL_FOLDER_DOWNLOADS);
         
-        if (paths::toUtf8(std::filesystem::current_path().u8string()).find(downloadsPath) == 0) {
+        if (!downloadsPath) {
+            showInitError(std::format("Downloads folder lookup failed: {}", SDL_GetError()));
+            return 0;
+        }
+        if ((paths::toUtf8(std::filesystem::current_path().u8string()) + "/").starts_with(downloadsPath)) {
             showInitError("Move the game out of Downloads, then launch it again.");
             return 0;
         }
