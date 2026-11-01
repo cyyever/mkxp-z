@@ -741,10 +741,8 @@ main_source = files(
     'display/plane.cpp',
     'display/sprite.cpp',
     'display/tilemap.cpp',
-    'display/tilemapvx.cpp',
     'display/viewport.cpp',
     'display/window.cpp',
-    'display/windowvx.cpp',
 
     'display/libnsgif/libnsgif.c',
     'display/libnsgif/lzw.c',
@@ -757,7 +755,6 @@ main_source = files(
     'display/gl/shader.cpp',
     'display/gl/texpool.cpp',
     'display/gl/tileatlas.cpp',
-    'display/gl/tileatlasvx.cpp',
     'display/gl/tilequad.cpp',
     'display/gl/vertex.cpp',
 

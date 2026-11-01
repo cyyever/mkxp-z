@@ -23,9 +23,7 @@ binding_source = [files(
     'tilemap-binding.cpp',
     'audio-binding.cpp',
     'module_rpg.cpp',
-    'filesystem-binding.cpp',
-    'windowvx-binding.cpp',
-    'tilemapvx-binding.cpp'
+    'filesystem-binding.cpp'
 )]
 
 if miniffi == true

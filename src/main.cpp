@@ -164,16 +164,6 @@ int rgssThreadFun(void *userdata) {
   return 0;
 }
 
-static void printRgssVersion(int ver) {
-  const char *const makers[] = {"", "XP", "VX", "VX Ace"};
-
-  char buf[128];
-  snprintf(buf, sizeof(buf), "RGSS version %d (RPG Maker %s)", ver,
-           makers[ver]);
-
-  Debug() << buf;
-}
-
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg) {
   rtData->rgssErrorMsg = msg;
   rtData->ethread->requestTerminate();
@@ -293,8 +283,11 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
-    printRgssVersion(conf.rgssVersion);
+    if (conf.rgssVersion != 1) {
+      showInitError("Only RGSS1 (RPG Maker XP) games are supported.");
+      SDL_Quit();
+      return 0;
+    }
 
     int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
     if (IMG_Init(imgFlags) != imgFlags) {

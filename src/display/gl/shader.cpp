@@ -59,7 +59,6 @@
 #include "simpleMatrix.vert.xxd"
 #include "blurH.vert.xxd"
 #include "blurV.vert.xxd"
-#include "tilemapvx.vert.xxd"
 #include "kglInvert.frag.xxd"
 #include "kglCompressAlpha.frag.xxd"
 #include "kglSubtract.frag.xxd"
@@ -756,20 +755,6 @@ BlurShader::VPass::VPass()
 	ShaderBase::init();
 }
 
-
-TilemapVXShader::TilemapVXShader()
-{
-	INIT_SHADER(tilemapvx, simple, TilemapVXShader);
-
-	ShaderBase::init();
-
-	GET_U(aniOffset);
-}
-
-void TilemapVXShader::setAniOffset(const Vec2 &value)
-{
-	gl.Uniform2f(u_aniOffset, value.x, value.y);
-}
 
 
 BltShader::BltShader()

@@ -71,8 +71,6 @@ extern "C" {
 #include "git-hash.h"
 
 extern const char module_rpg1[];
-extern const char module_rpg2[];
-extern const char module_rpg3[];
 
 static VALUE topSelf;
 
@@ -94,8 +92,6 @@ void viewportBindingInit();
 void planeBindingInit();
 void windowBindingInit();
 void tilemapBindingInit();
-void windowVXBindingInit();
-void tilemapVXBindingInit();
 
 void inputBindingInit();
 void audioBindingInit();
@@ -168,13 +164,8 @@ static void mriBindingInit() {
     viewportBindingInit();
     planeBindingInit();
     
-    if (rgssVer == 1) {
-        windowBindingInit();
-        tilemapBindingInit();
-    } else {
-        windowVXBindingInit();
-        tilemapVXBindingInit();
-    }
+    windowBindingInit();
+    tilemapBindingInit();
     
     inputBindingInit();
     audioBindingInit();
@@ -203,14 +194,7 @@ static void mriBindingInit() {
         _rb_define_module_function(rb_mKernel, "caller", _kernelCaller);
     }
     
-    if (rgssVer == 1)
-        rb_eval_string(module_rpg1);
-    else if (rgssVer == 2)
-        rb_eval_string(module_rpg2);
-    else if (rgssVer == 3)
-        rb_eval_string(module_rpg3);
-    else
-        assert(!"unreachable");
+    rb_eval_string(module_rpg1);
     
     VALUE mod = rb_define_module("System");
     _rb_define_module_function(mod, "delta", mkxpDelta);

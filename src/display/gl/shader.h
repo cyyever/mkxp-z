@@ -298,17 +298,6 @@ struct BlurShader
 	VPass pass2;
 };
 
-class TilemapVXShader : public ShaderBase
-{
-public:
-	TilemapVXShader();
-
-	void setAniOffset(const Vec2 &value);
-
-private:
-	GLint u_aniOffset;
-};
-
 /* Bitmap blit */
 class BltShader : public ShaderBase
 {
@@ -458,7 +447,6 @@ struct ShaderSet
 	BltShader blt;
 	SimpleMatrixShader simpleMatrix;
 	BlurShader blur;
-	TilemapVXShader tilemapVX;
 	KglInvertShader kglInvert;
 	KglCompressAlphaShader kglCompressAlpha;
 	KglSubtractShader kglSubtract;
