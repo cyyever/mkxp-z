@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <optional>
+#include <utility>
 
 namespace gpu {
 struct CompletedFrame {
@@ -37,8 +38,7 @@ public:
     std::optional<CompletedFrame> tryTake() {
         std::unique_lock lock(mutex);
         if (!pending) return std::nullopt;
-        auto result = std::move(pending);
-        pending.reset();
+        auto result = std::exchange(pending, std::nullopt);
         lock.unlock();
         available.notify_one();
         return result;

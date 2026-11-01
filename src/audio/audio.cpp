@@ -29,6 +29,7 @@
 #include "exception.h"
 
 #include <thread>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -36,7 +37,7 @@
 struct AudioPrivate
 {
     
-    std::vector<AudioStream*> bgmTracks;
+    std::vector<std::unique_ptr<AudioStream>> bgmTracks;
 	AudioStream bgs;
 	AudioStream me;
 
@@ -71,7 +72,7 @@ struct AudioPrivate
           volumeRatio(1)
 	{
         for (int i = 0; i < rtData.config.BGM.trackCount; i++) {
-            bgmTracks.push_back(new AudioStream(ALStream::Looped));
+            bgmTracks.push_back(std::make_unique<AudioStream>(ALStream::Looped));
         }
         
 		meWatch.state = MeNotPlaying;
@@ -82,8 +83,6 @@ struct AudioPrivate
 	{
 		/* Assigning an empty jthread requests stop and joins */
 		meWatch.thread = {};
-        for (auto track : bgmTracks)
-            delete track;
 	}
     
     AudioStream *getTrackByIndex(int index) {
@@ -91,7 +90,7 @@ struct AudioPrivate
         if (index > (int)(bgmTracks.size()) - 1) {
             throw Exception(Exception::MKXPError, "requested BGM track %d out of range (max: %d)", index, bgmTracks.size() - 1);
         }
-        return bgmTracks[index];
+        return bgmTracks[index].get();
     }
 
 	void meWatchFun(std::stop_token stop)
@@ -114,7 +113,7 @@ struct AudioPrivate
 				if (me.stream.queryState() == ALStream::Playing)
 				{
 					/* ME playing detected. -> FadeOutBGM */
-                    for (auto track : bgmTracks)
+                    for (const auto &track : bgmTracks)
                         track->extPaused = true;
                     
 					meWatch.state = BgmFadingOut;
@@ -138,7 +137,7 @@ struct AudioPrivate
                 bool shouldBreak = false;
                 
                 for (int i = 0; i < (int)(bgmTracks.size()); i++) {
-                    AudioStream *track = bgmTracks[i];
+                    AudioStream *track = bgmTracks[i].get();
                     
                     auto trackLock = track->lockStream();
                     
@@ -154,9 +153,9 @@ struct AudioPrivate
                         // check to see if there are any tracks still playing,
                         // and if the last one was ended this round, this branch should exit
                         std::vector<AudioStream*> playingTracks;
-                        for (auto t : bgmTracks)
+                        for (const auto &t : bgmTracks)
                             if (t->stream.queryState() == ALStream::Playing)
-                                playingTracks.push_back(t);
+                                playingTracks.push_back(t.get());
                         
                         
                         if (playingTracks.size() <= 0 && !shouldBreak) shouldBreak = true;
@@ -178,7 +177,7 @@ struct AudioPrivate
 				if (me.stream.queryState() != ALStream::Playing)
                 {
                     /* ME has ended */
-                    for (auto track : bgmTracks) {
+                    for (const auto &track : bgmTracks) {
                         auto trackLock = track->lockStream();
                         track->extPaused = false;
                         
@@ -208,13 +207,13 @@ struct AudioPrivate
 			{
                 std::vector<std::unique_lock<std::mutex>> trackLocks;
                 trackLocks.reserve(bgmTracks.size());
-                for (auto track : bgmTracks)
+                for (const auto &track : bgmTracks)
                     trackLocks.push_back(track->lockStream());
 
 				if (bgmTracks[0]->stream.queryState() == ALStream::Stopped)
 				{
 					/* BGM stopped midway fade in. -> MeNotPlaying */
-                    for (auto track : bgmTracks)
+                    for (const auto &track : bgmTracks)
                         track->setVolume(AudioStream::External, 1.0f);
 					meWatch.state = MeNotPlaying;
 
@@ -226,7 +225,7 @@ struct AudioPrivate
 				if (me.stream.queryState() == ALStream::Playing)
 				{
 					/* ME started playing midway BGM fade in. -> FadeOutBGM */
-                    for (auto track : bgmTracks)
+                    for (const auto &track : bgmTracks)
                         track->extPaused = true;
 					meWatch.state = BgmFadingOut;
 
@@ -243,7 +242,7 @@ struct AudioPrivate
 					meWatch.state = MeNotPlaying;
 				}
 
-                for (auto track : bgmTracks)
+                for (const auto &track : bgmTracks)
                     track->setVolume(AudioStream::External, vol);
 
 				break;
@@ -282,7 +281,7 @@ void Audio::bgmPlay(const char *filename,
 void Audio::bgmStop(int track)
 {
     if (track == -127) {
-        for (auto track : p->bgmTracks)
+        for (const auto &track : p->bgmTracks)
             track->stop();
         
         return;
@@ -294,7 +293,7 @@ void Audio::bgmStop(int track)
 void Audio::bgmFade(int time, int track)
 {
     if (track == -127) {
-        for (auto track : p->bgmTracks)
+        for (const auto &track : p->bgmTracks)
             track->fadeOut(time);
         
         return;
@@ -315,7 +314,7 @@ void Audio::bgmSetVolume(int volume, int track)
 {
     float vol = volume / 100.0;
     if (track == -127) {
-        for (auto track : p->bgmTracks)
+        for (const auto &track : p->bgmTracks)
             track->setVolume(AudioStream::BaseRatio, vol);
         
         return;
@@ -385,7 +384,7 @@ double Audio::bgsPos()
 
 void Audio::reset()
 {
-    for (auto track : p->bgmTracks) {
+    for (const auto &track : p->bgmTracks) {
     	track->stop();
     }
 

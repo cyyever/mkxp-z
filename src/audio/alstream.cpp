@@ -236,11 +236,8 @@ void ALStream::openSource(const std::string &filename)
 
 void ALStream::stopStream()
 {
-	if (thread.joinable())
-	{
-		thread.request_stop();
-		thread.join();
-	}
+	// jthread assignment requests stop and joins before queued data is cleared.
+	thread = {};
 
 	/* Unbind and drop queued data _after_ the thread has terminated,
 	 * because it might still have been pushing data */
