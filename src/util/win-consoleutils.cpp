@@ -12,7 +12,7 @@ bool setupWindowsConsole()
         
     const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 
-    return (handle != NULL && handle != INVALID_HANDLE_VALUE);
+    return (handle != nullptr && handle != INVALID_HANDLE_VALUE);
 }
 
 static FILE *outStream;

@@ -146,42 +146,6 @@ if host_system == 'darwin'
     subdir('macos/views')
 endif
 
-if get_option('steamworks_path') != ''
-    global_args += '-DMKXPZ_STEAM'
-
-    steamshim = subproject(
-        'steamshim',
-        default_options: meson_base_options + {
-            'steamworks_path': get_option('steamworks_path'),
-        },
-    )
-
-    executable(
-        'steam_' + exe_name,
-        dependencies: [
-            steamshim.get_variable('steamshim_parent'),
-        ],
-        cpp_args: [
-            '-DGAME_LAUNCH_NAME="' + exe_name + '"',
-            '-DDEBUGPIPE=' + (get_option('steamshim_debug') ? '1' : '0'),
-        ],
-        objcpp_args: [
-            '-fobjc-arc',
-            '-fobjc-weak',
-        ],
-        link_args: global_link_args,
-        override_options: engine_standards,
-        win_subsystem: get_option('steamshim_debug') ? 'console' : 'windows',
-        build_rpath: rpath,
-        install_rpath: rpath,
-        install: true,
-        install_dir: '.',
-        install_tag: meson.project_name(),
-    )
-
-    global_dependencies += steamshim.get_variable('steamshim_child')
-endif
-
 libmkxp = static_library(
     meson.project_name(),
     sources: global_sources,
@@ -247,31 +211,6 @@ foreach install_tag : global_install_tags
 endforeach
 
 if host_system == 'darwin'
-    if get_option('steamworks_path') != ''
-        executable(
-            'steam_bundle_' + meson.project_name(),
-            dependencies: [
-                steamshim.get_variable('steamshim_parent'),
-            ],
-            cpp_args: [
-                '-DGAME_LAUNCH_NAME="' + meson.project_name() + '"',
-                '-DDEBUGPIPE=' + (get_option('steamshim_debug') ? '1' : '0'),
-            ],
-            objcpp_args: [
-                '-fobjc-arc',
-                '-fobjc-weak',
-            ],
-            link_args: global_link_args,
-            override_options: engine_standards,
-            win_subsystem: get_option('steamshim_debug') ? 'console' : 'windows',
-            build_rpath: rpath,
-            install_rpath: rpath,
-            install: true,
-            install_dir: (exe_name + '.app') / 'Contents' / 'MacOS',
-            install_tag: meson.project_name() + '-bundle',
-        )
-    endif
-
     executable(
         'bundle_' + meson.project_name(),
         sources: [
@@ -293,7 +232,7 @@ if host_system == 'darwin'
         input: 'macos/Info.plist.in',
         output: 'Info.plist',
         configuration: {
-            'CFBundleExecutable': get_option('steamworks_path') != '' ? 'steam_bundle_' + meson.project_name() : 'bundle_' + meson.project_name(),
+            'CFBundleExecutable': 'bundle_' + meson.project_name(),
             'CFBundleGetInfoString': meson.project_name(),
             'CFBundleIdentifier': meson.project_name(),
             'CFBundleName': meson.project_name(),
@@ -314,18 +253,10 @@ endif
 if openal.type_name() == 'internal'
     summary('ALSA', have_alsa, bool_yn: true)
 endif
-summary('ANGLE', have_angle, bool_yn: true)
-if have_angle
-    summary('ANGLE Direct3D 11 backend', have_angle_direct3d11, bool_yn: true)
-    summary('ANGLE Metal backend', have_angle_metal, bool_yn: true)
-    summary('ANGLE null backend', have_angle_null, bool_yn: true)
-    summary('ANGLE Vulkan backend', have_angle_vulkan, bool_yn: true)
-endif
 summary('Extra shaders', have_extra_shaders, bool_yn: true)
 if openal.type_name() == 'internal'
     summary('JACK Audio Connection Kit', have_jack, bool_yn: true)
 endif
-summary('OpenSSL', have_openssl, bool_yn: true)
 if openal.type_name() == 'internal'
     summary('OSS', have_oss, bool_yn: true)
 endif

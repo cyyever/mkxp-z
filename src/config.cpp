@@ -156,7 +156,6 @@ void Config::read(int argc, char *argv[]) {
         {"frameSkip", false},
         {"syncToRefreshrate", false},
         {"solidFonts", json::array({})},
-        {"renderer", 0},
         {"subImageFix", false},
 #ifdef SDL_PLATFORM_WIN32
         {"enableBlitting", false},
@@ -175,9 +174,6 @@ void Config::read(int argc, char *argv[]) {
         {"dataPathApp", ""},
         {"iconPath", ""},
         {"execName", "Game"},
-        {"midiSoundFont", ""},
-        {"midiChorus", false},
-        {"midiReverb", false},
         {"SESourceCount", 6},
         {"BGMTrackCount", 1},
         {"customScript", ""},
@@ -301,7 +297,6 @@ try { exp } catch (...) {}
     for (std::string & solidFont : solidFonts)
         std::transform(solidFont.begin(), solidFont.end(), solidFont.begin(),
             [](unsigned char c) { return std::tolower(c); });
-    SET_OPT(renderer, integer);
     SET_OPT(subImageFix, boolean);
     SET_OPT(enableBlitting, boolean);
     SET_OPT_CUSTOMKEY(integerScaling.active, integerScalingActive, boolean);
@@ -310,9 +305,6 @@ try { exp } catch (...) {}
     SET_OPT(anyAltToggleFS, boolean);
     SET_OPT(enableReset, boolean);
     SET_OPT(enableSettings, boolean);
-    SET_STRINGOPT(midi.soundFont, midiSoundFont);
-    SET_OPT_CUSTOMKEY(midi.chorus, midiChorus, boolean);
-    SET_OPT_CUSTOMKEY(midi.reverb, midiReverb, boolean);
     SET_OPT_CUSTOMKEY(SE.sourceCount, SESourceCount, integer);
     SET_OPT_CUSTOMKEY(BGM.trackCount, BGMTrackCount, integer);
     SET_STRINGOPT(customScript, customScript);

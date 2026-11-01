@@ -22,24 +22,19 @@
 #include "alstream.h"
 
 #include "sharedstate.h"
-#include "sharedmidistate.h"
 #include "eventthread.h"
 #include "filesystem.h"
 #include "exception.h"
 #include "aldatasource.h"
-#include "fluid-fun.h"
 #include "sdl-util.h"
 #include "debugwriter.h"
 
-#include <SDL3/SDL_thread.h>
-#include <SDL3/SDL_timer.h>
+#include <thread>
 
-ALStream::ALStream(LoopMode loopMode,
-		           const std::string &threadId)
+ALStream::ALStream(LoopMode loopMode)
 	: looped(loopMode == Looped),
 	  state(Closed),
 	  source(0),
-	  thread(0),
 	  preemptPause(false),
       pitch(1.0f)
 {
@@ -51,13 +46,14 @@ ALStream::ALStream(LoopMode loopMode,
 
 	for (int i = 0; i < STREAM_BUFS; ++i)
 		alBuf[i] = AL::Buffer::gen();
-
-	threadName = std::string("al_stream (") + threadId + ")";
 }
 
 ALStream::~ALStream()
 {
 	close();
+
+	/* The stream thread may have finished on its own without being joined */
+	thread = {};
 
 	AL::Source::clearQueue(alSrc);
 	AL::Source::del(alSrc);
@@ -209,17 +205,6 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 				return true;
 			}
 
-			if (!strcmp(sig, "MThd"))
-			{
-				shState->midiState().initIfNeeded(shState->config());
-
-				if (HAVE_FLUID)
-				{
-					source = createMidiSource(ops, looped);
-					return true;
-				}
-			}
-
 			source = createSDLSource(ops, ext, STREAM_BUF_SIZE, looped);
 		}
 		catch (const Exception &e)
@@ -268,12 +253,10 @@ void ALStream::openSource(const std::string &filename)
 
 void ALStream::stopStream()
 {
-	threadTermReq = true;
-
-	if (thread)
+	if (thread.joinable())
 	{
-		SDL_WaitThread(thread, 0);
-		thread = 0;
+		thread.request_stop();
+		thread.join();
 		needsRewind = true;
 	}
 
@@ -292,13 +275,11 @@ void ALStream::startStream(double offset)
 	preemptPause = false;
 	streamInited = false;
 	sourceExhausted = false;
-	threadTermReq = false;
 
 	startOffset = offset;
 	procFrames = offset * source->sampleRate();
 
-	thread = createSDLThread
-		<ALStream, &ALStream::streamData>(this, threadName);
+	thread = std::jthread([this](std::stop_token stop) { streamData(stop); });
 }
 
 void ALStream::pauseStream()
@@ -349,13 +330,13 @@ void ALStream::checkStopped()
 }
 
 /* thread func */
-void ALStream::streamData()
+void ALStream::streamData(std::stop_token stop)
 {
 	/* Fill up queue */
 	bool firstBuffer = true;
 	ALDataSource::Status status;
 
-	if (threadTermReq)
+	if (stop.stop_requested())
 		return;
 
 	//if (needsRewind)
@@ -363,7 +344,7 @@ void ALStream::streamData()
 
 	for (int i = 0; i < STREAM_BUFS; ++i)
 	{
-		if (threadTermReq)
+		if (stop.stop_requested())
 			return;
 
 		AL::Buffer::ID buf = alBuf[i];
@@ -383,7 +364,7 @@ void ALStream::streamData()
 			streamInited = true;
 		}
 
-		if (threadTermReq)
+		if (stop.stop_requested())
 			return;
 
 		if (status == ALDataSource::EndOfStream)
@@ -403,7 +384,7 @@ void ALStream::streamData()
 
 		while (procBufs--)
 		{
-			if (threadTermReq)
+			if (stop.stop_requested())
 				break;
 
 			AL::Buffer::ID buf = AL::Source::unqueueBuffer(alSrc);
@@ -460,9 +441,9 @@ void ALStream::streamData()
 				sourceExhausted = true;
 		}
 
-		if (threadTermReq)
+		if (stop.stop_requested())
 			break;
 
-		SDL_Delay(AUDIO_SLEEP);
+		std::this_thread::sleep_for(AUDIO_SLEEP);
 	}
 }

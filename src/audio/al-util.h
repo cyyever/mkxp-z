@@ -27,6 +27,7 @@
 
 #include <SDL3/SDL_audio.h>
 #include <assert.h>
+#include <chrono>
 #include <cmath>
 
 #define GLOBAL_VOLUME 1.0f
@@ -279,7 +280,8 @@ inline ALenum chooseALFormat(int sampleSize, int channelCount)
 	return 0;
 }
 
-#define AUDIO_SLEEP 10
+/* Polling interval of the audio worker threads */
+inline constexpr std::chrono::milliseconds AUDIO_SLEEP{10};
 #define STREAM_BUF_SIZE 32768
 
 #endif // ALUTIL_H

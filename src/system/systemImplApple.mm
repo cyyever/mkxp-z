@@ -37,7 +37,7 @@ bool systemImpl::isWine() {
 bool systemImpl::isRosetta() {
     int translated = 0;
     size_t size = sizeof(translated);
-    int result = sysctlbyname("sysctl.proc_translated", &translated, &size, NULL, 0);
+    int result = sysctlbyname("sysctl.proc_translated", &translated, &size, nullptr, 0);
 
     if (result == -1)
         return false;

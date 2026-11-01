@@ -341,7 +341,7 @@ static unsigned int freetype_get_font_data( Font_Container *font, uint32_t table
 	if (buf && len)
 	{
 		FT_ULong needed = 0;
-		err = FT_Load_Sfnt_Table(ft_face, table, offset, NULL, &needed);
+		err = FT_Load_Sfnt_Table(ft_face, table, offset, nullptr, &needed);
 		if(!err && needed < len)
 			len = needed;
 	}

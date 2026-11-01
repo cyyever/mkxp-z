@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <string>
 
 struct AudioStream
@@ -95,12 +96,8 @@ struct AudioStream
 		 * cleanup (like it normally would) */
 		std::atomic<bool> reqFini{false};
 
-		/* Request fade thread to terminate
-		 * immediately */
-		std::atomic<bool> reqTerm{false};
-
-		SDL_Thread *thread;
-		std::string threadName;
+		/* Stopping the thread requests it to terminate immediately */
+		std::jthread thread;
 
 		/* Amount of reduced absolute volume
 		 * per ms of fade time */
@@ -114,16 +111,12 @@ struct AudioStream
 	struct
 	{
 		std::atomic<bool> rqFini{false};
-		std::atomic<bool> rqTerm{false};
-
-		SDL_Thread *thread;
-		std::string threadName;
+		std::jthread thread;
 
 		uint32_t startTicks;
 	} fadeIn;
 
-	AudioStream(ALStream::LoopMode loopMode,
-	            const std::string &threadId);
+	AudioStream(ALStream::LoopMode loopMode);
 	~AudioStream();
 
 	void play(const std::string &filename,
@@ -154,8 +147,8 @@ private:
 	void finiFadeOutInt();
 	void startFadeIn();
 
-	void fadeOutThread();
-	void fadeInThread();
+	void fadeOutThread(std::stop_token stop);
+	void fadeInThread(std::stop_token stop);
 };
 
 #endif // AUDIOSTREAM_H

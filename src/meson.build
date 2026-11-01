@@ -128,33 +128,6 @@ else
 endif
 global_dependencies += zlib
 
-require_system_openssl = get_option('openssl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled)
-if get_option('openssl').disabled() or (get_option('openssl').auto() and require_system_openssl.enabled())
-    require_system_openssl = get_option('openssl')
-endif
-openssl = dependency('openssl', allow_fallback: false, required: require_system_openssl)
-if not openssl.found() and not get_option('openssl').disabled() and not get_option('openssl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled).enabled()
-    openssl_options = meson_base_options + {
-        'asm': 'disabled',
-    }
-    openssl = subproject('openssl', default_options: openssl_options).get_variable('openssl_dep')
-    meson.override_dependency('openssl', openssl, static: true)
-    if host_system not in ['windows', 'cygwin', 'darwin']
-        atomic = meson.get_compiler('c').find_library('atomic', required: false)
-        if atomic.found()
-            global_dependencies += atomic
-        endif
-    endif
-endif
-have_openssl = openssl.found()
-if have_openssl
-    gplv3_features += 'OpenSSL'
-    global_dependencies += openssl
-    global_args += '-DMKXPZ_SSL'
-else
-    meson.override_dependency('openssl', null_dep, static: true)
-endif
-
 physfs = dependency('physfs', allow_fallback: false, required: get_option('physfs_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not physfs.found()
     physfs_options = cmake.subproject_options()
@@ -214,11 +187,6 @@ endif
 global_dependencies += sdl3
 
 # SDL3 owns the platform backends. Native OpenGL remains until the GPU port.
-have_angle = false
-have_angle_direct3d11 = false
-have_angle_metal = false
-have_angle_null = false
-have_angle_vulkan = false
 
 have_alsa = false
 have_jack = false
@@ -689,20 +657,6 @@ if not uchardet.found()
 endif
 global_dependencies += uchardet
 
-theora = dependency('theora', allow_fallback: false, required: get_option('theora_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not theora.found()
-    theora_options = meson_base_options
-    theora = subproject('theora', default_options: theora_options).get_variable('theoradec')
-endif
-global_dependencies += theora
-
-theoraplay_options = meson_base_options
-theoraplay = subproject('theoraplay', default_options: theoraplay_options).get_variable('theoraplay')
-if not subproject('theoraplay', default_options: theoraplay_options).get_variable('have_thread')
-    global_args += '-DMKXPZ_THEORAPLAY_NO_THREAD'
-endif
-global_dependencies += theoraplay
-
 sdl3_image = dependency('sdl3_image', allow_fallback: false,
     required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_image.found()
@@ -713,102 +667,10 @@ if not sdl3_image.found()
 endif
 global_dependencies += sdl3_image
 
-fluidsynth = dependency('fluidsynth', allow_fallback: false, required: get_option('fluidsynth_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not fluidsynth.found()
-    gcem_options = meson_base_options
-    gcem = subproject('gcem', default_options: gcem_options).get_variable('gcem')
-    gcem_include_dir = subproject('gcem', default_options: gcem_options).get_variable('gcem_include_dir')
-    gcem_includes = ['-I' + gcem_include_dir]
-
-    fluidsynth_internal_cflags = []
-    fluidsynth_external_cflags = []
-    if gcem.type_name() == 'internal'
-        fluidsynth_internal_cflags += gcem_includes
-    else
-        fluidsynth_external_cflags += gcem_includes
-    endif
-    fluidsynth_options = cmake.subproject_options()
-    fluidsynth_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, fluidsynth_internal_cflags + fluidsynth_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, fluidsynth_internal_cflags + fluidsynth_external_cflags, check: true).stdout().strip(),
-        'GCEM_INCLUDE_DIR': gcem_include_dir,
-        'BUILD_SHARED_LIBS': false,
-        'enable-alsa': false,
-        'enable-aufile': false,
-        'enable-dbus': false,
-        'enable-ipv6 ': false,
-        'enable-jack': false,
-        'enable-ladspa': false,
-        'enable-libinstpatch': false,
-        'enable-libsndfile': false,
-        'enable-midishare': false,
-        'enable-opensles': false,
-        'enable-oboe': false,
-        'enable-network': false,
-        'enable-oss': false,
-        'enable-dsound': false,
-        'enable-waveout': false,
-        'enable-winmidi': false,
-        'enable-sdl3': false,
-        'enable-pulseaudio': false,
-        'enable-pipewire': false,
-        'enable-readline': false,
-        'enable-threads': false,
-        'enable-openmp': false,
-        'enable-unicode': false,
-        'enable-native-dls': false,
-        'enable-systemd': false,
-        'enable-coreaudio': false,
-        'enable-coremidi': false,
-        'enable-framework': false,
-        'enable-dart': false,
-        'enable-kai': false,
-        'osal': 'embedded',
-    })
-    foreach opt, val : cmake_override_options
-        fluidsynth_options.set_override_option(opt, val)
-    endforeach
-    fluidsynth = cmake.subproject('fluidsynth', options: fluidsynth_options).dependency('libfluidsynth')
-    meson.override_dependency('fluidsynth', fluidsynth, static: true)
-endif
-global_dependencies += fluidsynth
 
 
 ruby = dependency('ruby-' + get_option('mri_version'), allow_fallback: false, required: get_option('ruby_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not ruby.found()
-    # Ruby 3.4 is built with only the zlib extension; libffi (fiddle) and libYAML (psych) are legacy 3.1 dependencies.
-    legacy_ruby_deps = get_option('mri_version') == '3.1'
-    if legacy_ruby_deps
-        libffi = dependency('libffi', allow_fallback: false, method: 'pkg-config', required: get_option('libffi_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-        if not libffi.found()
-            libffi_options = meson_base_options
-            libffi = subproject('libffi', default_options: libffi_options).get_variable('libffi')
-            libffi_includes = subproject('libffi', default_options: libffi_options).get_variable('libffi_includes')
-            libffi_libs = subproject('libffi', default_options: libffi_options).get_variable('libffi_libs')
-        else
-            libffi_includes = ['-I' + libffi.get_variable(pkgconfig: 'includedir')]
-            libffi_libs = ['-L' + libffi.get_variable(pkgconfig: 'libdir')]
-        endif
-
-        libyaml = dependency('yaml-0.1', allow_fallback: false, method: 'pkg-config', required: get_option('libyaml_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-        if not libyaml.found()
-            libyaml_options = cmake.subproject_options()
-            libyaml_options.add_cmake_defines(cmake_base_options + {
-                'BUILD_SHARED_LIBS': false,
-            })
-            foreach opt, val : cmake_override_options
-                libyaml_options.set_override_option(opt, val)
-            endforeach
-            libyaml = cmake.subproject('libyaml', options: libyaml_options).dependency('yaml')
-            libyaml_includes = ['-I' + meson.project_source_root() / 'subprojects' / 'libyaml' / 'include', '-I' + meson.project_build_root() / 'subprojects' / 'libyaml' / '__CMake_build' / 'include']
-            libyaml_libs = ['-L' + meson.project_build_root() / 'subprojects' / 'libyaml']
-            meson.override_dependency('yaml-0.1', libyaml, static: true)
-        else
-            libyaml_includes = ['-I' + libyaml.get_variable(pkgconfig: 'includedir')]
-            libyaml_libs = ['-L' + libyaml.get_variable(pkgconfig: 'libdir')]
-        endif
-    endif
-
     ruby_internal_cflags = []
     ruby_external_cflags = []
     ruby_internal_ldflags = []
@@ -819,22 +681,6 @@ if not ruby.found()
     else
         ruby_external_cflags += zlib_includes
         ruby_external_ldflags += zlib_libs
-    endif
-    if legacy_ruby_deps
-        if libyaml.type_name() == 'internal'
-            ruby_internal_cflags += libyaml_includes
-            ruby_internal_ldflags += libyaml_libs
-        else
-            ruby_external_cflags += libyaml_includes
-            ruby_external_ldflags += libyaml_libs
-        endif
-        if libffi.type_name() == 'internal'
-            ruby_internal_cflags += libffi_includes
-            ruby_internal_ldflags += libffi_libs
-        else
-            ruby_external_cflags += libffi_includes
-            ruby_external_ldflags += libffi_libs
-        endif
     endif
     ruby_options = meson_base_options + {
         'cflags': run_command(quotetool, ruby_internal_cflags + ruby_external_cflags, check: true).stdout().strip(),
@@ -857,7 +703,7 @@ endif
 global_include_dirs += include_directories('.',
     'audio',
     'crypto',
-    'display', 'display/gl', 'display/libnsgif', 'display/libnsgif/utils',
+    'display', 'display/gl',
     'etc',
     'filesystem',
     'input',
@@ -881,8 +727,6 @@ main_source = files(
     'audio/alstream.cpp',
     'audio/audio.cpp',
     'audio/audiostream.cpp',
-    'audio/fluid-fun.cpp',
-    'audio/midisource.cpp',
     'audio/sdlsoundsource.cpp',
     'audio/soundemitter.cpp',
     'audio/vorbissource.cpp',
@@ -897,13 +741,9 @@ main_source = files(
     'display/plane.cpp',
     'display/sprite.cpp',
     'display/tilemap.cpp',
-    'display/tilemapvx.cpp',
     'display/viewport.cpp',
     'display/window.cpp',
-    'display/windowvx.cpp',
 
-    'display/libnsgif/libnsgif.c',
-    'display/libnsgif/lzw.c',
 
     'display/gl/gl-debug.cpp',
     'display/gl/gl-fun.cpp',
@@ -913,7 +753,6 @@ main_source = files(
     'display/gl/shader.cpp',
     'display/gl/texpool.cpp',
     'display/gl/tileatlas.cpp',
-    'display/gl/tileatlasvx.cpp',
     'display/gl/tilequad.cpp',
     'display/gl/vertex.cpp',
 
@@ -928,8 +767,6 @@ main_source = files(
     'input/input.cpp',
     'input/keybindings.cpp',
 
-    'net/LUrlParser.cpp',
-    'net/net.cpp',
 
     host_system == 'darwin' ? 'system/systemImplApple.mm' : 'system/systemImpl.cpp',
 )

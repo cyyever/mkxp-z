@@ -23,15 +23,8 @@ binding_source = [files(
     'tilemap-binding.cpp',
     'audio-binding.cpp',
     'module_rpg.cpp',
-    'filesystem-binding.cpp',
-    'windowvx-binding.cpp',
-    'tilemapvx-binding.cpp',
-    'http-binding.cpp'
+    'filesystem-binding.cpp'
 )]
-
-if get_option('steamworks_path') != ''
-    binding_source += files('cusl-binding.cpp')
-endif
 
 if miniffi == true
     binding_source += files('miniffi-binding.cpp')

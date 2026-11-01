@@ -49,7 +49,6 @@ class SharedFontState;
 struct GlobalIBO;
 struct Config;
 struct Vec2i;
-struct SharedMidiState;
 
 struct SharedState
 {
@@ -79,7 +78,6 @@ struct SharedState
 
 	SharedFontState &fontState() const;
 	Font &defaultFont() const;
-	SharedMidiState &midiState() const;
 
 	sigslot::signal<> prepareDraw;
 

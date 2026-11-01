@@ -31,8 +31,6 @@ class Bitmap;
 class Disposable;
 struct RGSSThreadData;
 struct GraphicsPrivate;
-struct THEORAPLAY_VideoFrame;
-struct Movie;
 
 class Graphics
 {
@@ -68,9 +66,6 @@ public:
     int displayHeight() const;
 	void resizeScreen(int width, int height);
     void resizeWindow(int width, int height, bool center=false);
-	void drawMovieFrame(const THEORAPLAY_VideoFrame* video, Bitmap *videoBitmap);
-	bool updateMovieInput(Movie *movie);
-	void playMovie(const char *filename, int volume, bool skippable);
 	void screenshot(const char *filename);
 
 	void reset();
