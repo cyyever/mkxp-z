@@ -20,6 +20,7 @@
 */
 
 #include "filesystem.h"
+#include <SDL3/SDL_iostream.h>
 #include "directory-search.h"
 #include "util/paths.h"
 #include "display/font.h"

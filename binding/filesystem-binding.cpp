@@ -25,6 +25,7 @@
 #include "binding-util.h"
 
 #include "filesystem.h"
+#include <SDL3/SDL_iostream.h>
 #include "sharedstate.h"
 
 #include "ruby/encoding.h"
