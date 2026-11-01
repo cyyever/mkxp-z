@@ -11,7 +11,7 @@ if (runtime_lib = ENV['RUBYLIB'])
   $LOAD_PATH.unshift(arch_lib) if arch_lib
 end
 
-check(RUBY_VERSION == '3.4.12', "unexpected runtime: #{RUBY_DESCRIPTION}")
+check(RUBY_VERSION == '4.0.9', "unexpected runtime: #{RUBY_DESCRIPTION}")
 check(verify_native_class, 'native class replacement')
 check(verify_typed_data == 42, 'C++ typed data')
 

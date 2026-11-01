@@ -9,7 +9,7 @@ image codecs and font-shaping dependencies are disabled for this focused suite.
 
 The jobs compile and run the real SDL APIs used by `tests/sdl3` and the production
 audio state machine in `tests/audio`. Linux also tests the production Ruby IO
-bindings in `tests/io` with Ruby >= 3.4. These focused tests use dummy drivers
+bindings in `tests/io` with Ruby >= 4.0. These focused tests use dummy drivers
 and do not validate SDL_GPU rendering. The full engine smoke and native GPU
 pixel checks require a working GPU backend, such as Windows Direct3D 12.
 An Xvfb/OpenGL-only setup does not validate the current renderer.

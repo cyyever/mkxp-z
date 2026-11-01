@@ -1002,35 +1002,11 @@ static void mriBindingExecute() {
     std::vector<const char*> rubyArgsC{"mkxp-z"};
     rubyArgsC.push_back("-e ");
     void *node;
-#if RAPI_FULL >= 400
     // The bundled Ruby 4 interpreter carries RGSS visibility patches. Its JITs
     // have separate dispatch implementations and are deliberately disabled.
     if (conf.jit.enabled || conf.yjit.enabled)
         Debug() << "JIT settings are ignored by the Ruby 4 RGSS runtime.";
     node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
-#else
-    if (conf.jit.enabled) {
-        // Ruby v3.1.0 renamed the --jit options to --mjit.
-        std::string verboseLevel("--mjit-verbose=");
-        std::string maxCache("--mjit-max-cache=");
-        std::string minCalls("--mjit-min-calls=");
-        rubyArgsC.push_back("--mjit");
-        verboseLevel += std::to_string(conf.jit.verboseLevel);
-        maxCache += std::to_string(conf.jit.maxCache);
-        minCalls += std::to_string(conf.jit.minCalls);
-
-        rubyArgsC.push_back(verboseLevel.c_str());
-        rubyArgsC.push_back(maxCache.c_str());
-        rubyArgsC.push_back(minCalls.c_str());
-        node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
-    } else if (conf.yjit.enabled) {
-        rubyArgsC.push_back("--yjit");
-        // TODO: Maybe support --yjit-exec-mem-size, --yjit-call-threshold
-        node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
-    } else {
-        node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
-    }
-#endif
     
     int state;
     bool valid = ruby_executable_node(node, &state);

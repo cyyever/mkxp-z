@@ -22,7 +22,9 @@ builddir.mkdir(parents=True, exist_ok=True)
 
 env = dict(os.environ)
 # configure.bat and nmake run generated batch files from the current directory.
-env.pop('NoDefaultCurrentDirectoryInExePath', None)
+# Windows environment names are case-insensitive, and os.environ upper-cases them.
+for name in [name for name in env if name.upper() == 'NODEFAULTCURRENTDIRECTORYINEXEPATH']:
+    del env[name]
 # Ruby bootstrap installers may export GNU make; recursive mswin builds need nmake.
 env['MAKE'] = 'nmake'
 env.pop('MAKEFLAGS', None)

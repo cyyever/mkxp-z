@@ -3,8 +3,8 @@ project('mkxp-z', 'c', 'cpp', version: '2.4.2', meson_version: '>=1.10.0',
 
 # Old interpreter bindings were removed; reject incompatible requests before
 # dependency fallback can try downloading an unavailable Ruby version.
-if get_option('mri_version').version_compare('<3.4')
-    error('mkxp-z requires Ruby 3.4 or newer')
+if get_option('mri_version').version_compare('<4.0')
+    error('mkxp-z requires Ruby 4.0 or newer')
 endif
 
 c_std = 'gnu11,c11'
