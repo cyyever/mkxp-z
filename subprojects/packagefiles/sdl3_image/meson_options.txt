@@ -1,0 +1,1 @@
+option('legacy_jpeg', type: 'boolean', value: false, description: 'Enable JPEG decoding for offline asset conversion')
