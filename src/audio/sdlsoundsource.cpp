@@ -29,11 +29,7 @@ struct SDLSoundSource : ALDataSource
 {
 	Sound_Sample *sample;
 	SDL_IOStream *srcOps = nullptr;
-	uint8_t sampleSize;
 	bool looped;
-
-	ALenum alFormat;
-	ALsizei alFreq;
 
 	SDLSoundSource(SDL_IOStream *ops,
 	               const char *extension,
@@ -42,51 +38,14 @@ struct SDLSoundSource : ALDataSource
 	    : srcOps(ops),
 	      looped(looped)
 	{
-        sample = Sound_NewSample(borrowIO(srcOps), extension, nullptr, maxBufSize);
+		/* SDL converts whatever format the decoder produces */
+		sample = Sound_NewSample(borrowIO(srcOps), extension, nullptr, maxBufSize);
 
 		if (!sample)
 		{
 			SDL_CloseIO(srcOps);
 			throw Exception(Exception::SDLError, "SDL_sound: %s", Sound_GetError());
 		}
-
-		bool validFormat = true;
-		
-		switch (sample->actual.format)
-		{
-			// OpenAL Soft doesn't support S32 formats.
-			// https://github.com/kcat/openal-soft/issues/934
-			case SDL_AUDIO_S32LE :
-			case SDL_AUDIO_S32BE :
-				validFormat = false;
-		}
-
-		if (!validFormat)
-		{
-			// Unfortunately there's no way to change the desired format of a sample.
-			// https://github.com/icculus/SDL_sound/issues/91
-			// So we just have to close the sample (which closes the file too),
-			// and retry with a new desired format.
-			Sound_FreeSample(sample);
-			SDL_SeekIO(srcOps, 0, SDL_IO_SEEK_SET);
-			
-			SDL_AudioSpec desired;
-			SDL_memset(&desired, '\0', sizeof (SDL_AudioSpec));
-			desired.format = SDL_AUDIO_F32;
-
-			sample = Sound_NewSample(borrowIO(srcOps), extension, &desired, maxBufSize);
-
-			if (!sample)
-			{
-				SDL_CloseIO(srcOps);
-				throw Exception(Exception::SDLError, "SDL_sound: %s", Sound_GetError());
-			}
-		}
-
-		sampleSize = formatSampleSize(sample->actual.format);
-
-		alFormat = chooseALFormat(sampleSize, sample->actual.channels);
-		alFreq = sample->actual.freq;
 	}
 
 	~SDLSoundSource()
@@ -95,7 +54,7 @@ struct SDLSoundSource : ALDataSource
 		SDL_CloseIO(srcOps);
 	}
 
-	Status fillBuffer(AL::Buffer::ID alBuffer)
+	Status fillBuffer(std::vector<uint8_t> &out) override
 	{
 		uint32_t decoded = Sound_Decode(sample);
 
@@ -112,30 +71,28 @@ struct SDLSoundSource : ALDataSource
 		if (sample->flags & SOUND_SAMPLEFLAG_ERROR)
 			return ALDataSource::Error;
 
-		AL::Buffer::uploadData(alBuffer, alFormat, sample->buffer, decoded, alFreq);
+		const auto *data = static_cast<const uint8_t *>(sample->buffer);
+		out.assign(data, data + decoded);
 
 		if (sample->flags & SOUND_SAMPLEFLAG_EOF)
 		{
-			if (looped)
-			{
-				Sound_Rewind(sample);
-				return ALDataSource::WrapAround;
-			}
-			else
-			{
+			if (!looped)
 				return ALDataSource::EndOfStream;
-			}
+
+			if (!Sound_Rewind(sample))
+				return ALDataSource::Error;
+			return ALDataSource::WrapAround;
 		}
 
 		return ALDataSource::NoError;
 	}
 
-	int sampleRate()
+	SDL_AudioSpec spec() override
 	{
-		return sample->actual.freq;
+		return sample->actual;
 	}
 
-	void seekToOffset(double seconds)
+	void seekToOffset(double seconds) override
 	{
 		if (seconds <= 0)
 		{
@@ -149,15 +106,10 @@ struct SDLSoundSource : ALDataSource
 		}
 	}
 
-	uint32_t loopStartFrames()
+	uint32_t loopStartFrames() override
 	{
 		/* Loops from the beginning of the file */
 		return 0;
-	}
-
-	bool setPitch(float)
-	{
-		return false;
 	}
 };
 

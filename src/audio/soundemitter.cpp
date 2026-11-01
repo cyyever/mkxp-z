@@ -37,43 +37,15 @@ struct SoundBuffer
 	/* Uniquely identifies this or equal buffer */
 	std::string key;
 
-	AL::Buffer::ID alBuffer;
+	/* Fully decoded PCM data and its format */
+	std::vector<uint8_t> pcm;
+	SDL_AudioSpec spec;
 
 	/* Link into the buffer cache priority list */
 	IntruListLink<SoundBuffer> link;
 
-	/* Buffer byte count */
-	uint32_t bytes;
+	SoundBuffer() : link(this) {}
 
-	/* Reference count */
-	uint8_t refCount;
-
-	SoundBuffer()
-	    : link(this),
-	      refCount(1)
-
-	{
-		alBuffer = AL::Buffer::gen();
-	}
-
-	static SoundBuffer *ref(SoundBuffer *buffer)
-	{
-		++buffer->refCount;
-
-		return buffer;
-	}
-
-	static void deref(SoundBuffer *buffer)
-	{
-		if (--buffer->refCount == 0)
-			delete buffer;
-	}
-
-private:
-	~SoundBuffer()
-	{
-		AL::Buffer::del(alBuffer);
-	}
 };
 
 /* Before: [a][b][c][d], After (index=1): [a][c][d][b] */
@@ -88,36 +60,30 @@ arrayPushBack(std::vector<size_t> &array, size_t size, size_t index)
 	array[size-1] = v;
 }
 
+static bool isPlaying(SDL_AudioStream *src)
+{
+	return SDL_GetAudioStreamDevice(src) != 0
+	    && (SDL_GetAudioStreamQueued(src) > 0 || SDL_GetAudioStreamAvailable(src) > 0);
+}
+
 SoundEmitter::SoundEmitter(const Config &conf)
     : bufferBytes(0),
       srcCount(conf.SE.sourceCount),
-      alSrcs(srcCount),
-      atchBufs(srcCount),
+      sources(srcCount),
+      sourceKeys(srcCount),
       srcPrio(srcCount)
 {
 	for (size_t i = 0; i < srcCount; ++i)
 	{
-		alSrcs[i] = AL::Source::gen();
-		atchBufs[i] = 0;
+		/* The input format is set per sound in play() */
+		sources[i].reset(SDL_CreateAudioStream(nullptr, nullptr));
+		if (!sources[i])
+			throw Exception(Exception::SDLError, "SDL_CreateAudioStream: %s", SDL_GetError());
 		srcPrio[i] = i;
 	}
 }
 
-SoundEmitter::~SoundEmitter()
-{
-	for (size_t i = 0; i < srcCount; ++i)
-	{
-		AL::Source::stop(alSrcs[i]);
-		AL::Source::del(alSrcs[i]);
-
-		if (atchBufs[i])
-			SoundBuffer::deref(atchBufs[i]);
-	}
-
-	BufferHash::const_iterator iter;
-	for (iter = bufferHash.cbegin(); iter != bufferHash.cend(); ++iter)
-		SoundBuffer::deref(iter->second);
-}
+SoundEmitter::~SoundEmitter() = default;
 
 void SoundEmitter::play(const std::string &filename,
                         int volume,
@@ -134,14 +100,14 @@ void SoundEmitter::play(const std::string &filename,
 	/* Try to find first free source */
 	size_t i;
 	for (i = 0; i < srcCount; ++i)
-		if (AL::Source::getState(alSrcs[srcPrio[i]]) != AL_PLAYING)
+		if (!isPlaying(sources[srcPrio[i]].get()))
 			break;
 
 	/* If we didn't find any, try to find the lowest priority source
 	 * with the same buffer to overtake */
 	if (i == srcCount)
 		for (size_t j = 0; j < srcCount; ++j)
-			if (atchBufs[srcPrio[j]] == buffer)
+			if (sourceKeys[srcPrio[j]] == filename)
 				i = j;
 
 	/* If we didn't find any, overtake the one with lowest priority */
@@ -150,51 +116,44 @@ void SoundEmitter::play(const std::string &filename,
 
 	size_t srcIndex = srcPrio[i];
 
-	/* Only detach/reattach if it's actually a different buffer */
-	bool switchBuffer = (atchBufs[srcIndex] != buffer);
-
 	/* Push the used source to the back of the priority list */
 	arrayPushBack(srcPrio, srcCount, i);
 
-	AL::Source::ID src = alSrcs[srcIndex];
-	AL::Source::stop(src);
+	SDL_AudioStream *src = sources[srcIndex].get();
+	SDL_UnbindAudioStream(src);
+	SDL_ClearAudioStream(src);
 
-	if (switchBuffer)
-		AL::Source::detachBuffer(src);
+	sourceKeys[srcIndex] = filename;
 
-	SoundBuffer *old = atchBufs[srcIndex];
-
-	if (old)
-		SoundBuffer::deref(old);
-
-	atchBufs[srcIndex] = SoundBuffer::ref(buffer);
-
-	if (switchBuffer)
-		AL::Source::attachBuffer(src, buffer->alBuffer);
-
-	AL::Source::setVolume(src, _volume);
-	AL::Source::setPitch(src, _pitch);
-
-	AL::Source::play(src);
+	if (!SDL_SetAudioStreamFormat(src, &buffer->spec, nullptr))
+		throw Exception(Exception::SDLError, "SDL_SetAudioStreamFormat: %s", SDL_GetError());
+	SDL_SetAudioStreamGain(src, rgssVolumeToGain(_volume));
+	SDL_SetAudioStreamFrequencyRatio(src, _pitch);
+	if (!SDL_PutAudioStreamData(src, buffer->pcm.data(), static_cast<int>(buffer->pcm.size())))
+		throw Exception(Exception::SDLError, "SDL_PutAudioStreamData: %s", SDL_GetError());
+	/* No more data follows; let the resampler emit its tail */
+	SDL_FlushAudioStream(src);
+	if (!SDL_BindAudioStream(audioDevice, src))
+		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 }
 
 void SoundEmitter::stop()
 {
 	for (size_t i = 0; i < srcCount; i++)
-		AL::Source::stop(alSrcs[i]);
+	{
+		SDL_UnbindAudioStream(sources[i].get());
+		SDL_ClearAudioStream(sources[i].get());
+	}
 }
 
 struct SoundOpenHandler : FileSystem::OpenHandler
 {
-	SoundBuffer *buffer;
-
-	SoundOpenHandler()
-	    : buffer(0)
-	{}
+	std::unique_ptr<SoundBuffer> buffer;
 
 	bool tryRead(SDL_IOStream *ops, const char *ext)
 	{
-		Sound_Sample *sample = Sound_NewSample(ops, ext, 0, STREAM_BUF_SIZE);
+		std::unique_ptr<Sound_Sample, decltype(&Sound_FreeSample)> sample(
+			Sound_NewSample(ops, ext, nullptr, STREAM_BUF_SIZE), Sound_FreeSample);
 
 		if (!sample)
 		{
@@ -203,19 +162,16 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 
 		/* Do all of the decoding in the handler so we don't have
 		 * to keep the source ops around */
-		uint32_t decBytes = Sound_DecodeAll(sample);
-		uint8_t sampleSize = formatSampleSize(sample->actual.format);
-		uint32_t sampleCount = decBytes / sampleSize;
+		uint32_t decBytes = Sound_DecodeAll(sample.get());
+		const auto *data = static_cast<const uint8_t *>(sample->buffer);
 
-		buffer = new SoundBuffer;
-		buffer->bytes = sampleSize * sampleCount;
+		if (sample->flags & SOUND_SAMPLEFLAG_ERROR)
+			return false;
 
-		ALenum alFormat = chooseALFormat(sampleSize, sample->actual.channels);
+		buffer = std::make_unique<SoundBuffer>();
+		buffer->spec = sample->actual;
+		buffer->pcm.assign(data, data + decBytes);
 
-		AL::Buffer::uploadData(buffer->alBuffer, alFormat, sample->buffer,
-							   buffer->bytes, sample->actual.freq);
-
-		Sound_FreeSample(sample);
 
 		return true;
 	}
@@ -224,7 +180,7 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 {
 	const auto found = bufferHash.find(filename);
-	SoundBuffer *buffer = found == bufferHash.end() ? nullptr : found->second;
+	SoundBuffer *buffer = found == bufferHash.end() ? nullptr : found->second.get();
 
 	if (buffer)
 	{
@@ -240,7 +196,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		/* Buffer not in cache, needs to be loaded */
 		SoundOpenHandler handler;
 		shState->fileSystem().openRead(handler, filename.c_str());
-		buffer = handler.buffer;
+		buffer = handler.buffer.get();
 
 		if (!buffer)
 		{
@@ -253,22 +209,21 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		}
 
 		buffer->key = filename;
-		uint32_t wouldBeBytes = bufferBytes + buffer->bytes;
+		size_t wouldBeBytes = bufferBytes + buffer->pcm.size();
 
 		/* If memory limit is reached, delete lowest priority buffer
 		 * until there is room or no buffers left */
 		while (wouldBeBytes > SE_CACHE_MEM && !buffers.isEmpty())
 		{
 			SoundBuffer *last = buffers.tail();
-			bufferHash.erase(last->key);
 			buffers.remove(last->link);
 
-			wouldBeBytes -= last->bytes;
+			wouldBeBytes -= last->pcm.size();
 
-			SoundBuffer::deref(last);
+			bufferHash.erase(last->key);
 		}
 
-		bufferHash.insert_or_assign(filename, buffer);
+		bufferHash.insert_or_assign(filename, std::move(handler.buffer));
 		buffers.prepend(buffer->link);
 
 		bufferBytes = wouldBeBytes;

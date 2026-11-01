@@ -39,7 +39,6 @@
 #include "keybindings.h"
 
 struct RGSSThreadData;
-struct ALCdevice;
 struct SDL_Window;
 union SDL_Event;
 
@@ -241,7 +240,6 @@ struct RGSSThreadData
 	const char *argv0;
 
 	SDL_Window *window;
-	ALCdevice *alcDev;
     
     SDL_GLContext glContext;
 
@@ -257,7 +255,6 @@ struct RGSSThreadData
 	RGSSThreadData(EventThread *ethread,
 	               const char *argv0,
 	               SDL_Window *window,
-	               ALCdevice *alcDev,
 	               int refreshRate,
                    int scalingFactor,
 	               const Config& newconf,
@@ -265,7 +262,6 @@ struct RGSSThreadData
 	    : ethread(ethread),
 	      argv0(argv0),
 	      window(window),
-	      alcDev(alcDev),
 	      sizeResoRatio(1, 1),
 	      refreshRate(refreshRate),
           scale(scalingFactor),

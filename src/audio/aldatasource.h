@@ -22,7 +22,12 @@
 #ifndef ALDATASOURCE_H
 #define ALDATASOURCE_H
 
-#include "al-util.h"
+#include "audio-util.h"
+
+#include <cstdint>
+#include <vector>
+
+#include <SDL3/SDL_iostream.h>
 
 struct ALDataSource
 {
@@ -34,13 +39,14 @@ struct ALDataSource
 		Error
 	};
 
-	virtual ~ALDataSource() {}
+	virtual ~ALDataSource() = default;
 
-	/* Read/process next chunk of data, and attach it
-	 * to provided AL buffer */
-	virtual Status fillBuffer(AL::Buffer::ID alBuffer) = 0;
+	/* Decode the next chunk of PCM data (in spec() format) into 'out',
+	 * replacing its contents. On WrapAround the chunk ends exactly at
+	 * the loop end. */
+	virtual Status fillBuffer(std::vector<uint8_t> &out) = 0;
 
-	virtual int sampleRate() = 0;
+	virtual SDL_AudioSpec spec() = 0;
 
 	/* If the source doesn't support seeking, it will
 	 * reset back to the beginning */
@@ -48,9 +54,6 @@ struct ALDataSource
 
 	/* The frame count right after wrap around */
 	virtual uint32_t loopStartFrames() = 0;
-
-	/* Returns false if not supported */
-	virtual bool setPitch(float value) = 0;
 };
 
 ALDataSource *createSDLSource(SDL_IOStream *ops,

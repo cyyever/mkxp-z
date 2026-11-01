@@ -26,26 +26,23 @@
 #include "filesystem.h"
 #include "exception.h"
 #include "aldatasource.h"
-#include "sdl-util.h"
 #include "debugwriter.h"
 
+#include <algorithm>
 #include <thread>
+#include <vector>
+
+/* Keep roughly this many bytes of decoded data queued ahead of playback */
+static constexpr int QUEUE_AHEAD_BYTES = 3 * STREAM_BUF_SIZE * 2;
 
 ALStream::ALStream(LoopMode loopMode)
 	: looped(loopMode == Looped),
-	  state(Closed),
-	  source(0),
-	  preemptPause(false),
-      pitch(1.0f)
+	  stream(SDL_CreateAudioStream(nullptr, nullptr))
 {
-	alSrc = AL::Source::gen();
+	if (!stream)
+		throw Exception(Exception::SDLError, "SDL_CreateAudioStream: %s", SDL_GetError());
 
-	AL::Source::setVolume(alSrc, 1.0f);
-	AL::Source::setPitch(alSrc, 1.0f);
-	AL::Source::detachBuffer(alSrc);
-
-	for (int i = 0; i < STREAM_BUFS; ++i)
-		alBuf[i] = AL::Buffer::gen();
+	setVolume(1.0f);
 }
 
 ALStream::~ALStream()
@@ -55,11 +52,6 @@ ALStream::~ALStream()
 	/* The stream thread may have finished on its own without being joined */
 	thread = {};
 
-	AL::Source::clearQueue(alSrc);
-	AL::Source::del(alSrc);
-
-	for (int i = 0; i < STREAM_BUFS; ++i)
-		AL::Buffer::del(alBuf[i]);
 }
 
 void ALStream::close()
@@ -72,7 +64,7 @@ void ALStream::close()
 	case Paused:
 		stopStream();
 	case Stopped:
-		closeSource();
+		source.reset();
 		state = Closed;
 	case Closed:
 		return;
@@ -119,7 +111,9 @@ void ALStream::play(double offset)
 		startStream(offset);
 		break;
 	case Paused :
-		resumeStream();
+		/* Queued data stays in the stream while it is unbound */
+		if (!SDL_BindAudioStream(audioDevice, stream.get()))
+			throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 	}
 
 	state = Playing;
@@ -136,7 +130,7 @@ void ALStream::pause()
 	case Paused:
 		return;
 	case Playing:
-		pauseStream();
+		SDL_UnbindAudioStream(stream.get());
 	}
 
 	state = Paused;
@@ -144,17 +138,12 @@ void ALStream::pause()
 
 void ALStream::setVolume(float value)
 {
-	AL::Source::setVolume(alSrc, value);
+	SDL_SetAudioStreamGain(stream.get(), rgssVolumeToGain(value));
 }
 
 void ALStream::setPitch(float value)
 {
-	/* If the source supports setting pitch natively,
-	 * we don't have to do it via OpenAL */
-	if (source && source->setPitch(value))
-		AL::Source::setPitch(alSrc, 1.0f);
-	else
-		AL::Source::setPitch(alSrc, value);
+	SDL_SetAudioStreamFrequencyRatio(stream.get(), value);
 }
 
 ALStream::State ALStream::queryState()
@@ -169,15 +158,25 @@ double ALStream::queryOffset()
 	if (state == Closed || !source)
 		return 0;
 
-	double procOffset = static_cast<double>(procFrames) / source->sampleRate();
+	std::scoped_lock lock(posMut);
 
-	// TODO: getSecOffset returns a float, we should improve precision to double.
-	return procOffset + AL::Source::getSecOffset(alSrc);
-}
+	if (sampleRate == 0 || frameSize == 0)
+		return 0;
 
-void ALStream::closeSource()
-{
-	delete source;
+	/* Frames handed to SDL minus those still waiting in its input queue */
+	const uint64_t queued = std::max(SDL_GetAudioStreamQueued(stream.get()), 0) / frameSize;
+	const uint64_t played = pushedFrames - std::min(pushedFrames, queued);
+
+	/* Forget wrap points that playback has moved past */
+	while (wraps.size() > 1 && wraps[1].first <= played)
+		wraps.pop_front();
+
+	uint64_t frame = startFrames + played;
+
+	if (!wraps.empty() && wraps.front().first <= played)
+		frame = wraps.front().second + (played - wraps.front().first);
+
+	return static_cast<double>(frame) / sampleRate;
 }
 
 struct ALStreamOpenHandler : FileSystem::OpenHandler
@@ -247,8 +246,7 @@ void ALStream::openSource(const std::string &filename)
 		Debug() << buf;
 	}
 	
-	source = handler.source;
-	needsRewind = false;
+	source.reset(handler.source);
 }
 
 void ALStream::stopStream()
@@ -257,49 +255,45 @@ void ALStream::stopStream()
 	{
 		thread.request_stop();
 		thread.join();
-		needsRewind = true;
 	}
 
-	/* Need to stop the source _after_ the thread has terminated,
-	 * because it might have accidentally started it again before
-	 * seeing the term request */
-	AL::Source::stop(alSrc);
+	/* Unbind and drop queued data _after_ the thread has terminated,
+	 * because it might still have been pushing data */
+	SDL_UnbindAudioStream(stream.get());
+	SDL_ClearAudioStream(stream.get());
 
-	procFrames = 0;
+	std::scoped_lock lock(posMut);
+	pushedFrames = 0;
+	wraps.clear();
 }
 
 void ALStream::startStream(double offset)
 {
-	AL::Source::clearQueue(alSrc);
+	SDL_UnbindAudioStream(stream.get());
+	SDL_ClearAudioStream(stream.get());
 
-	preemptPause = false;
-	streamInited = false;
+	const SDL_AudioSpec spec = source->spec();
+	if (!SDL_SetAudioStreamFormat(stream.get(), &spec, nullptr))
+		throw Exception(Exception::SDLError, "SDL_SetAudioStreamFormat: %s", SDL_GetError());
+
+	{
+		std::scoped_lock lock(posMut);
+		sampleRate = spec.freq;
+		frameSize = SDL_AUDIO_FRAMESIZE(spec);
+		startFrames = static_cast<uint64_t>(offset * spec.freq);
+		pushedFrames = 0;
+		wraps.clear();
+	}
+
 	sourceExhausted = false;
 
-	startOffset = offset;
-	procFrames = offset * source->sampleRate();
+	source->seekToOffset(offset);
+
+	/* Binding before any data is queued is fine; SDL plays silence until data arrives */
+	if (!SDL_BindAudioStream(audioDevice, stream.get()))
+		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 
 	thread = std::jthread([this](std::stop_token stop) { streamData(stop); });
-}
-
-void ALStream::pauseStream()
-{
-	std::scoped_lock lock(pauseMut);
-
-	if (AL::Source::getState(alSrc) != AL_PLAYING)
-		preemptPause = true;
-	else
-		AL::Source::pause(alSrc);
-}
-
-void ALStream::resumeStream()
-{
-	std::scoped_lock lock(pauseMut);
-
-	if (preemptPause)
-		preemptPause = false;
-	else
-		AL::Source::play(alSrc);
 }
 
 void ALStream::checkStopped()
@@ -310,19 +304,12 @@ void ALStream::checkStopped()
 	if (state != Playing)
 		return;
 
-	/* If streaming thread hasn't queued up
-	 * buffers yet there's not point in querying
-	 * the AL source */
-	if (!streamInited)
-		return;
-
-	/* If alSrc isn't playing, but we haven't
-	 * exhausted the data source yet, we're just
-	 * having a buffer underrun */
+	/* If the source still has data, an empty queue
+	 * is just a buffer underrun */
 	if (!sourceExhausted)
 		return;
 
-	if (AL::Source::getState(alSrc) == AL_PLAYING)
+	if (SDL_GetAudioStreamQueued(stream.get()) > 0 || SDL_GetAudioStreamAvailable(stream.get()) > 0)
 		return;
 
 	stopStream();
@@ -332,117 +319,47 @@ void ALStream::checkStopped()
 /* thread func */
 void ALStream::streamData(std::stop_token stop)
 {
-	/* Fill up queue */
-	bool firstBuffer = true;
-	ALDataSource::Status status;
+	std::vector<uint8_t> chunk;
 
-	if (stop.stop_requested())
-		return;
-
-	//if (needsRewind)
-		source->seekToOffset(startOffset);
-
-	for (int i = 0; i < STREAM_BUFS; ++i)
-	{
-		if (stop.stop_requested())
-			return;
-
-		AL::Buffer::ID buf = alBuf[i];
-
-		status = source->fillBuffer(buf);
-
-		if (status == ALDataSource::Error)
-			return;
-
-		AL::Source::queueBuffer(alSrc, buf);
-
-		if (firstBuffer)
-		{
-			resumeStream();
-
-			firstBuffer = false;
-			streamInited = true;
-		}
-
-		if (stop.stop_requested())
-			return;
-
-		if (status == ALDataSource::EndOfStream)
-		{
-			sourceExhausted = true;
-			break;
-		}
-	}
-
-	/* Wait for buffers to be consumed, then
-	 * refill and queue them up again */
-	while (true)
+	while (!stop.stop_requested())
 	{
 		shState->rtData().syncPoint.passSecondarySync();
 
-		ALint procBufs = AL::Source::getProcBufferCount(alSrc);
-
-		while (procBufs--)
+		/* Top up the queue, then sleep until it drains a bit */
+		while (!stop.stop_requested() && SDL_GetAudioStreamQueued(stream.get()) < QUEUE_AHEAD_BYTES)
 		{
-			if (stop.stop_requested())
-				break;
+			const ALDataSource::Status status = source->fillBuffer(chunk);
 
-			AL::Buffer::ID buf = AL::Source::unqueueBuffer(alSrc);
-
-			/* If something went wrong, try again later */
-			if (buf == AL::Buffer::ID(0))
-				break;
-
-			if (buf == lastBuf)
+			if (status == ALDataSource::Error || chunk.empty())
 			{
-				/* Reset the processed sample count so
-				 * querying the playback offset returns 0.0 again */
-				procFrames = source->loopStartFrames();
-				lastBuf = AL::Buffer::ID(0);
-			}
-			else
-			{
-				/* Add the frame count contained in this
-				 * buffer to the total count */
-				ALint bits = AL::Buffer::getBits(buf);
-				ALint size = AL::Buffer::getSize(buf);
-				ALint chan = AL::Buffer::getChannels(buf);
-
-				if (bits != 0 && chan != 0)
-					procFrames += ((size / (bits / 8)) / chan);
-			}
-
-			if (sourceExhausted)
-				continue;
-
-			status = source->fillBuffer(buf);
-
-			if (status == ALDataSource::Error)
-			{
+				SDL_FlushAudioStream(stream.get());
 				sourceExhausted = true;
 				return;
 			}
 
-			AL::Source::queueBuffer(alSrc, buf);
+			{
+				std::scoped_lock lock(posMut);
+				if (!SDL_PutAudioStreamData(stream.get(), chunk.data(), static_cast<int>(chunk.size())))
+				{
+					sourceExhausted = true;
+					return;
+				}
+				pushedFrames += chunk.size() / frameSize;
 
-			/* In case of buffer underrun,
-			 * start playing again */
-			if (AL::Source::getState(alSrc) == AL_STOPPED)
-				AL::Source::play(alSrc);
-
-			/* If this was the last buffer before the data
-			 * source loop wrapped around again, mark it as
-			 * such so we can catch it and reset the processed
-			 * sample count once it gets unqueued */
-			if (status == ALDataSource::WrapAround)
-				lastBuf = buf;
+				/* The chunk ended at the loop end; playback position
+				 * jumps back to the loop start once it gets there */
+				if (status == ALDataSource::WrapAround)
+					wraps.emplace_back(pushedFrames, source->loopStartFrames());
+			}
 
 			if (status == ALDataSource::EndOfStream)
+			{
+				/* Let the resampler emit its tail */
+				SDL_FlushAudioStream(stream.get());
 				sourceExhausted = true;
+				return;
+			}
 		}
-
-		if (stop.stop_requested())
-			break;
 
 		std::this_thread::sleep_for(AUDIO_SLEEP);
 	}

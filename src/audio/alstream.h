@@ -22,18 +22,18 @@
 #ifndef ALSTREAM_H
 #define ALSTREAM_H
 
-#include "al-util.h"
-#include "sdl-util.h"
+#include "audio-util.h"
 
 #include <atomic>
+#include <cstdint>
+#include <deque>
+#include <memory>
 #include <mutex>
-#include <thread>
 #include <string>
-#include <SDL3/SDL_iostream.h>
+#include <thread>
+#include <utility>
 
 struct ALDataSource;
-
-#define STREAM_BUFS 3
 
 /* State-machine like audio playback stream.
  * This class is NOT thread safe */
@@ -46,36 +46,6 @@ struct ALStream
 		Playing,
 		Paused
 	};
-
-	bool looped;
-	State state;
-
-	ALDataSource *source;
-	std::mutex pauseMut;
-	bool preemptPause;
-
-	/* When this flag isn't set and alSrc is
-	 * in 'STOPPED' state, stream isn't over
-	 * (it just hasn't started yet) */
-	std::atomic<bool> streamInited{false};
-	std::atomic<bool> sourceExhausted{false};
-
-	std::atomic<bool> needsRewind{false};
-	double startOffset;
-
-	float pitch;
-
-	AL::Source::ID alSrc;
-	AL::Buffer::ID alBuf[STREAM_BUFS];
-
-	uint64_t procFrames;
-	AL::Buffer::ID lastBuf;
-
-	struct
-	{
-		ALenum format;
-		ALsizei freq;
-	} stream;
 
 	enum LoopMode
 	{
@@ -96,16 +66,32 @@ struct ALStream
 	void setPitch(float value);
 	State queryState();
 	double queryOffset();
-	bool queryNativePitch();
 
 private:
-	void closeSource();
+	bool looped;
+	State state = Closed;
+
+	std::unique_ptr<ALDataSource> source;
+	AudioStreamPtr stream;
+
+	/* Set by the streaming thread once the data source has
+	 * no more data; the stream ends when the queue drains */
+	std::atomic<bool> sourceExhausted{false};
+
+	/* Playback position bookkeeping, shared with the streaming thread.
+	 * Positions are in source frames pushed since startStream(). */
+	std::mutex posMut;
+	uint64_t startFrames = 0;
+	uint64_t pushedFrames = 0;
+	int frameSize = 0;
+	int sampleRate = 0;
+	/* (pushed frame at which the source wrapped, loop start frame) */
+	std::deque<std::pair<uint64_t, uint32_t>> wraps;
+
 	void openSource(const std::string &filename);
 
 	void stopStream();
 	void startStream(double offset);
-	void pauseStream();
-	void resumeStream();
 
 	void checkStopped();
 
