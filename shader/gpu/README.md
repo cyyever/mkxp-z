@@ -64,3 +64,34 @@ pipeline accepts omitted program bytecode and rejects requesting such an effect,
 so xBRZ need not be embedded in builds that disable it. This does not establish
 full rendered parity: xBRZ edge behavior still needs comparison against the GL
 baseline, as do full sprite/tilemap scenes and high-resolution resize filters.
+
+## Embedded format descriptors
+
+The engine now carries `ShaderCode { bytes, format, entrypoint }` instead of
+assuming every shader is DXBC. The registry is generated from the same entry
+manifest used by offline compilation; blob symbols include the format, and the
+GPU device is offered only formats actually embedded. Pipeline creation selects
+an available variant accepted by `SDL_GetGPUShaderFormats`. Existing DXBC-span
+callers remain source compatible. SPIR-V input is copied to Uint32-aligned
+storage during shader creation.
+
+This change still produces **DXBC only**, using the Windows SDK FXC compiler.
+It does not complete Vulkan or Metal artifact production or establish runtime
+parity on another platform. Non-Windows configuration now reports the missing
+offline producer directly rather than failing later on missing DXBC headers.
+
+Queued work: add an offline SPIR-V producer with SDL's combined sampled-image
+bindings and verified uniform layout; add a Metal producer and actual exported
+entrypoint metadata; then compile/link those artifacts on Linux/FreeBSD and
+macOS. Metal registry generation requires an explicit exported-entrypoint map,
+so a cross compiler's function rename cannot silently become an assumed name.
+No runtime shader translator or new engine library is introduced.
+
+Official contracts:
+- [SDL supported device formats](https://wiki.libsdl.org/SDL3/SDL_GetGPUShaderFormats)
+- [SDL shader resource bindings](https://wiki.libsdl.org/SDL3/SDL_CreateGPUShader)
+- [SDL offline shader translation](https://github.com/libsdl-org/SDL_shadercross)
+- [DXC SPIR-V mappings](https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst)
+
+Validation for this descriptor change is native Windows MSVC compile/link with
+extra shaders both enabled and disabled. No runtime tests were run.

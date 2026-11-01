@@ -296,7 +296,7 @@ int main(int argc, char *argv[]) {
 
     std::unique_ptr<gpu::Device> gpuDevice;
     try {
-        gpuDevice = std::make_unique<gpu::Device>(win, SDL_GPU_SHADERFORMAT_DXBC, conf.debugMode);
+        gpuDevice = std::make_unique<gpu::Device>(win, gpu::engineShaderFormats(), conf.debugMode);
         const auto mode = conf.vsync || conf.syncToRefreshrate ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE;
         if (SDL_WindowSupportsGPUPresentMode(gpuDevice->native(), win, mode) &&
             !SDL_SetGPUSwapchainParameters(gpuDevice->native(), win, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, mode))
