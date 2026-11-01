@@ -97,10 +97,37 @@ check rejects descriptor sets or resource kinds outside SDL's contract. Vertex
 uniforms use set 1, fragment sampled images set 2 and fragment uniforms set 3.
 All existing uniform blocks retain their float4/matrix layout and slot numbers.
 
-Metal remains unavailable: there is no MSL/metallib producer or Apple compiler
-validation. macOS configuration reports that gap explicitly. Metal registry
-generation still requires an explicit exported-entrypoint map. Compiling SPIR-V
-on Windows does not establish Linux/FreeBSD runtime support or pixel parity.
+An optional offline **MSL source producer** is also available. It uses pinned
+SDL_shadercross + SPIRV-Cross, and never links either library into the engine:
+
+```sh
+cmake -S tools/shaders/offline-msl -B build/offline-msl -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DMKXP_SDL_SOURCE=/path/to/SDL3-source
+cmake --build build/offline-msl --target shadercross mkxp-msl-entrypoint
+```
+
+Alternatively omit `MKXP_SDL_SOURCE` and provide an installed static SDL3 CMake
+package. Only the offline CLI needs SDL. Source builds disable its audio/video/
+GPU backends. Place both resulting executables (`shadercross` and
+`mkxp-msl-entrypoint`) on PATH, or provide their absolute paths in Meson's
+`[binaries]` native file. DXC is also required for the preceding SPIR-V stage.
+
+Pinned inputs (CMake verifies archive SHA256):
+- SDL_shadercross `1ff05bec573988a98ef9e0260b4da44f512b8367`,
+  `feb818c93c804cff0f9a1f3f0d0462bfff09f33bc8406da7f716e9cff018187c`.
+- SPIRV-Cross `57e4efcc84112abcd426dc5ec248b5339bee04f2`,
+  `5be4b0ee78036ed6358f5320c6070df5c5bd1cf05c6f55dc221795f1d4e7bd38`.
+
+Each entry point produces MSL 2.0 source plus a JSON metadata fragment. The
+companion queries SPIRV-Cross's actual cleansed Metal entrypoint name; registry
+generation merges those fragments and rejects duplicate/missing mappings. The
+producer also checks that the reflected name occurs in the generated source.
+macOS requires both offline tools rather than treating SPIR-V as a Metal fallback.
+
+This is **MSL generation, not Apple compiler validation**. No `metal`/`metallib`
+toolchain was available on the Windows build host; no metallib is produced and
+native macOS compilation or Metal runtime/pixel parity is unverified. Likewise,
+Windows SPIR-V generation does not establish Linux/FreeBSD native runtime support.
 
 Official contracts:
 - [SDL supported device formats](https://wiki.libsdl.org/SDL3/SDL_GetGPUShaderFormats)
@@ -112,4 +139,7 @@ Validation: official portable DXC v1.9.2609 compiled all 25 SPIR-V entry points
 (including xBRZ), with DXC validation and descriptor/uniform-ABI checks enabled.
 Production Meson shader/embed rules and native MSVC compiled and linked the
 combined DXBC/SPIR-V registry with extra shaders enabled and disabled. No runtime
-tests were run; no Linux, FreeBSD or Metal compiler/runtime validation is claimed.
+tests were run; no Linux, FreeBSD or Apple Metal compiler/runtime validation is claimed.
+The pinned offline tools also compiled and linked on Windows; all 25 MSL sources
+and reflected maps were generated, then the production Meson rules embedded
+DXBC/SPIR-V/MSL together into a native MSVC compiled/linked registry.

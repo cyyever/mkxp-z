@@ -21,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--formats', nargs='+', choices=FORMATS, required=True)
     parser.add_argument('--extra-shaders', action='store_true')
-    parser.add_argument('--entrypoints', type=Path, help='JSON format -> semantic -> exported entrypoint')
+    parser.add_argument('--entrypoints', type=Path, action='append', default=[], help='JSON format -> semantic -> exported entrypoint')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if len(set(args.formats)) != len(args.formats):
@@ -33,7 +33,14 @@ def main():
     entries = list(module.ENTRIES)
     if args.extra_shaders:
         entries.append('xbrzMain')
-    exports = json.loads(args.entrypoints.read_text(encoding='utf-8')) if args.entrypoints else {}
+    exports = {}
+    for metadata in args.entrypoints:
+        for format, entries in json.loads(metadata.read_text(encoding='utf-8')).items():
+            destination = exports.setdefault(format, {})
+            for semantic, exported in entries.items():
+                if semantic in destination:
+                    parser.error(f'Duplicate exported entrypoint for {format}/{semantic}')
+                destination[semantic] = exported
     lines = ['// Generated from the offline shader manifest. Do not edit.',
              '#pragma once', '#include "gpu-shader.h"', '#include <string_view>']
     for entry in entries:

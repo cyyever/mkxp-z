@@ -3,6 +3,7 @@
 gpu_shader_binaries = {}
 gpu_shader_formats = []
 gpu_shader_targets = []
+gpu_shader_entrypoint_maps = []
 hlsl_python = find_program('python3', 'python')
 hlsl_checker = files('../../tools/shaders/lint-hlsl.py')
 extra_shader_args = get_variable('have_extra_shaders', false) ? ['--extra-shaders'] : []
@@ -31,9 +32,6 @@ endif
 
 # DXC is an offline build tool only. Official portable DXC includes SPIR-V;
 # some Windows SDK builds expose the switch but omit its implementation.
-if host_machine.system() == 'darwin'
-    error('Metal shader artifacts are not implemented yet; SPIR-V is not a Metal fallback.')
-endif
 spirv_compiler = find_program('dxc', required: host_machine.system() != 'windows')
 spirv_tool = files('../../tools/shaders/compile-spirv.py')
 have_spirv_compiler = spirv_compiler.found()
@@ -64,6 +62,29 @@ if have_spirv_compiler
                       '--source', '@INPUT@', '--output', '@OUTPUT@'],
         )
         gpu_shader_binaries += {entry + '.spirv': compiled_shader}
+        gpu_shader_targets += compiled_shader
+    endforeach
+endif
+
+# SDL_shadercross and the reflection companion are offline tools only.
+msl_compiler = find_program('shadercross', required: host_machine.system() == 'darwin')
+msl_reflector = find_program('mkxp-msl-entrypoint', required: host_machine.system() == 'darwin')
+if have_spirv_compiler and msl_compiler.found() and msl_reflector.found()
+    gpu_shader_formats += ['msl']
+    msl_tool = files('../../tools/shaders/compile-msl.py')
+    foreach specification : entry_points
+        entry = specification.split(':')[0]
+        stage = specification.split(':')[1].startswith('vs') ? 'vertex' : 'fragment'
+        compiled_shader = custom_target(
+            'gpu-msl-' + entry,
+            input: gpu_shader_binaries[entry + '.spirv'],
+            output: [entry + '.msl', entry + '.msl.json'],
+            command: [hlsl_python, msl_tool, '--compiler', msl_compiler,
+                      '--reflector', msl_reflector, '--entry', entry, '--stage', stage,
+                      '--source', '@INPUT@', '--output', '@OUTPUT0@', '--metadata', '@OUTPUT1@'],
+        )
+        gpu_shader_binaries += {entry + '.msl': compiled_shader[0]}
+        gpu_shader_entrypoint_maps += compiled_shader[1]
         gpu_shader_targets += compiled_shader
     endforeach
 endif
