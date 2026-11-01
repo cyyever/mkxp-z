@@ -11,7 +11,7 @@ enum class Program { Simple, FlatColor, VertexColor, VertexAlpha, UniformAlpha, 
 enum class Blend { Disabled, Normal, Addition, Subtraction, KeepDestinationAlpha, ColorAdditionKeepDestinationAlpha, ColorSubtractionKeepDestinationAlpha };
 struct QuadVertex { float position[2]; float texcoord[2]; float color[4]; };
 struct alignas(16) VertexParameters {
-    // Column-major matrices, matching the HLSL default and existing GL uploads.
+    // Column-major matrices, matching the offline HLSL matrix layout.
     float projection[16];
     float transform[16];
     float textureScaleTranslation[4];
@@ -32,8 +32,21 @@ static_assert(sizeof(QuadVertex) == 32);
 static_assert(sizeof(VertexParameters) == 144);
 static_assert(sizeof(FragmentParameters) == 80);
 
+// The producer records the exported entrypoint rather than assuming that a
+// cross compiler preserves the HLSL function name. Bytes stay alive through
+// shader creation; Shader does not retain the borrowed descriptor.
+struct ShaderCode {
+    std::span<const Uint8> bytes;
+    SDL_GPUShaderFormat format = SDL_GPU_SHADERFORMAT_INVALID;
+    const char *entrypoint = nullptr;
+};
+// Select the first supplied variant accepted by the actual device. No runtime
+// translation or renderer fallback is performed.
+ShaderCode selectShaderCode(std::span<const ShaderCode>, SDL_GPUShaderFormat supported);
+
 class Shader {
 public:
+    Shader(SDL_GPUDevice *, ShaderCode, SDL_GPUShaderStage, Uint32 samplers, Uint32 uniforms);
     Shader(SDL_GPUDevice *, std::span<const Uint8>, const char *entry,
            SDL_GPUShaderStage, Uint32 samplers, Uint32 uniforms);
     ~Shader();
@@ -49,6 +62,9 @@ private:
 // One cache per render thread; pipelines are created once per program/blend/format.
 class QuadPipeline {
 public:
+    using FragmentShaders = std::array<ShaderCode, static_cast<size_t>(Program::Count)>;
+    QuadPipeline(SDL_GPUDevice *, ShaderCode vertexCode, const FragmentShaders &,
+                 ShaderCode tilemapVertexCode = {});
     using FragmentBytecode = std::array<std::span<const Uint8>, static_cast<size_t>(Program::Count)>;
     QuadPipeline(SDL_GPUDevice *, std::span<const Uint8> vertexCode, const FragmentBytecode &,
                  std::span<const Uint8> tilemapVertexCode = {});

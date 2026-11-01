@@ -1,9 +1,11 @@
 #include "gpu-shader.h"
 #include <cstddef>
+#include <bit>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace gpu {
 namespace {
@@ -53,13 +55,40 @@ SDL_GPUColorTargetBlendState blendState(Blend mode) {
     return state;
 }
 }
-Shader::Shader(SDL_GPUDevice *d, std::span<const Uint8> code, const char *entry,
-               SDL_GPUShaderStage stage, Uint32 samplerCount, Uint32 uniformCount) : device(d), shader(nullptr) {
-    if (code.size() < 4 || std::memcmp(code.data(), "DXBC", 4))
-        throw std::invalid_argument("GPU shader requires offline DXBC bytecode");
+ShaderCode selectShaderCode(std::span<const ShaderCode> variants, SDL_GPUShaderFormat supported) {
+    for (const auto &code : variants)
+        if (!code.bytes.empty() && (code.format & supported)) return code;
+    throw std::invalid_argument("No embedded shader variant matches the GPU device formats");
+}
+Shader::Shader(SDL_GPUDevice *d, std::span<const Uint8> bytes, const char *entry,
+               SDL_GPUShaderStage stage, Uint32 samplerCount, Uint32 uniformCount)
+    : Shader(d, ShaderCode{bytes, SDL_GPU_SHADERFORMAT_DXBC, entry}, stage, samplerCount, uniformCount) {}
+Shader::Shader(SDL_GPUDevice *d, ShaderCode code, SDL_GPUShaderStage stage,
+               Uint32 samplerCount, Uint32 uniformCount) : device(d), shader(nullptr) {
+    constexpr auto known = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXBC |
+        SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_METALLIB;
+    if (!device || code.bytes.empty() || !code.entrypoint || !*code.entrypoint ||
+        !std::has_single_bit(code.format) || (code.format & ~known))
+        throw std::invalid_argument("GPU shader requires a single format, bytecode and exported entrypoint");
+    if (!(SDL_GetGPUShaderFormats(device) & code.format))
+        throw std::invalid_argument("GPU device does not accept the supplied shader format");
     SDL_GPUShaderCreateInfo info{};
-    info.code = code.data(); info.code_size = code.size(); info.entrypoint = entry;
-    info.format = SDL_GPU_SHADERFORMAT_DXBC; info.stage = stage;
+    info.code = code.bytes.data(); info.code_size = code.bytes.size(); info.entrypoint = code.entrypoint;
+    info.format = code.format; info.stage = stage;
+    std::vector<Uint32> alignedSpirv;
+    if (code.format == SDL_GPU_SHADERFORMAT_DXBC || code.format == SDL_GPU_SHADERFORMAT_DXIL) {
+        if (code.bytes.size() < 4 || std::memcmp(code.bytes.data(), "DXBC", 4))
+            throw std::invalid_argument("Direct3D shader requires a DXBC container");
+    } else if (code.format == SDL_GPU_SHADERFORMAT_SPIRV) {
+        const Uint8 magic[] = {3,2,35,7};
+        if (code.bytes.size() < 20 || code.bytes.size() % sizeof(Uint32) ||
+            std::memcmp(code.bytes.data(), magic, sizeof(magic)))
+            throw std::invalid_argument("Vulkan shader requires a SPIR-V module");
+        // Embedded uint8 arrays do not promise Vulkan's Uint32 alignment.
+        alignedSpirv.resize(code.bytes.size() / sizeof(Uint32));
+        std::memcpy(alignedSpirv.data(), code.bytes.data(), code.bytes.size());
+        info.code = reinterpret_cast<const Uint8 *>(alignedSpirv.data());
+    }
     info.num_samplers = samplerCount; info.num_uniform_buffers = uniformCount;
     shader = SDL_CreateGPUShader(device, &info);
     if (!shader) fail("SDL_CreateGPUShader");
@@ -67,12 +96,26 @@ Shader::Shader(SDL_GPUDevice *d, std::span<const Uint8> code, const char *entry,
 Shader::~Shader() { SDL_ReleaseGPUShader(device, shader); }
 const char *QuadPipeline::entryPoint(Program program) { return names[index(program)]; }
 Uint32 QuadPipeline::samplerCount(Program program) { return samplers[index(program)]; }
-QuadPipeline::QuadPipeline(SDL_GPUDevice *d, std::span<const Uint8> vertexCode, const FragmentBytecode &code, std::span<const Uint8> tilemapVertexCode)
-    : device(d), vertex(d, vertexCode, "vertexMain", SDL_GPU_SHADERSTAGE_VERTEX, 0, 1) {
-    if (!tilemapVertexCode.empty())
-        tilemapVertex = std::make_unique<Shader>(device, tilemapVertexCode, "tilemapVertexMain", SDL_GPU_SHADERSTAGE_VERTEX, 0, 2);
-    for (size_t i = 0; i < fragments.size(); ++i)
-        if (!code[i].empty()) fragments[i] = std::make_unique<Shader>(device, code[i], names[i], SDL_GPU_SHADERSTAGE_FRAGMENT, samplers[i], uniforms[i]);
+namespace {
+QuadPipeline::FragmentShaders dxbcFragments(const QuadPipeline::FragmentBytecode &bytes) {
+    QuadPipeline::FragmentShaders result{};
+    for (size_t i=0;i<result.size();++i)
+        result[i] = {bytes[i], SDL_GPU_SHADERFORMAT_DXBC, names[i]};
+    return result;
+}
+}
+QuadPipeline::QuadPipeline(SDL_GPUDevice *d, std::span<const Uint8> vertexCode,
+    const FragmentBytecode &code, std::span<const Uint8> tilemapVertexCode)
+    : QuadPipeline(d, ShaderCode{vertexCode,SDL_GPU_SHADERFORMAT_DXBC,"vertexMain"},
+        dxbcFragments(code), ShaderCode{tilemapVertexCode,SDL_GPU_SHADERFORMAT_DXBC,"tilemapVertexMain"}) {}
+QuadPipeline::QuadPipeline(SDL_GPUDevice *d, ShaderCode vertexCode,
+    const FragmentShaders &code, ShaderCode tilemapVertexCode)
+    : device(d), vertex(d, vertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0, 1) {
+    if (!tilemapVertexCode.bytes.empty())
+        tilemapVertex = std::make_unique<Shader>(device, tilemapVertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0, 2);
+    for (size_t i=0;i<fragments.size();++i)
+        if (!code[i].bytes.empty())
+            fragments[i] = std::make_unique<Shader>(device, code[i], SDL_GPU_SHADERSTAGE_FRAGMENT, samplers[i], uniforms[i]);
 }
 QuadPipeline::~QuadPipeline() {
     for (auto &[key, pipeline] : cache) SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
