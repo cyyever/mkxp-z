@@ -255,9 +255,10 @@ private:
 	SignalConnection loresDispCon;
 	const char *klassName() const { return "bitmap"; }
 
-	BitmapPrivate *p;
+	BitmapPrivate *p = nullptr;
 
 	void loresDisposal();
+	void hiresModified();
 };
 
 #endif // BITMAP_H

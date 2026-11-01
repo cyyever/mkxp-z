@@ -183,6 +183,7 @@ struct BitmapPrivate
     } animation;
 
     SignalConnection prepareCon;
+    SignalConnection loresModifiedCon;
 
     TEXFBO gl;
 
@@ -1351,8 +1352,20 @@ DEF_ATTR_RD_SIMPLE(Bitmap, Hires, Bitmap*, p->selfHires)
 void Bitmap::setHires(Bitmap *hires) {
     guardDisposed();
 
+    for (Bitmap *child = hires; child; child = child->p->selfHires) {
+        child->guardDisposed();
+        if (child == this)
+            throw Exception(Exception::ArgumentError, "High-resolution bitmap replacements cannot form a cycle");
+    }
+    if (p->selfHires && !p->selfHires->isDisposed()) {
+        p->selfHires->loresDispCon.disconnect();
+        p->selfHires->p->loresModifiedCon.disconnect();
+        p->selfHires->p->selfLores = nullptr;
+    }
     hires->setLores(this);
     p->selfHires = hires;
+    p->gl.selfHires = &hires->getRenderTarget();
+    p->onModified();
 }
 
 void Bitmap::setLores(Bitmap *lores) {
@@ -1360,6 +1373,7 @@ void Bitmap::setLores(Bitmap *lores) {
 
     p->selfLores = lores;
     loresDispCon = lores->wasDisposed.connect(&Bitmap::loresDisposal, this);
+    p->loresModifiedCon = modified.connect(&Bitmap::hiresModified, lores);
 
     if (p->font && p->font != &shState->defaultFont())
         p->font->setHiresMult((float)width() / (float)lores->width());
@@ -2279,8 +2293,19 @@ void Bitmap::clear()
 
 void Bitmap::createSurface() const
 {
+    if (p->selfHires)
+        p->selfHires->guardDisposed();
     if (p->surface)
         return;
+    // Most HiRes mutations deliberately update only the child. Materialize the
+    // logical target only when a CPU consumer needs it, using configured filters.
+    if (p->selfHires) {
+        const int scale = RenderOps::blitScaleIsSpecial(p->gl, false, rect(), p->gl, rect());
+        RenderOps::blitBegin(p->gl, false, scale);
+        RenderOps::blitSource(p->gl, scale);
+        RenderOps::blitRectangle(rect(), rect());
+        RenderOps::blitEnd();
+    }
     const auto &target = p->getRenderTarget();
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
         SDL_CreateSurface(target.width, target.height,
@@ -2472,6 +2497,14 @@ void Bitmap::replaceRaw(void *pixel_data, int size)
     {
         TEX::bind(getRenderTarget().tex);
         TEX::uploadImage(w, h, pixel_data, SDL_PIXELFORMAT_RGBA32);
+    }
+
+    // An explicit logical replacement remains authoritative until the child
+    // next changes, even if no CPU readback has been requested yet.
+    if (p->selfHires && !p->animation.enabled && !p->megaSurface && !p->surface) {
+        p->surface = SDL_CreateSurface(w, h, p->format->format);
+        if (!p->surface)
+            throw Exception(Exception::SDLError, "%s", SDL_GetError());
     }
 
     // Keep an existing CPU cache coherent with the exact replacement bytes.
@@ -3881,7 +3914,7 @@ void Bitmap::releaseResources()
         SDL_DestroySurface(p->megaSurface);
     if (p->surface)
         SDL_DestroySurface(p->surface);
-    else if (p->animation.enabled) {
+    if (p->animation.enabled) {
         p->animation.enabled = false;
         p->animation.playing = false;
         for (TEXFBO &tex : p->animation.frames)
@@ -3896,6 +3929,12 @@ void Bitmap::releaseResources()
     }
 
     delete p;
+}
+
+void Bitmap::hiresModified()
+{
+    if (p && !isDisposed())
+        p->onModified();
 }
 
 void Bitmap::loresDisposal()
