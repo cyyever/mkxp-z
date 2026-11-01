@@ -21,12 +21,14 @@ public:
     SDL_GPUTexture *native() const { return texture; }
     Uint32 width() const { return w; }
     Uint32 height() const { return h; }
+    Uint32 mipLevels() const { return levels; }
 private:
     friend class Device;
-    Texture(SDL_GPUDevice *, SDL_GPUTexture *, Uint32, Uint32);
+    Texture(SDL_GPUDevice *, SDL_GPUTexture *, Uint32, Uint32, Uint32, SDL_GPUTextureUsageFlags);
     SDL_GPUDevice *device = nullptr;
     SDL_GPUTexture *texture = nullptr;
-    Uint32 w = 0, h = 0;
+    Uint32 w = 0, h = 0, levels = 0;
+    SDL_GPUTextureUsageFlags usage = 0;
 };
 
 class Fence {
@@ -76,11 +78,13 @@ public:
     SDL_GPUDevice *native() const { return device; }
     SDL_GPUTextureFormat swapchainFormat() const;
     Texture createTexture(Uint32 width, Uint32 height,
-        SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET);
+        SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
+        Uint32 mipLevels = 1);
     // Tight RGBA8 rows, top to bottom. These initial transfer paths wait for
     // completion; renderer hot paths should batch native SDL copy passes.
     void uploadRGBA(const Texture &, std::span<const Uint8>);
-    std::vector<Uint8> downloadRGBA(const Texture &);
+    std::vector<Uint8> downloadRGBA(const Texture &, Uint32 mipLevel = 0);
+    void generateMipmaps(const Texture &);
     void copy(CommandBuffer &, const Texture &source, const Texture &destination);
     // Returns null when minimized. The texture is borrowed until submission;
     // never sample/download it. It is owned by the SDL swapchain.

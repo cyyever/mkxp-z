@@ -36,6 +36,15 @@ SDL_GPUColorTargetBlendState blendState(Blend mode) {
         state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
         state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
         state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE; break;
+    case Blend::ColorAdditionKeepDestinationAlpha:
+    case Blend::ColorSubtractionKeepDestinationAlpha:
+        state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+        state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        state.color_blend_op = mode == Blend::ColorAdditionKeepDestinationAlpha
+            ? SDL_GPU_BLENDOP_ADD : SDL_GPU_BLENDOP_REVERSE_SUBTRACT;
+        break;
     case Blend::KeepDestinationAlpha:
         state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
         state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE; break;
@@ -57,6 +66,7 @@ Shader::Shader(SDL_GPUDevice *d, std::span<const Uint8> code, const char *entry,
 }
 Shader::~Shader() { SDL_ReleaseGPUShader(device, shader); }
 const char *QuadPipeline::entryPoint(Program program) { return names[index(program)]; }
+Uint32 QuadPipeline::samplerCount(Program program) { return samplers[index(program)]; }
 QuadPipeline::QuadPipeline(SDL_GPUDevice *d, std::span<const Uint8> vertexCode, const FragmentBytecode &code, std::span<const Uint8> tilemapVertexCode)
     : device(d), vertex(d, vertexCode, "vertexMain", SDL_GPU_SHADERSTAGE_VERTEX, 0, 1) {
     if (!tilemapVertexCode.empty())
