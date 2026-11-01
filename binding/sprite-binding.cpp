@@ -60,6 +60,7 @@ DEF_GFX_PROP_I(Sprite, OY)
 DEF_GFX_PROP_I(Sprite, BushDepth)
 DEF_GFX_PROP_I(Sprite, BushOpacity)
 DEF_GFX_PROP_I(Sprite, Opacity)
+DEF_GFX_PROP_I(Sprite, WeatherType)
 DEF_GFX_PROP_I(Sprite, BlendType)
 DEF_GFX_PROP_I(Sprite, PatternBlendType)
 DEF_GFX_PROP_I(Sprite, PatternOpacity)
@@ -134,6 +135,7 @@ void spriteBindingInit() {
     _rb_define_method(klass, "height", spriteHeight);
     
     INIT_PROP_BIND(Sprite, BushOpacity, "bush_opacity");
+    INIT_PROP_BIND(Sprite, WeatherType, "weather_type");
     
     INIT_PROP_BIND(Sprite, Pattern, "pattern");
     INIT_PROP_BIND(Sprite, PatternBlendType, "pattern_blend_type");

@@ -34,11 +34,12 @@ int main(int argc, char **argv) {
         require(window != nullptr, SDL_GetError());
         {
             gpu::Device device(window, SDL_GPU_SHADERFORMAT_DXBC, false, "direct3d12");
-            const std::filesystem::path directory(argv[1]);
+            const auto directory = std::filesystem::absolute(argv[1]);
             auto vertexCode = read(directory / "vertexMain.dxbc");
             std::array<std::vector<Uint8>, static_cast<size_t>(gpu::Program::Count)> fragmentCode;
             gpu::QuadPipeline::FragmentBytecode fragments;
             for (size_t i = 0; i < fragmentCode.size(); ++i) {
+                if (static_cast<gpu::Program>(i) == gpu::Program::Weather) continue;
                 if (static_cast<gpu::Program>(i) == gpu::Program::Xbrz && !extraShaders) continue;
                 fragmentCode[i] = read(directory / (std::string(gpu::QuadPipeline::entryPoint(static_cast<gpu::Program>(i))) + ".dxbc"));
                 fragments[i] = fragmentCode[i];
@@ -204,6 +205,49 @@ int main(int argc, char **argv) {
             device.uploadRGBA(source, red);
             fp.parameters[3]=1.f/3;
             draw(gpu::Program::Hue,gpu::Blend::Disabled,1,{0,1,0,1});
+            // A requested game-owned program must fail closed, then load an
+            // offline variant for the actual backend. Shader bytes are never
+            // compiled or replaced with an embedded effect at runtime.
+            struct GameDirectory {
+                std::filesystem::path previous=std::filesystem::current_path();
+                std::filesystem::path temporary=std::filesystem::temp_directory_path()/
+                    ("mkxp-weather-"+std::to_string(SDL_GetTicksNS()));
+                GameDirectory(){std::filesystem::create_directories(temporary/"shaders");std::filesystem::current_path(temporary);}
+                ~GameDirectory(){std::error_code error;std::filesystem::current_path(previous,error);std::filesystem::remove_all(temporary,error);}
+            } gameDirectory;
+            const auto weatherPipeline = [&] {
+                return pipelines.get(gpu::Program::Weather,gpu::Blend::Disabled,
+                    SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM);
+            };
+            const auto expectWeatherError = [&] {
+                bool rejected=false;
+                try {weatherPipeline();} catch(const std::runtime_error &error) {
+                    rejected=std::string(error.what()).starts_with("Game weather shader:");
+                }
+                require(rejected,"requested invalid game weather shader did not fail closed");
+            };
+            expectWeatherError(); // Missing manifest.
+            const auto manifest = [](const char *text) {
+                std::ofstream file("shaders/weather.json",std::ios::binary);file<<text;
+            };
+            manifest(R"({"version":2,"variants":[]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[{"format":"unknown"}]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"../outside.dxbc","entrypoint":"flatColorMain"}]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"shaders/missing.dxbc","entrypoint":"flatColorMain"}]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"C:/outside.dxbc","entrypoint":"flatColorMain"}]})");expectWeatherError();
+            manifest("{malformed");expectWeatherError();
+            {std::ofstream file("shaders/weather.json");file<<std::string(64*1024+1,' ');}
+            expectWeatherError();
+            const auto unicodeShader=std::filesystem::u8path("shaders/雨雪.dxbc");
+            std::filesystem::copy_file(directory/"flatColorMain.dxbc",unicodeShader);
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"shaders/雨雪.dxbc","entrypoint":"flatColorMain"}]})");
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"shaders/雨雪.dxbc","entrypoint":""}]})");expectWeatherError();
+            manifest(R"({"version":1,"variants":[{"format":"dxbc","file":"shaders/雨雪.dxbc","entrypoint":"flatColorMain"}]})");
+            require(weatherPipeline()!=nullptr,"offline game weather shader did not load");
+            fp={};fp.color[1]=1;fp.color[3]=.5f;
+            draw(gpu::Program::Weather,gpu::Blend::Disabled,0,{0,1,0,.5f});
+            require(weatherPipeline()==weatherPipeline(),"game shader pipeline cache missed");
             require(pipelines.get(gpu::Program::Simple,gpu::Blend::Normal,SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM)
                 == pipelines.get(gpu::Program::Simple,gpu::Blend::Normal,SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM), "pipeline cache missed");
         }

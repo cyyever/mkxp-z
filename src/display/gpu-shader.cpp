@@ -1,4 +1,7 @@
 #include "gpu-shader.h"
+#include "util/json5pp.hpp"
+#include <filesystem>
+#include <fstream>
 #include <cstddef>
 #include <bit>
 #include <cstring>
@@ -9,9 +12,9 @@
 
 namespace gpu {
 namespace {
-constexpr std::array names = {"simpleMain", "flatColorMain", "vertexColorMain", "vertexAlphaMain", "uniformAlphaMain", "planeMain", "transitionMain", "simpleTransitionMain", "bitmapBlendMain", "hueMain", "spriteMain", "tilemapMain", "flashMapMain", "grayMain", "blurMain", "invertMain", "compressAlphaMain", "subtractMain", "bicubicMain", "lanczosMain", "shadowHorizontalMain", "shadowVerticalMain", "xbrzMain"};
-constexpr std::array<Uint32, 23> samplers = {1,0,0,1,1,1,3,2,2,1,2,1,0,1,1,1,1,2,1,1,1,1,1};
-constexpr std::array<Uint32, 23> uniforms = {0,1,0,0,1,1,1,1,1,1,2,1,1,1,2,0,0,1,2,2,2,2,2};
+constexpr std::array names = {"simpleMain", "flatColorMain", "vertexColorMain", "vertexAlphaMain", "uniformAlphaMain", "planeMain", "transitionMain", "simpleTransitionMain", "bitmapBlendMain", "hueMain", "spriteMain", "tilemapMain", "flashMapMain", "grayMain", "blurMain", "invertMain", "compressAlphaMain", "subtractMain", "bicubicMain", "lanczosMain", "shadowHorizontalMain", "shadowVerticalMain", "xbrzMain", "weatherMain"};
+constexpr std::array<Uint32, 24> samplers = {1,0,0,1,1,1,3,2,2,1,2,1,0,1,1,1,1,2,1,1,1,1,1,0};
+constexpr std::array<Uint32, 24> uniforms = {0,1,0,0,1,1,1,1,1,1,2,1,1,1,2,0,0,1,2,2,2,2,2,1};
 size_t index(Program program) {
     const auto value = static_cast<size_t>(program);
     if (value >= names.size()) throw std::invalid_argument("Invalid GPU quad program");
@@ -120,8 +123,52 @@ QuadPipeline::QuadPipeline(SDL_GPUDevice *d, ShaderCode vertexCode,
 QuadPipeline::~QuadPipeline() {
     for (auto &[key, pipeline] : cache) SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
 }
+void QuadPipeline::loadWeatherShader() {
+    namespace fs = std::filesystem;
+    const auto readFile = [](const fs::path &path, size_t limit) {
+        const auto size = fs::file_size(path);
+        if (!size || size > limit) throw std::runtime_error("Invalid game weather shader file size: " + path.generic_string());
+        std::ifstream file(path, std::ios::binary);
+        std::vector<Uint8> bytes(static_cast<size_t>(size));
+        if (!file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
+            throw std::runtime_error("Cannot read game weather shader file: " + path.generic_string());
+        return bytes;
+    };
+    try {
+        const auto manifestBytes = readFile("shaders/weather.json", 64*1024);
+        const auto manifest = json5pp::parse5(std::string(manifestBytes.begin(),manifestBytes.end()));
+        if (manifest["version"].as_integer() != 1)
+            throw std::runtime_error("Unsupported game weather shader manifest version");
+        const auto supported = SDL_GetGPUShaderFormats(device);
+        for (const auto &variant : manifest["variants"].as_array()) {
+            const auto &name = variant["format"].as_string();
+            const auto format = name=="dxbc" ? SDL_GPU_SHADERFORMAT_DXBC :
+                name=="dxil" ? SDL_GPU_SHADERFORMAT_DXIL :
+                name=="spirv" ? SDL_GPU_SHADERFORMAT_SPIRV :
+                name=="msl" ? SDL_GPU_SHADERFORMAT_MSL : SDL_GPU_SHADERFORMAT_INVALID;
+            if (format == SDL_GPU_SHADERFORMAT_INVALID)
+                throw std::runtime_error("Unknown game weather shader format: " + name);
+            if (!(supported & format)) continue;
+            const auto path = fs::u8path(variant["file"].as_string());
+            if (path.empty() || path.is_absolute() || path.has_root_name())
+                throw std::runtime_error("Game weather shader file must be game-relative");
+            for (const auto &component : path)
+                if (component == "..") throw std::runtime_error("Game weather shader file cannot traverse parent directories");
+            const auto bytes = readFile(path,16*1024*1024);
+            const auto &entry = variant["entrypoint"].as_string();
+            if (entry.empty()) throw std::runtime_error("Game weather shader entrypoint is empty");
+            fragments[index(Program::Weather)] = std::make_unique<Shader>(device,
+                ShaderCode{bytes,format,entry.c_str()},SDL_GPU_SHADERSTAGE_FRAGMENT,0,1);
+            return;
+        }
+        throw std::runtime_error("Game weather shader has no variant supported by this GPU device");
+    } catch (const std::exception &error) {
+        throw std::runtime_error(std::string("Game weather shader: ")+error.what());
+    }
+}
 SDL_GPUGraphicsPipeline *QuadPipeline::get(Program program, Blend blend, SDL_GPUTextureFormat format) {
     const auto i = index(program);
+    if (program == Program::Weather && !fragments[i]) loadWeatherShader();
     if (!fragments[i]) throw std::logic_error("GPU effect bytecode was not supplied");
     const auto key = std::tuple(program, blend, format);
     if (const auto found = cache.find(key); found != cache.end()) return found->second;

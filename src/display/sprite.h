@@ -59,6 +59,7 @@ public:
 	DECL_ATTR( BushDepth,   int     )
 	DECL_ATTR( BushOpacity, int     )
 	DECL_ATTR( Opacity,     int     )
+    DECL_ATTR( WeatherType, int     )
 	DECL_ATTR( BlendType,   int     )
 	DECL_ATTR( Color,       Color&  )
 	DECL_ATTR( Tone,        Tone&   )
