@@ -455,7 +455,9 @@ void EventThread::process(RGSSThreadData &rtData)
                 
             case SDL_EVENT_MOUSE_WHEEL :
                 /* Only consider vertical scrolling for now */
-                verticalScrollDistance += static_cast<int>(event.wheel.y);
+                /* integer_y accumulates fractional (trackpad) deltas into whole steps */
+                verticalScrollDistance += event.wheel.integer_y;
+                break;
                 
             case SDL_EVENT_FINGER_DOWN :
                 i = event.tfinger.fingerID;
