@@ -28,6 +28,10 @@
 #include "src/util/util.h"
 
 #include <assert.h>
+#include <cstdlib>
+#include <exception>
+#include <new>
+#include <stdexcept>
 #include <stdarg.h>
 #include <string.h>
 
@@ -80,6 +84,47 @@ void raiseRbExc(Exception *exc) {
   delete exc;
 
   rb_exc_raise(rb_class_new_instance(1, &str, excClass));
+}
+
+static RbNativeException captureNativeMessage(VALUE klass, const char *message) noexcept {
+  const size_t length = strlen(message) + 1;
+  char *copy = static_cast<char *>(malloc(length));
+  if (copy) memcpy(copy, message, length);
+  return {klass, copy, copy == nullptr};
+}
+
+RbNativeException captureRbNativeException() noexcept {
+  // Copy while the native exception is alive; Ruby raises after this catch ends.
+  try {
+    throw;
+  } catch (const std::bad_alloc &) {
+    return {Qnil, nullptr, true};
+  } catch (const Exception &exc) {
+    return captureNativeMessage(getRbData()->exc[excToRbExc[exc.type]], exc.msg.c_str());
+  } catch (const std::invalid_argument &exc) {
+    return captureNativeMessage(rb_eArgError, exc.what());
+  } catch (const std::exception &exc) {
+    return captureNativeMessage(rb_eRuntimeError, exc.what());
+  } catch (...) {
+    return captureNativeMessage(rb_eRuntimeError, "Unknown native exception");
+  }
+}
+
+static VALUE nativeExceptionMessage(VALUE message) {
+  return rb_str_new_cstr(reinterpret_cast<const char *>(message));
+}
+
+[[noreturn]] void raiseRbNativeException(RbNativeException error) {
+  if (error.outOfMemory) {
+    free(error.message);
+    rb_memerror();
+  }
+  int state = 0;
+  VALUE message = rb_protect(nativeExceptionMessage,
+                            reinterpret_cast<VALUE>(error.message), &state);
+  free(error.message);
+  if (state) rb_jump_tag(state);
+  rb_exc_raise(rb_exc_new_str(error.klass, message));
 }
 
 void raiseDisposedAccess(VALUE self) {
@@ -316,7 +361,7 @@ int rb_get_args(int argc, VALUE *argv, const char *format, ...) {
 #include <ruby/thread.h>
 
 typedef struct gvl_guard_args {
-	Exception *exc;
+	std::exception_ptr exc;
 	void *(*func)(void *);
 	void *args;
 } gvl_guard_args;
@@ -325,23 +370,19 @@ static void *gvl_guard(void *args) {
 	gvl_guard_args *gvl_args = (gvl_guard_args*)args;
 	try{
 		return gvl_args->func(gvl_args->args);
-	} catch (const Exception &e) {
-		gvl_args->exc = new Exception(e);
+	} catch (...) {
+		gvl_args->exc = std::current_exception();
 	}
 	return 0;
 }
 
 void *drop_gvl_guard(void *(*func)(void *), void *args,
                             rb_unblock_function_t *ubf, void *data2) {
-	gvl_guard_args gvl_args = {0, func, args};
+	gvl_guard_args gvl_args = {{}, func, args};
 	
 	void *ret = rb_thread_call_without_gvl(&gvl_guard, &gvl_args, ubf, data2);
 	
-	Exception *&exc = gvl_args.exc;
-	if (exc){
-		Exception e(*exc);
-		delete exc;
-		throw e;
-	}
+	if (gvl_args.exc)
+		std::rethrow_exception(gvl_args.exc);
 	return ret;
 }
