@@ -1,9 +1,11 @@
 # Keep Ruby from defining _WIN32_WINNT itself: the Meson cross files already define it, and the
 # redefinition warning makes every werror configure probe fail (e.g. PRI_LL_PREFIX ends up undefined).
 
+diff --git a/configure.ac b/configure.ac
+index eae9eb2..7e3e941 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1045,7 +1045,6 @@
+@@ -1077,7 +1077,6 @@ AC_ARG_WITH(winnt-ver,
    [with_winnt_ver="$withval"], [with_winnt_ver="0x0600"])
  AS_CASE(["$target_os"],
  [mingw*], [
@@ -11,9 +13,11 @@
    RUBY_APPEND_OPTION(CPPFLAGS, -D__MINGW_USE_VC2005_COMPAT)
  ])
  
+diff --git a/ext/socket/extconf.rb b/ext/socket/extconf.rb
+index a814e21..c3226fc 100644
 --- a/ext/socket/extconf.rb
 +++ b/ext/socket/extconf.rb
-@@ -535,7 +535,6 @@
+@@ -535,7 +535,6 @@ EOF
  
    if ipv6
      if $mingw

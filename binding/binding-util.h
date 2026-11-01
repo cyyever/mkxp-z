@@ -27,8 +27,8 @@
 
 #include "exception.h"
 
-#if RUBY_API_VERSION_MAJOR < 3 || (RUBY_API_VERSION_MAJOR == 3 && RUBY_API_VERSION_MINOR < 4)
-#error "mkxp-z requires Ruby 3.4 or newer"
+#if RUBY_API_VERSION_MAJOR < 4
+#error "mkxp-z requires Ruby 4.0 or newer"
 #endif
 
 #define RAPI_MAJOR RUBY_API_VERSION_MAJOR

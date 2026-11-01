@@ -1,4 +1,4 @@
-project('ruby-3.4', 'c', 'cpp', meson_version: '>=1.10.0')
+project('ruby-4.0', 'c', 'cpp', meson_version: '>=1.10.0')
 
 common = subproject('common')
 python = common.get_variable('python')
@@ -64,7 +64,7 @@ if cc.get_argument_syntax() == 'msvc'
             ruby_msvc_build_dir / 'enc' / 'encinit.obj',
             ruby_msvc_build_dir / 'enc' / 'libenc.lib',
             ruby_msvc_build_dir / 'enc' / 'libtrans.lib',
-            ruby_msvc_build_dir / (ruby_so_prefix + '-vcruntime140-ruby340-static.lib'),
+            ruby_msvc_build_dir / (ruby_so_prefix + '-vcruntime140-ruby400-static.lib'),
         ],
     )
 else
@@ -235,4 +235,4 @@ else
     )
 endif
 
-meson.override_dependency('ruby-3.4', ruby, static: true)
+meson.override_dependency('ruby-4.0', ruby, static: true)
