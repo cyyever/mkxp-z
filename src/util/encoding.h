@@ -11,58 +11,52 @@
 #include <string>
 #include <string.h>
 
-#include "util/encoding.h"
+#include "util/exception.h"
+#include "util/text-encoding.h"
 #include <iconv.h>
-#include <uchardet.h>
 #include <errno.h>
 
 namespace Encoding {
 
-static std::string getCharset(std::string &str) {
-    uchardet_t ud = uchardet_new();
-    uchardet_handle_data(ud, str.c_str(), str.length());
-    uchardet_data_end(ud);
-    
-    std::string ret(uchardet_get_charset(ud));
-    uchardet_delete(ud);
-    
-    if (ret.empty())
-        throw Exception(Exception::MKXPError, "Could not detect string encoding", str.c_str());
-    return ret;
-}
-
 static std::string convertString(std::string &str, const char *charset) {
     // Conversion doesn't need to happen if it's already UTF-8
     if (!strcmp(charset, "UTF-8") || !strcmp(charset, "ASCII")) {
-        return std::string(str);
+        if (!validUtf8(str))
+            throw Exception(Exception::MKXPError, "Invalid UTF-8 text");
+        return str.starts_with("\xef\xbb\xbf") ? str.substr(3) : str;
     }
     
-    iconv_t cd = iconv_open("UTF-8", charset);
+    struct Converter {
+        iconv_t handle;
+        ~Converter() { iconv_close(handle); }
+    };
+    const auto handle = iconv_open("UTF-8", charset);
+    if (handle == (iconv_t)-1)
+        throw Exception(Exception::MKXPError, "Unsupported text encoding: %s", charset);
+    Converter converter{handle};
     
     size_t inLen = str.size();
     size_t outLen = inLen * 4;
     std::string buf(outLen, '\0');
-    char *inPtr = const_cast<char*>(str.c_str());
-    char *outPtr = const_cast<char*>(buf.c_str());
+    char *inPtr = str.data();
+    char *outPtr = buf.data();
     
     errno = 0;
-    size_t result = iconv(cd, &inPtr, &inLen, &outPtr, &outLen);
-    
-    iconv_close(cd);
+    size_t result = iconv(converter.handle, &inPtr, &inLen, &outPtr, &outLen);
     
     if (result != (size_t)-1 && errno == 0)
     {
         buf.resize(buf.size()-outLen);
     }
     else {
-        throw Exception(Exception::MKXPError, "Unable to convert string (Guessed encoding: %s)", charset);
+        throw Exception(Exception::MKXPError, "Unable to convert string (encoding: %s)", charset);
     }
     
     return buf;
 }
 
 static std::string convertString(std::string &str) {
-    return convertString(str, getCharset(str).c_str());
+    return convertString(str, textCharset(str));
 }
 }
 

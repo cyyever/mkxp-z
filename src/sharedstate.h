@@ -22,7 +22,7 @@
 #ifndef SHAREDSTATE_H
 #define SHAREDSTATE_H
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 #define shState SharedState::instance
 #define glState shState->_glState()
@@ -78,7 +78,7 @@ struct SharedState
 	SharedFontState &fontState() const;
 	Font &defaultFont() const;
 
-	sigslot::signal<> prepareDraw;
+	Signal prepareDraw;
 
 	unsigned int genTimeStamp();
     

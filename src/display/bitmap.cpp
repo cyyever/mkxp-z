@@ -51,7 +51,7 @@
 
 #include "debugwriter.h"
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -170,7 +170,7 @@ struct BitmapPrivate
         }
     } animation;
     
-    sigslot::connection prepareCon;
+    SignalConnection prepareCon;
     
     TEXFBO gl;
     
@@ -797,8 +797,8 @@ struct ChildPrivate
     
     ChildPublic shared;
     
-    sigslot::connection dirtyCon;
-    sigslot::connection disposeCon;
+    SignalConnection dirtyCon;
+    SignalConnection disposeCon;
     
     Vec2i parentPos;
     IntRect srcRect;

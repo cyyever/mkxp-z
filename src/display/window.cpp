@@ -36,7 +36,7 @@
 #include "texpool.h"
 #include "glstate.h"
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 template<typename T>
 struct Sides
@@ -175,15 +175,15 @@ struct WindowPrivate
 	Bitmap *contents;
 	Bitmap *realContents;
 
-	sigslot::connection windowskinDispCon;
-	sigslot::connection contentsDispCon;
+	SignalConnection windowskinDispCon;
+	SignalConnection contentsDispCon;
 
 	bool bgStretch;
 	Rect *cursorRect;
 	bool active;
 	bool pause;
 
-	sigslot::connection cursorRectCon;
+	SignalConnection cursorRectCon;
 
 	Vec2i sceneOffset;
 
@@ -253,7 +253,7 @@ struct WindowPrivate
 
 	EtcTemps tmp;
 
-	sigslot::connection prepareCon;
+	SignalConnection prepareCon;
 
 	bool contentsVisible;
 

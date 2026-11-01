@@ -67,7 +67,6 @@ option('sdl_image_system', type: 'feature', value: 'auto', description: 'Use the
 option('sdl_sound_system', type: 'feature', value: 'auto', description: 'Use the system version of SDL_sound instead of the vendored version')
 option('sdl_system', type: 'feature', value: 'auto', description: 'Use the system version of SDL instead of the vendored version')
 option('sdl_ttf_system', type: 'feature', value: 'auto', description: 'Use the system version of SDL_ttf instead of the vendored version')
-option('uchardet_system', type: 'feature', value: 'auto', description: 'Use the system version of uchardet instead of the vendored version')
 option('vorbis_system', type: 'feature', value: 'auto', description: 'Use the system version of Vorbis instead of the vendored version')
 option('wayland_system', type: 'feature', value: 'auto', description: 'Use the system version of the Wayland client libraries instead of the vendored version')
 option('x11_system', type: 'feature', value: 'auto', description: 'Use the system version of the X11 client libraries instead of the vendored version')

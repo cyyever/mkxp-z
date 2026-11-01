@@ -22,7 +22,7 @@
 #ifndef ETC_H
 #define ETC_H
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 #include "serializable.h"
 #include "etc-internal.h"
@@ -143,7 +143,7 @@ struct Tone : public Serializable
 	/* Normalized (-1.0 ~ 1.0) */
 	Vec4 norm;
 
-    sigslot::signal<> valueChanged;
+    Signal valueChanged;
 };
 
 struct Rect : public Serializable
@@ -197,7 +197,7 @@ struct Rect : public Serializable
 	int width;
 	int height;
 
-	sigslot::signal<> valueChanged;
+	Signal valueChanged;
 };
 
 enum InterpolationMethod
