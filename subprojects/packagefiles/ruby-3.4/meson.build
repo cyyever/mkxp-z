@@ -178,6 +178,9 @@ else
                     meson.get_compiler('c').find_library('rt', required: false),
                 ]
                 : [],
+            host_machine.system() == 'darwin'
+                ? [dependency('appleframeworks', modules: ['CoreFoundation'])]
+                : [],
             host_machine.system() in ['windows', 'cygwin']
                 ? [
                     meson.get_compiler('c').find_library('shell32', required: true),
