@@ -84,8 +84,6 @@ static constexpr auto vButtonsN = std::size(vButtons);
 /* Human readable string representation */
 std::string sourceDescString(const SourceDesc src)
 {
-	char buf[128];
-	//char pos;
 
 	switch (src.type)
 	{
@@ -106,13 +104,16 @@ std::string sourceDescString(const SourceDesc src)
 			return str;
 	}
 	case CButton:
-		snprintf(buf, sizeof(buf), "%s", shState->input().getButtonName(src.d.cb));
-		return buf;
+	{
+		const char *name = SDL_GetGamepadStringForButton(src.d.cb);
+		return name ? name : "Invalid";
+	}
 
 	case CAxis:
-		snprintf(buf, sizeof(buf), "%s%c",
-		         shState->input().getAxisName(src.d.ca.axis), src.d.ca.dir == Negative ? '-' : '+');
-		return buf;
+	{
+		const char *name = SDL_GetGamepadStringForAxis(src.d.ca.axis);
+		return std::string(name ? name : "Invalid") + (src.d.ca.dir == Negative ? '-' : '+');
+	}
 	}
 
 	assert(!"unreachable");

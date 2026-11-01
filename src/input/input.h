@@ -112,8 +112,6 @@ public:
     char *getClipboardText();
     void setClipboardText(char *text);
     
-    const char *getAxisName(SDL_GamepadAxis axis);
-    const char *getButtonName(SDL_GamepadButton button);
 
 private:
 	Input(const RGSSThreadData &rtData);

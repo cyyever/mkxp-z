@@ -438,39 +438,6 @@ std::unordered_map<std::string, SDL_GamepadButton> strToGCButton {
 
 #undef m
 
-const char *axisNames[] {
-    "LStick X",
-    "LStick Y",
-    "RStick X",
-    "RStick Y",
-    "LTrigger",
-    "RTrigger"
-};
-
-const char *buttonNames[] {
-    "Pad A",
-    "Pad B",
-    "Pad X",
-    "Pad Y",
-    "Pad Back",
-    "Pad Guide",
-    "Pad Start",
-    "Pad LS",
-    "Pad RS",
-    "Pad LB",
-    "Pad RB",
-    "Pad Up",
-    "Pad Down",
-    "Pad Left",
-    "Pad Right",
-    "Pad Misc",
-    "Pad Paddle1",
-    "Pad Paddle2",
-    "Pad Paddle3",
-    "Pad Paddle4",
-    "Pad Touchpad"
-};
-
 struct ButtonState
 {
     bool pressed;
@@ -1511,20 +1478,6 @@ void Input::setClipboardText(char *text)
 {
     if (!SDL_SetClipboardText(text))
         throw Exception(Exception::SDLError, "Failed to set clipboard text: %s", SDL_GetError());
-}
-
-const char *Input::getAxisName(SDL_GamepadAxis axis) {
-    if (axis < 0 || axis >= SDL_GAMEPAD_AXIS_COUNT)
-        return "Invalid";
-    
-    return axisNames[axis];
-}
-
-const char *Input::getButtonName(SDL_GamepadButton button) {
-    if (button < 0 || button >= SDL_GAMEPAD_BUTTON_COUNT)
-        return "Invalid";
-    
-    return buttonNames[button];
 }
 
 Input::~Input()
