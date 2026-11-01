@@ -77,3 +77,12 @@ ini_tests = executable(
     override_options: engine_standards + {'warning_level': '3', 'werror': true},
 )
 test('ini-configuration', ini_tests)
+
+# Exercise the production Table implementation without SDL or Ruby stubs.
+table_tests = executable(
+    'table-serialization-tests',
+    'table-serialization.cpp', '../../src/etc/table.cpp',
+    include_directories: include_directories('../../src', '../../src/util'),
+    override_options: engine_standards + {'warning_level': '3', 'werror': true},
+)
+test('table-serialization', table_tests)

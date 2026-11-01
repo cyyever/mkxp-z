@@ -25,6 +25,7 @@
 #include "serializable.h"
 
 #include <stdint.h>
+#include <span>
 #include "util/engine-signal.h"
 #include <vector>
 
@@ -49,7 +50,9 @@ public:
 
 	int serialSize() const;
 	void serialize(char *buffer) const;
+    void serialize(std::span<char> buffer) const;
 	static Table *deserialize(const char *data, int len);
+    static Table *deserialize(std::span<const char> bytes);
 
 	/* <internal */
 	inline int16_t &at(int x, int y = 0, int z = 0)
