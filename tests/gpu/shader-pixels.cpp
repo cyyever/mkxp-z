@@ -27,7 +27,8 @@ struct DrawResources {
 int main(int argc, char **argv) {
     SDL_Window *window = nullptr;
     try {
-        require(argc == 2, "usage: gpu-shader-tests DXBC_DIRECTORY");
+        require(argc == 2 || (argc == 3 && std::string(argv[2]) == "--extra-shaders"), "usage: gpu-shader-tests DXBC_DIRECTORY [--extra-shaders]");
+        const bool extraShaders = argc == 3;
         require(SDL_Init(SDL_INIT_VIDEO), SDL_GetError());
         window = SDL_CreateWindow("GPU quad parity", 32, 32, SDL_WINDOW_HIDDEN);
         require(window != nullptr, SDL_GetError());
@@ -35,13 +36,15 @@ int main(int argc, char **argv) {
             gpu::Device device(window, SDL_GPU_SHADERFORMAT_DXBC, false, "direct3d12");
             const std::filesystem::path directory(argv[1]);
             auto vertexCode = read(directory / "vertexMain.dxbc");
-            std::array<std::vector<Uint8>, 10> fragmentCode;
+            std::array<std::vector<Uint8>, static_cast<size_t>(gpu::Program::Count)> fragmentCode;
             gpu::QuadPipeline::FragmentBytecode fragments;
             for (size_t i = 0; i < fragmentCode.size(); ++i) {
+                if (static_cast<gpu::Program>(i) == gpu::Program::Xbrz && !extraShaders) continue;
                 fragmentCode[i] = read(directory / (std::string(gpu::QuadPipeline::entryPoint(static_cast<gpu::Program>(i))) + ".dxbc"));
                 fragments[i] = fragmentCode[i];
             }
-            gpu::QuadPipeline pipelines(device.native(), vertexCode, fragments);
+            auto tilemapVertexCode = read(directory / "tilemapVertexMain.dxbc");
+            gpu::QuadPipeline pipelines(device.native(), vertexCode, fragments, tilemapVertexCode);
             DrawResources resources{device.native()};
             const gpu::QuadVertex vertices[] = {
                 {{-1,-1},{0,1},{1,1,1,.5f}}, {{1,-1},{1,1},{1,1,1,.5f}}, {{-1,1},{0,0},{1,1,1,.5f}},
@@ -84,11 +87,13 @@ int main(int argc, char **argv) {
             gpu::VertexParameters vp{};
             for (int i = 0; i < 4; ++i) vp.projection[i*5] = vp.transform[i*5] = 1;
             vp.textureScaleTranslation[0] = vp.textureScaleTranslation[1] = 1;
+            gpu::EffectParameters effects{};
+            gpu::TilemapParameters tilemap{};
             gpu::FragmentParameters fp{}; fp.parameters[0] = 1;
-            const SDL_GPUTextureSamplerBinding bindings[] = {
+            SDL_GPUTextureSamplerBinding bindings[] = {
                 {source.native(),resources.sampler}, {second.native(),resources.sampler}, {mask.native(),resources.sampler}
             };
-            auto draw = [&](gpu::Program program, gpu::Blend blend, unsigned count, std::array<float,4> expected) {
+            auto draw = [&](gpu::Program program, gpu::Blend blend, unsigned count, std::array<float,4> expected, std::span<const Uint8> reference = {}) {
                 gpu::CommandBuffer command(device.native());
                 SDL_GPUColorTargetInfo color{}; color.texture = target.native();
                 color.load_op = SDL_GPU_LOADOP_CLEAR; color.store_op = SDL_GPU_STOREOP_STORE;
@@ -97,13 +102,13 @@ int main(int argc, char **argv) {
                 require(pass != nullptr, SDL_GetError());
                 const SDL_GPUBufferBinding buffer{resources.vertices,0};
                 pipelines.bind(command.native(), pass, program, blend, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-                    buffer, std::span(bindings).first(count), vp, fp);
+                    buffer, std::span(bindings).first(count), vp, fp, effects, tilemap);
                 SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
                 SDL_EndGPURenderPass(pass); command.submitAndWait();
                 const auto pixels = device.downloadRGBA(target);
                 for (size_t i = 0; i < pixels.size(); ++i) {
-                    if (std::abs(float(pixels[i]) - expected[i%4]*255) > 2) {
-                        std::cerr << gpu::QuadPipeline::entryPoint(program) << " channel " << i%4 << ": " << unsigned(pixels[i]) << " expected " << expected[i%4]*255 << '\n';
+                    if (std::abs(float(pixels[i]) - (reference.empty() ? expected[i%4]*255 : reference[i])) > 2) {
+                        std::cerr << gpu::QuadPipeline::entryPoint(program) << " channel " << i%4 << ": " << unsigned(pixels[i]) << " expected " << (reference.empty() ? expected[i%4]*255 : reference[i]) << '\n';
                         throw std::runtime_error("GPU quad pixel mismatch");
                     }
                 }
@@ -133,6 +138,66 @@ int main(int argc, char **argv) {
             draw(gpu::Program::BitmapBlend,gpu::Blend::Disabled,2,{r*weight+32.f/255*(1-weight),g*weight+128.f/255*(1-weight),b*weight+192.f/255*(1-weight),1});
             fp = {}; fp.parameters[3]=1; // full hue rotation must preserve RGB and alpha
             draw(gpu::Program::Hue,gpu::Blend::Disabled,1,{r,g,b,a});
+            fp = {}; fp.parameters[0]=1;
+            draw(gpu::Program::Tilemap,gpu::Blend::Disabled,1,{r,g,b,a});
+            fp.parameters[0]=.25f;
+            draw(gpu::Program::FlashMap,gpu::Blend::Disabled,0,{.25f,.25f,.25f,1});
+            fp = {}; fp.tone[3]=1;
+            draw(gpu::Program::Gray,gpu::Blend::Disabled,1,{gray,gray,gray,a});
+            fp = {}; fp.parameters[0]=1;
+            effects.blurDirection[0]=.5f;
+            draw(gpu::Program::Blur,gpu::Blend::Disabled,1,{r,g,b,a});
+            draw(gpu::Program::Invert,gpu::Blend::Disabled,1,{1-r,1-g,1-b,a});
+            draw(gpu::Program::CompressAlpha,gpu::Blend::Disabled,1,{r*a,g*a,b*a,0});
+            fp.parameters[0]=.5f; fp.subrect[2]=fp.subrect[3]=1;
+            draw(gpu::Program::Subtract,gpu::Blend::Disabled,2,{0,96.f/255,176.f/255,1});
+            fp = {}; fp.parameters[0]=1;
+            effects = {}; effects.spriteFlags[0]=1; effects.spriteFlags[3]=1;
+            effects.patternScaleOffset[0]=effects.patternScaleOffset[1]=1;
+            effects.blurDirection[2]=.5f; effects.bush[1]=1; effects.bush[2]=.25f;
+            draw(gpu::Program::Sprite,gpu::Blend::Disabled,2,{(r+32.f/255)*.5f,(g+128.f/255)*.5f,(b+192.f/255)*.5f,a*.25f});
+            effects.spriteFlags[1]=1;
+            draw(gpu::Program::Sprite,gpu::Blend::Disabled,2,{r+16.f/255,g+64.f/255,b+96.f/255,a*.25f});
+            effects = {}; effects.filterSize[0]=effects.filterSize[1]=2;
+            effects.filterSize[2]=effects.filterSize[3]=.5f;
+            effects.filterParameters[0]=effects.filterParameters[1]=1.f/3;
+            draw(gpu::Program::Bicubic,gpu::Blend::Disabled,1,{r,g,b,a});
+            draw(gpu::Program::Lanczos,gpu::Blend::Disabled,1,{r,g,b,a});
+            effects.filterParameters[2]=effects.filterParameters[3]=1;
+            if (!fragmentCode[static_cast<size_t>(gpu::Program::Xbrz)].empty())
+                draw(gpu::Program::Xbrz,gpu::Blend::Disabled,1,{r,g,b,a});
+            effects = {}; effects.shadowBounds[1]=2;
+            effects.shadowDimensions[0]=effects.shadowDimensions[1]=2;
+            effects.shadowDimensions[3]=-1; effects.shadowSlopes[1]=10;
+            draw(gpu::Program::ShadowHorizontal,gpu::Blend::Disabled,1,{0,0,0,0});
+            effects.shadowDimensions[2]=-1; effects.shadowDimensions[3]=0;
+            draw(gpu::Program::ShadowVertical,gpu::Blend::Disabled,1,{0,0,0,0});
+            effects = {};
+            // Animated atlas UVs must select the second 96-pixel autotile frame.
+            auto atlas=device.createTexture(192,128);
+            std::vector<Uint8> atlasPixels(192*128*4);
+            for (size_t i=0;i<atlasPixels.size();i+=4) {
+                atlasPixels[i + ((i/4)%192 < 96 ? 0 : 1)] = 255;
+                atlasPixels[i+3]=255;
+            }
+            device.uploadRGBA(atlas,atlasPixels);
+            bindings[0].texture=atlas.native();
+            vp.textureScaleTranslation[0]=1.f/192; vp.textureScaleTranslation[1]=1.f/128;
+            tilemap.animation[0]=1; tilemap.autotileFrames0[0]=2;
+            draw(gpu::Program::Tilemap,gpu::Blend::Disabled,1,{0,1,0,1});
+            bindings[0].texture=source.native();
+            vp.textureScaleTranslation[0]=vp.textureScaleTranslation[1]=1;
+            const std::array<Uint8,16> checker = {255,0,0,255, 0,0,255,255, 0,255,0,255, 255,255,255,255};
+            device.uploadRGBA(source,checker);
+            effects = {}; effects.blurDirection[0]=.5f;
+            const std::array<Uint8,16> horizontalBlur = {170,0,85,255, 85,0,170,255, 85,255,85,255, 170,255,170,255};
+            draw(gpu::Program::Blur,gpu::Blend::Disabled,1,{},horizontalBlur);
+            effects = {}; effects.filterSize[0]=effects.filterSize[1]=2;
+            effects.filterSize[2]=effects.filterSize[3]=.5f;
+            effects.filterParameters[1]=.5f; // interpolating Catmull-Rom B=0,C=.5
+            draw(gpu::Program::Bicubic,gpu::Blend::Disabled,1,{},checker);
+            draw(gpu::Program::Lanczos,gpu::Blend::Disabled,1,{},checker);
+            effects.filterParameters[2]=effects.filterParameters[3]=1;
             const std::array<Uint8,16> red = {255,0,0,255, 255,0,0,255, 255,0,0,255, 255,0,0,255};
             device.uploadRGBA(source, red);
             fp.parameters[3]=1.f/3;
