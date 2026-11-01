@@ -23,11 +23,11 @@
 #define TILEMAPCOMMON_H
 
 #include "table.h"
-#include "gl-util.h"
-#include "gl-meta.h"
+#include "render-resources.h"
+#include "render-ops.h"
 #include "sharedstate.h"
 #include "global-ibo.h"
-#include "glstate.h"
+#include "render-state.h"
 #include "shader.h"
 #include "vertex.h"
 #include "quad.h"
@@ -119,14 +119,14 @@ struct FlashMap
 	{
 		vao.vbo = VBO::gen();
 		vao.ibo = shState->globalIBO().ibo;
-		GLMeta::vaoFillInVertexData<CVertex>(vao);
+		RenderOps::vaoFillInVertexData<CVertex>(vao);
 
-		GLMeta::vaoInit(vao);
+		RenderOps::vaoInit(vao);
 	}
 
 	~FlashMap()
 	{
-		GLMeta::vaoFini(vao);
+		RenderOps::vaoFini(vao);
 		VBO::del(vao.vbo);
 		dataCon.disconnect();
 	}
@@ -148,8 +148,8 @@ struct FlashMap
 		if (!data)
 			return;
 
-        
-        
+
+
         dataCon = data->modified.connect(&FlashMap::setDirty, this);
 	}
 
@@ -175,8 +175,8 @@ struct FlashMap
 		if (count == 0)
 			return;
 
-		GLMeta::vaoBind(vao);
-		glState.blendMode.pushSet(BlendAddition);
+		RenderOps::vaoBind(vao);
+		renderState.blendMode.pushSet(BlendAddition);
 
 		FlashMapShader &shader = shState->shaders().flashMap;
 		shader.bind();
@@ -184,11 +184,11 @@ struct FlashMap
 		shader.setAlpha(alpha);
 		shader.setTranslation(trans);
 
-		gl.DrawElements(GL_TRIANGLES, count * 6, _GL_INDEX_TYPE, 0);
+		RenderOps::drawElements(count * 6);
 
-		glState.blendMode.pop();
+		renderState.blendMode.pop();
 
-		GLMeta::vaoUnbind(vao);
+		RenderOps::vaoUnbind(vao);
 	}
 
 private:
@@ -271,7 +271,7 @@ private:
 
 	IntRect viewp;
 
-	GLMeta::VAO vao;
+	RenderOps::VAO vao;
 	size_t allocQuads;
 	std::vector<CVertex> vertices;
 };

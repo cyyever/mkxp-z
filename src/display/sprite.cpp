@@ -29,11 +29,11 @@
 #include "etc-internal.h"
 #include "util.h"
 
-#include "gl-util.h"
+#include "render-resources.h"
 #include "quad.h"
 #include "transform.h"
 #include "shader.h"
-#include "glstate.h"
+#include "render-state.h"
 #include "quadarray.h"
 
 #include <math.h>
@@ -1016,7 +1016,7 @@ void Sprite::draw()
                 Debug() << "BUG: High-res Sprite pattern not implemented";
             }
 
-            shader.setPattern(p->pattern->getGLTypes().tex, Vec2(p->pattern->width(), p->pattern->height()));
+            shader.setPattern(p->pattern->getRenderTarget().tex, Vec2(p->pattern->width(), p->pattern->height()));
             shader.setPatternBlendType(p->patternBlendType);
             shader.setPatternTile(p->patternTile);
             shader.setPatternZoom(p->patternZoom);
@@ -1108,7 +1108,7 @@ void Sprite::draw()
         }        
     }
     
-    glState.blendMode.pushSet(p->blendType);
+    renderState.blendMode.pushSet(p->blendType);
     
     p->bitmap->bindTex(*base, false);
 
@@ -1129,7 +1129,7 @@ void Sprite::draw()
     
     TEX::setSmooth(false);
 
-    glState.blendMode.pop();
+    renderState.blendMode.pop();
 }
 
 void Sprite::onGeometryChange(const Scene::Geometry &geo)
