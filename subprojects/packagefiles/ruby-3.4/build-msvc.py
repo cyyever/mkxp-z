@@ -23,6 +23,10 @@ builddir.mkdir(parents=True, exist_ok=True)
 env = dict(os.environ)
 # configure.bat and nmake run generated batch files from the current directory.
 env.pop('NoDefaultCurrentDirectoryInExePath', None)
+# Ruby bootstrap installers may export GNU make; recursive mswin builds need nmake.
+env['MAKE'] = 'nmake'
+env.pop('MAKEFLAGS', None)
+env.pop('MFLAGS', None)
 
 # Ruby's mkmf looks for zlib under --with-opt-dir as include/zlib.h and lib/zlib.lib.
 optdir = builddir / 'zlib-opt'
