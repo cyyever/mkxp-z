@@ -24,6 +24,8 @@
 #include "util.h"
 #include "exception.h"
 
+#include <cassert>
+
 #include <thread>
 #include <SDL3/SDL_timer.h>
 

@@ -23,7 +23,7 @@
 #define SOUNDEMITTER_H
 
 #include "intrulist.h"
-#include "al-util.h"
+#include "audio-util.h"
 #include <map>
 
 #include <string>
@@ -34,17 +34,17 @@ struct Config;
 
 struct SoundEmitter
 {
-	typedef std::map<std::string, SoundBuffer*> BufferHash;
+	typedef std::map<std::string, std::unique_ptr<SoundBuffer>> BufferHash;
 
 	IntruList<SoundBuffer> buffers;
 	BufferHash bufferHash;
 
-	/* Byte count sum of all cached / playing buffers */
-	uint32_t bufferBytes;
+	/* Byte count sum of cached PCM data; SDL owns a copy of queued sound data */
+	size_t bufferBytes;
 
 	const size_t srcCount;
-	std::vector<AL::Source::ID> alSrcs;
-	std::vector<SoundBuffer*> atchBufs;
+	std::vector<AudioStreamPtr> sources;
+	std::vector<std::string> sourceKeys;
 
 	/* Indices of sources, sorted by priority (lowest first) */
 	std::vector<size_t> srcPrio;

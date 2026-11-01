@@ -22,7 +22,7 @@
 #ifndef AUDIOSTREAM_H
 #define AUDIOSTREAM_H
 
-#include "al-util.h"
+#include "audio-util.h"
 #include "alstream.h"
 #include "sdl-util.h"
 

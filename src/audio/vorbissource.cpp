@@ -73,10 +73,7 @@ struct VorbisSource : ALDataSource
 		int channels;
 		int rate;
 		int frameSize;
-		ALenum alFormat;
 	} info;
-
-	std::vector<int16_t> sampleBuf;
 
 	VorbisSource(SDL_IOStream *ops,
 	             bool looped)
@@ -104,10 +101,7 @@ struct VorbisSource : ALDataSource
 			                "Cannot handle audio with more than 2 channels");
 		}
 
-		info.alFormat = chooseALFormat(sizeof(int16_t), info.channels);
 		info.frameSize = sizeof(int16_t) * info.channels;
-
-		sampleBuf.resize(STREAM_BUF_SIZE);
 
 		loop.requested = looped;
 		loop.valid = false;
@@ -151,12 +145,12 @@ struct VorbisSource : ALDataSource
 		SDL_CloseIO(src);
 	}
 
-	int sampleRate()
+	SDL_AudioSpec spec() override
 	{
-		return info.rate;
+		return {SDL_AUDIO_S16, info.channels, info.rate};
 	}
 
-	void seekToOffset(double seconds)
+	void seekToOffset(double seconds) override
 	{
 		if (seconds <= 0)
 		{
@@ -174,10 +168,13 @@ struct VorbisSource : ALDataSource
 			ov_raw_seek(&vf, 0);
 	}
 
-	Status fillBuffer(AL::Buffer::ID alBuffer)
+	Status fillBuffer(std::vector<uint8_t> &out) override
 	{
-		void *bufPtr = sampleBuf.data();
-		int availBuf = sampleBuf.size();
+		out.resize(STREAM_BUF_SIZE * sizeof(int16_t));
+		auto *samples = reinterpret_cast<int16_t *>(out.data());
+
+		void *bufPtr = samples;
+		int availBuf = STREAM_BUF_SIZE;
 		int bufUsed  = 0;
 
 		int canRead = availBuf;
@@ -238,7 +235,7 @@ struct VorbisSource : ALDataSource
 			}
 
 			bufUsed += (res / sizeof(int16_t));
-			bufPtr = &sampleBuf[bufUsed];
+			bufPtr = &samples[bufUsed];
 			currentFrame += (res / info.frameSize);
 
 			if (loop.valid && currentFrame >= loop.end)
@@ -261,14 +258,12 @@ struct VorbisSource : ALDataSource
 			canRead -= res;
 		}
 
-		if (retStatus != ALDataSource::Error)
-			AL::Buffer::uploadData(alBuffer, info.alFormat, sampleBuf.data(),
-			                       bufUsed*sizeof(int16_t), info.rate);
+		out.resize(retStatus == ALDataSource::Error ? 0 : bufUsed * sizeof(int16_t));
 
 		return retStatus;
 	}
 
-	uint32_t loopStartFrames()
+	uint32_t loopStartFrames() override
 	{
 		if (loop.valid)
 			return loop.start;
@@ -276,10 +271,6 @@ struct VorbisSource : ALDataSource
 			return 0;
 	}
 
-	bool setPitch(float)
-	{
-		return false;
-	}
 };
 
 ALDataSource *createVorbisSource(SDL_IOStream *ops,

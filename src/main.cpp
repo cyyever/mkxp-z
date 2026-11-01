@@ -30,8 +30,7 @@
 
 #include "icon.png.xxd"
 
-#include <alc.h>
-#include <alext.h>
+#include "audio-util.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
@@ -112,6 +111,8 @@ static void printGLInfo() {
 static SDL_GLContext initGL(SDL_Window *win, Config &conf,
                             RGSSThreadData *threadData);
 
+SDL_AudioDeviceID audioDevice = 0;
+
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
@@ -120,34 +121,10 @@ int rgssThreadFun(void *userdata) {
     return 0;
   }
 
-  /* Setup AL context */
-  static const ALCint attrs[] = {
-    /* HRTF is explicitly disabled here because it results in poor-quality audio
-     * when enabled (see https://github.com/mkxp-z/mkxp-z/issues/341). By
-     * default, it's enabled when OpenAL Soft detects that the user is using
-     * headphones for audio drivers that support detecting if the user is using
-     * headphones, and disabled regardless of whether or not the user is using
-     * headphones if the audio driver does not support this detection. The HRTF
-     * is required for positional audio support, so we'll need to find a way
-     * around the audio quality issues and inconsistent detection of whether or
-     * not the user is using headphones once we have positional audio support. */
-    ALC_HRTF_SOFT, ALC_FALSE,
-    0
-  };
-  ALCcontext *alcCtx = alcCreateContext(threadData->alcDev, attrs);
-
-  if (!alcCtx) {
-    rgssThreadError(threadData, "Error creating OpenAL context");
-    return 0;
-  }
-
-  alcMakeContextCurrent(alcCtx);
-
   try {
     SharedState::initInstance(threadData);
   } catch (const Exception &exc) {
     showInitError(exc.msg);
-    alcDestroyContext(alcCtx);
 
     return 0;
   }
@@ -159,8 +136,6 @@ int rgssThreadFun(void *userdata) {
   threadData->ethread->requestTerminate();
 
   SharedState::finiInstance();
-
-  alcDestroyContext(alcCtx);
 
   return 0;
 }
@@ -370,9 +345,10 @@ int main(int argc, char *argv[]) {
     (void)setupWindowIcon;
 #endif
 
-    ALCdevice *alcDev = alcOpenDevice(0);
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO))
+      audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
 
-    if (!alcDev) {
+    if (!audioDevice) {
       showInitError("Could not detect an available audio device.");
       SDL_DestroyWindow(win);
       TTF_Quit();
@@ -402,7 +378,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    RGSSThreadData rtData(&eventThread, argv[0], win, alcDev, mode.refresh_rate,
+    RGSSThreadData rtData(&eventThread, argv[0], win, mode.refresh_rate,
                           mkxp_sys::getScalingFactor(), conf, glCtx);
 
     int winW, winH, drwW, drwH;
@@ -468,7 +444,7 @@ int main(int argc, char *argv[]) {
 
     Debug() << "Shutting down.";
 
-    alcCloseDevice(alcDev);
+    SDL_CloseAudioDevice(audioDevice);
     SDL_DestroyWindow(win);
 
 #if defined(SDL_PLATFORM_WIN32)
