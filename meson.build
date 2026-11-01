@@ -39,6 +39,9 @@ default_system_enabled = get_option('default_system').enabled()
 null_dep = dependency('', required: false)
 
 compilers = {'cpp': meson.get_compiler('cpp')}
+if host_system == 'windows' and compilers['cpp'].get_argument_syntax() != 'msvc'
+    error('Windows builds require an MSVC-compatible compiler and native Windows toolchain.')
+endif
 
 global_sources = []
 global_dependencies = []
@@ -92,10 +95,6 @@ if use_gles_by_default
     global_args += '-DMKXPZ_USE_GLES_BY_DEFAULT'
 endif
 
-if host_system in ['windows', 'cygwin'] and host_machine.cpu_family() == 'x86' and compilers['cpp'].get_argument_syntax() != 'msvc'
-    global_args += '-masm=intel'
-endif
-
 # ====================
 # Ext libs
 # ====================
@@ -146,7 +145,7 @@ global_include_dirs += include_directories('src', 'binding')
 
 rpath = meson.get_compiler('cpp').get_linker_id().split('.')[0] == 'ld64' ? '@loader_path' : '$ORIGIN'
 
-if host_system in ['windows', 'cygwin']
+if host_system == 'windows'
     windows_resource_directory = '../' + get_option('windows_resource_directory')
     subdir('windows')
     global_include_dirs += include_directories('windows')

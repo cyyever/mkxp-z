@@ -4,21 +4,11 @@ python = import('python').find_installation(required: true)
 
 install_directory = [python, files('install-directory.py')[0]]
 
-# MSVC builds use lib.exe/rc.exe through Meson itself; the GNU tools are only needed by autoconf-based external projects.
+# GNU archive tools are used only by Ruby's Autotools build.
 is_msvc = meson.get_compiler('c').get_argument_syntax() == 'msvc'
-ar = meson.version().version_compare('>=1.10.0') ? find_program('ar', required: not is_msvc).cmd_array() : [find_program('ar', required: not is_msvc)]
-ranlib = ar + 's'
-if host_machine.system() in ['windows', 'cygwin'] and is_msvc
-    windres = [find_program('rc', required: false).full_path()]
-elif host_machine.system() in ['windows', 'cygwin']
-    windres = meson.version().version_compare('>=1.10.0') ? find_program('windres').cmd_array() : [find_program('windres')]
-else
-    windres = [python, files('windres-dummy.py')[0]]
-endif
-if build_machine.system() in ['windows', 'cygwin']
-    cygpath = meson.version().version_compare('>=1.10.0') ? find_program('cygpath').cmd_array() : [find_program('cygpath')]
-else
-    cygpath = [python, files('cygpath-dummy.py')[0]]
+if not is_msvc
+    ar = meson.version().version_compare('>=1.10.0') ? find_program('ar').cmd_array() : [find_program('ar')]
+    ranlib = ar + 's'
 endif
 
 # embedtool SOURCE_FILE DESTINATION_FILE NAME
@@ -34,11 +24,7 @@ quotetool = [python, files('quotetool.py')[0]]
 
 host_triplet_cpu = host_machine.cpu()
 host_triplet_vendor = 'unknown'
-if host_machine.system() in ['windows', 'cygwin']
-    host_triplet_os = 'mingw64'
-else
-    host_triplet_os = host_machine.system()
-endif
+host_triplet_os = host_machine.system()
 host_triplet = host_triplet_cpu + '-' + host_triplet_vendor + '-' + host_triplet_os
 
 base_cflags = []
