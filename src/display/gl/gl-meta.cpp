@@ -26,6 +26,8 @@
 #include "quad.h"
 #include "config.h"
 #include "etc.h"
+#include "util/exception.h"
+#include <memory>
 
 namespace FBO
 {
@@ -49,15 +51,17 @@ void subRectImageUpload(GLint srcW, GLint srcX, GLint srcY,
 	}
 	else
 	{
-		const SDL_PixelFormatDetails *form = src->format;
-		SDL_Surface *tmp = SDL_CreateSurface(dstW, dstH, SDL_GetPixelFormatForMasks(form->bits_per_pixel, form->Rmask, form->Gmask, form->Bmask, form->Amask));
+		std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> tmp(
+		    SDL_CreateSurface(dstW, dstH, src->format), SDL_DestroySurface);
+		if (!tmp)
+			throw Exception(Exception::SDLError, "%s", SDL_GetError());
 		SDL_Rect srcRect = { srcX, srcY, dstW, dstH };
 
-		SDL_BlitSurface(src, &srcRect, tmp, 0);
+		if (!SDL_BlitSurface(src, &srcRect, tmp.get(), nullptr))
+			throw Exception(Exception::SDLError, "%s", SDL_GetError());
 
 		TEX::uploadSubImage(dstX, dstY, dstW, dstH, tmp->pixels, format);
 
-		SDL_DestroySurface(tmp);
 	}
 }
 

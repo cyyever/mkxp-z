@@ -23,6 +23,11 @@
 
 #include "bitmap.h"
 
+#include <memory>
+#include <format>
+#include <string_view>
+#include <utility>
+
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -422,12 +427,14 @@ struct BitmapPrivate
         }
     }
     
-    static void ensureFormat(SDL_Surface *&surf, Uint32 format)
+    static void ensureFormat(SDL_Surface *&surf, SDL_PixelFormat format)
     {
         if (SDL_GetPixelFormatDetails(surf->format)->format == format)
             return;
         
-        SDL_Surface *surfConv = SDL_ConvertSurface(surf, format->format);
+        SDL_Surface *surfConv = SDL_ConvertSurface(surf, format);
+        if (!surfConv)
+            throw Exception(Exception::SDLError, "Failed to convert surface: %s", SDL_GetError());
         SDL_DestroySurface(surf);
         surf = surfConv;
     }
@@ -457,19 +464,16 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
 
 Bitmap::Bitmap(const char *filename)
 {
-    std::string hiresPrefix = "Hires/";
-    std::string filenameStd = filename;
     Bitmap *hiresBitmap = nullptr;
-    if (shState->config().enableHires && !filenameStd.starts_with(hiresPrefix)) {
+    if (shState->config().enableHires && !std::string_view(filename).starts_with("Hires/")) {
         // Look for a high-res version of the file.
-        std::string hiresFilename = hiresPrefix + filenameStd;
+        const auto hiresFilename = std::format("Hires/{}", filename);
         try {
             hiresBitmap = new Bitmap(hiresFilename.c_str());
             hiresBitmap->setLores(this);
         }
-        catch (const Exception &e)
+        catch (const Exception &)
         {
-            Debug() << "No high-res Bitmap found at" << hiresFilename;
             hiresBitmap = nullptr;
         }
     }
@@ -1477,7 +1481,7 @@ static void bltFilter(enum Bitmap::BitmapBltMode mode, uint32_t &dst_pixel, uint
     switch (mode)
     {
         case Bitmap::NORMAL:
-            __builtin_unreachable();
+            std::unreachable();
             break;
 
         case Bitmap::KGL_SUBTRACT:
@@ -1604,7 +1608,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         if(scaleIsOne)
             SDL_BlitSurface(srcSurf, &sourceRect, p->megaSurface, &destRect);
         else
-            SDL_BlitSurfaceScaled(srcSurf, &sourceRect, p->megaSurface, &destRect);
+            SDL_BlitSurfaceScaled(srcSurf, &sourceRect, p->megaSurface, &destRect, SDL_SCALEMODE_NEAREST);
         
         SDL_SetSurfaceBlendMode(srcSurf, SDL_BLENDMODE_NONE);
         SDL_SetSurfaceAlphaMod(srcSurf, tempAlpha);
@@ -1640,7 +1644,7 @@ void Bitmap::stretchBlt(IntRect destRect,
             
             if (srcRectTooBig || srcSurfTooBig)
             {
-                int error;
+                bool success = true;
                 if (srcRectTooBig)
                 {
                     /* We have to resize it here anyway, so use software resizing */
@@ -1653,7 +1657,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                     if (smooth)
                     {
                         if (mode == NORMAL)
-                            error = SDL_SoftStretchLinear(srcSurf, &srcRect, blitTemp, 0);
+                            success = SDL_StretchSurface(srcSurf, &srcRect, blitTemp, nullptr, SDL_SCALEMODE_LINEAR);
                         else
                         {
 
@@ -1695,7 +1699,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                         if (mode == NORMAL)
                         {
                             SDL_Rect tmpRect = {0, 0, blitTemp->w, blitTemp->h};
-                            error = SDL_BlitSurfaceUncheckedScaled(srcSurf, &srcRect, blitTemp, &tmpRect);
+                            success = SDL_BlitSurfaceUncheckedScaled(srcSurf, &srcRect, blitTemp, &tmpRect, SDL_SCALEMODE_NEAREST);
                         }
                         else
                         {
@@ -1722,10 +1726,10 @@ void Bitmap::stretchBlt(IntRect destRect,
                                         SDL_GetError());
                     
                     SDL_Rect tmpRect = {0, 0, blitTemp->w, blitTemp->h};
-                    error = SDL_BlitSurfaceUnchecked(srcSurf, &srcRect, blitTemp, &tmpRect);
+                    success = SDL_BlitSurfaceUnchecked(srcSurf, &srcRect, blitTemp, &tmpRect);
                 }
                 
-                if (error)
+                if (!success)
                 {
                     SDL_DestroySurface(blitTemp);
                     throw Exception(Exception::SDLError, "Failed to blit surface: %s", SDL_GetError());
@@ -2106,7 +2110,7 @@ void Bitmap::blur()
             bufferY = buffer;
         }
         
-        Bitmap *tmp = new Bitmap(tmpWidth + (bufferX * 2), tmpHeight + (bufferY * 2), true);
+        auto tmp = std::make_unique<Bitmap>(tmpWidth + (bufferX * 2), tmpHeight + (bufferY * 2), true);
         IntRect sourceRect = tmp->rect();
         IntRect destRect = {};
         
@@ -2152,7 +2156,7 @@ void Bitmap::blur()
                 stretchBlt(destRect, *tmp, IntRect(tmpRect.x + tmpX, tmpRect.y + tmpY, destRect.w, destRect.h), 255);
             }
         }
-        delete tmp;
+        tmp.reset();
         p->clearTaintedArea();
         if (p->pixmanUseRegion32)
         {
@@ -2361,7 +2365,6 @@ Color Bitmap::getPixel(int x, int y) const
     GUARD_ANIMATED;
     
     if (hasHires()) {
-        Debug() << "GAME BUG: Game is calling getPixel on low-res Bitmap; you may want to patch the game to improve graphics quality.";
 
         int xHires = x * p->selfHires->width() / width();
         int yHires = y * p->selfHires->height() / height();
@@ -2432,7 +2435,6 @@ void Bitmap::setPixel(int x, int y, const Color &color)
     GUARD_ANIMATED;
     
     if (hasHires()) {
-        Debug() << "GAME BUG: Game is calling setPixel on low-res Bitmap; you may want to patch the game to improve graphics quality.";
 
         int xHires = x * p->selfHires->width() / width();
         int yHires = y * p->selfHires->height() / height();
@@ -2492,10 +2494,6 @@ bool Bitmap::getRaw(void *output, int output_size)
     
     guardDisposed();
     
-    if (hasHires()) {
-        Debug() << "GAME BUG: Game is calling getRaw on low-res Bitmap; you may want to patch the game to improve graphics quality.";
-    }
-
     if (!p->animation.enabled && (p->surface || p->megaSurface)) {
         void *src = (p->megaSurface) ? p->megaSurface->pixels : p->surface->pixels;
         memcpy(output, src, output_size);
@@ -2511,10 +2509,6 @@ void Bitmap::replaceRaw(void *pixel_data, int size)
 {
     guardDisposed();
     
-    if (hasHires()) {
-        Debug() << "GAME BUG: Game is calling replaceRaw on low-res Bitmap; you may want to patch the game to improve graphics quality.";
-    }
-
     int w = width();
     int h = height();
     int requiredsize = w*h*4;
@@ -2525,7 +2519,7 @@ void Bitmap::replaceRaw(void *pixel_data, int size)
     if (p->megaSurface)
     {
         // This should always be true
-        if (p->SDL_GetPixelFormatDetails(megaSurface->format)->bits_per_pixel == 32)
+        if (SDL_GetPixelFormatDetails(p->megaSurface->format)->bits_per_pixel == 32)
             memcpy(p->megaSurface->pixels, pixel_data, w*h*4);
     }
     else
@@ -2542,11 +2536,8 @@ void Bitmap::saveToFile(const char *filename)
 {
     guardDisposed();
     
-    if (hasHires()) {
-        Debug() << "GAME BUG: Game is calling saveToFile on low-res Bitmap; you may want to patch the game to improve graphics quality.";
-    }
-
     SDL_Surface *surf;
+    std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> ownedSurface(nullptr, SDL_DestroySurface);
     
     if (p->surface || p->megaSurface) {
         surf = (p->surface) ? p->surface : p->megaSurface;
@@ -2557,6 +2548,7 @@ void Bitmap::saveToFile(const char *filename)
         if (!surf)
             throw Exception(Exception::SDLError, "Failed to prepare bitmap for saving: %s", SDL_GetError());
         
+        ownedSurface.reset(surf);
         getRaw(surf->pixels, surf->w * surf->h * 4);
     }
     
@@ -2579,23 +2571,20 @@ void Bitmap::saveToFile(const char *filename)
     }
     
     std::string fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
-    int rc;
+    bool saved;
     switch (filetype) {
         case 2:
-            rc = IMG_SaveJPG(surf, fn_normalized.c_str(), 90);
+            saved = IMG_SaveJPG(surf, fn_normalized.c_str(), 90);
             break;
         case 1:
-            rc = IMG_SavePNG(surf, fn_normalized.c_str());
+            saved = IMG_SavePNG(surf, fn_normalized.c_str());
             break;
         case 0: default:
-            rc = SDL_SaveBMP(surf, fn_normalized.c_str());
+            saved = SDL_SaveBMP(surf, fn_normalized.c_str());
             break;
     }
     
-    if (!p->surface && !p->megaSurface)
-        SDL_DestroySurface(surf);
-    
-    if (rc) throw Exception(Exception::SDLError, "%s", SDL_GetError());
+    if (!saved) throw Exception(Exception::SDLError, "%s", SDL_GetError());
 }
 
 void Bitmap::hueChange(int hue)
@@ -2619,7 +2608,7 @@ void Bitmap::hueChange(int hue)
         int heightMult = ceil((float) height() / glState.caps.maxTexSize);
         int tmpHeight = ceil((float) height() / heightMult);
         
-        Bitmap *tmp = new Bitmap(tmpWidth, tmpHeight, true);
+        auto tmp = std::make_unique<Bitmap>(tmpWidth, tmpHeight, true);
         IntRect sourceRect = {0, 0, tmpWidth, tmpHeight};
         
         pixman_region16_t originalTainted;
@@ -2647,7 +2636,7 @@ void Bitmap::hueChange(int hue)
                 stretchBlt(sourceRect, *tmp, tmp->rect(), 255);
             }
         }
-        delete tmp;
+        tmp.reset();
         p->clearTaintedArea();
         if (p->pixmanUseRegion32)
         {
@@ -3022,34 +3011,23 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
     }
     
     // Trim the text to only fill double the rect width
-    int charLimit = 0;
+    size_t byteLimit = 0;
     float squeezeLimit = 0.5f;
-    if (TTF_MeasureUTF8(sdlFont, str, std::min(width() - rect.x, rect.w) / squeezeLimit, nullptr, &charLimit) == 0)
+    if (TTF_MeasureString(sdlFont, str, 0,
+                          static_cast<int>(std::min(width() - rect.x, rect.w) / squeezeLimit),
+                          nullptr, &byteLimit))
     {
-        if (charLimit != fixed.size())
-        {
-            /* TTF_MeasureUTF8 returns the charLimit in codepoints, not bytes,
-             * so we have to calculate where that limit is ourselves.
-             * Grabbing a few codepoints past the limit in case the next
-             * character is a multi codepoint character.*/
-            charLimit += 4;
-            for(std::string::iterator it=fixed.begin(); it!=fixed.end() && *it != '\0'; ++it)
-            {
-                /* The first byte of a multibyte character starts with the first
-                 * two bits set to 11, with subsequent bytes starting with 10.
-                 * Single byte characters start with 0.*/
-                if ((*it & 0xC0) != 0x80)
-                {
-                    if (charLimit-- == 0)
-                    {
-                        *it = '\0';
-                        break;
-                    }
-                }
-            }
+        // SDL_ttf 3 reports bytes. Keep four additional complete codepoints
+        // for combining marks without truncating a UTF-8 sequence.
+        for (int extra = 0; extra < 4 && byteLimit < fixed.size(); ++extra) {
+            ++byteLimit;
+            while (byteLimit < fixed.size() && (fixed[byteLimit] & 0xC0) == 0x80)
+                ++byteLimit;
         }
+        if (byteLimit < fixed.size())
+            fixed[byteLimit] = '\0';
     }
-    
+
     SDL_Surface *txtSurf;
     
     if (p->font->isSolid())
@@ -3241,7 +3219,7 @@ IntRect Bitmap::textSize(const char *str)
     /* For cursive characters, returning the advance
      * as width yields better results */
     if (p->font->getItalic() && *endPtr == '\0')
-        TTF_GlyphMetrics(sdlFont, ucs2, 0, 0, 0, 0, &w);
+        TTF_GetGlyphMetrics(sdlFont, ucs2, 0, 0, 0, 0, &w);
 
     if (shState->config().fontHeightReporting == 0) {
         if(!w) {
@@ -3250,7 +3228,7 @@ IntRect Bitmap::textSize(const char *str)
             /* RGSS normalizes the reported heights.
              * Note that this may result in the bottoms
              * of some characters being cut off. */
-             h = TTF_FontHeight(sdlFont);
+             h = TTF_GetFontHeight(sdlFont);
         }
     }
     
@@ -3283,19 +3261,11 @@ TEXFBO &Bitmap::getGLTypes() const
 
 SDL_Surface *Bitmap::surface() const
 {
-    if (hasHires()) {
-        Debug() << "BUG: Called surface() on low-res Bitmap; graphics quality will be degraded.";
-    }
-
     return p->surface;
 }
 
 SDL_Surface *Bitmap::megaSurface() const
 {
-    if (hasHires()) {
-        Debug() << "BUG: Called megaSurface() on low-res Bitmap; graphics quality will be degraded.";
-    }
-
     return p->megaSurface;
 }
 
