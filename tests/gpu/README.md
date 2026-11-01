@@ -58,3 +58,19 @@ identity Catmull-Rom/Lanczos sampling; constant color verifies filter normalizat
 and optional xBRZ. These checks do not yet compare xBRZ edges or whole scenes
 against OpenGL. Use `-Dextra_shaders=true` in this standalone test project to
 compile/test the separately licensed optional GPLv3+ shader.
+
+## Batched offscreen frames
+
+`gpu-frame-batches` compiles the production `FrameEncoder`. It verifies captured
+per-draw viewport/scissor/blend/uniform state, explicit target LOAD/CLEAR behavior,
+clear-only targets, recovery after a bind error inside a render pass, clipped-out
+geometry, and twenty queued frames with different vertices/targets. Every queued
+frame is read back to detect overwriting an in-flight vertex upload.
+
+The encoder copies CPU geometry and draw state, uploads one contiguous vertex
+buffer before rendering, precreates pipeline cache entries before opening passes,
+and reuses cycling transfer/vertex buffers. `TextureView` is borrowed until
+submission; offscreen target ownership stays with the caller. `submit()` returns
+a completion fence and resets the recorded CPU commands. A render-pass guard
+ends an active pass before exceptions cancel its command buffer. The encoder is
+not yet wired into production `SharedState` or drawable classes.
