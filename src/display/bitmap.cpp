@@ -67,6 +67,8 @@
 extern "C" {
 }
 
+using SurfacePtr = std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)>;
+
 #define GUARD_MEGA \
 { \
 if (p->megaSurface) \
@@ -424,16 +426,15 @@ struct BitmapPrivate
         }
     }
 
-    static void ensureFormat(SDL_Surface *&surf, SDL_PixelFormat format)
+    static SurfacePtr ensureFormat(SurfacePtr surf, SDL_PixelFormat format)
     {
-        if (SDL_GetPixelFormatDetails(surf->format)->format == format)
-            return;
+        if (surf->format == format)
+            return surf;
 
-        SDL_Surface *surfConv = SDL_ConvertSurface(surf, format);
-        if (!surfConv)
+        SurfacePtr converted(SDL_ConvertSurface(surf.get(), format), SDL_DestroySurface);
+        if (!converted)
             throw Exception(Exception::SDLError, "Failed to convert surface: %s", SDL_GetError());
-        SDL_DestroySurface(surf);
-        surf = surfConv;
+        return converted;
     }
 
     void onModified(bool freeSurface = true)
@@ -744,7 +745,8 @@ Bitmap::~Bitmap()
 
 void Bitmap::initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool forceMega)
 {
-    BitmapPrivate::ensureFormat(imgSurf, SDL_PIXELFORMAT_RGBA32);
+    imgSurf = BitmapPrivate::ensureFormat(SurfacePtr(imgSurf, SDL_DestroySurface),
+                                         SDL_PIXELFORMAT_RGBA32).release();
 
     if (imgSurf->w > renderState.caps.maxTexSize || imgSurf->h > renderState.caps.maxTexSize || forceMega)
     {
@@ -2627,9 +2629,11 @@ static std::string fixupString(const char *str)
     return s;
 }
 
-static void applyShadow(SDL_Surface *&in, const SDL_PixelFormatDetails &fm, const SDL_Color &c, int offset)
+static void applyShadow(SurfacePtr &in, const SDL_PixelFormatDetails &fm, const SDL_Color &c, int offset)
 {
-    SDL_Surface *out = SDL_CreateSurface(in->w+offset, in->h+offset, fm.format);
+    SurfacePtr out(SDL_CreateSurface(in->w+offset, in->h+offset, fm.format), SDL_DestroySurface);
+    if (!out)
+        throw Exception(Exception::SDLError, "Error creating text shadow: %s", SDL_GetError());
 
     float fr = c.r / 255.0f;
     float fg = c.g / 255.0f;
@@ -2708,9 +2712,7 @@ static void applyShadow(SDL_Surface *&in, const SDL_PixelFormatDetails &fm, cons
             *outP = SDL_MapRGBA(&fm, nullptr, r, g, b, a);
         }
 
-    /* Store new surface in the input pointer */
-    SDL_DestroySurface(in);
-    in = out;
+    in = std::move(out);
 }
 
 /* An implementation of the bitmap blit equation (see shader/bitmapBlit.frag),
@@ -2952,18 +2954,15 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
             fixed[byteLimit] = '\0';
     }
 
-    SDL_Surface *txtSurf;
-
-    if (p->font->isSolid())
-        txtSurf = TTF_RenderText_Solid(sdlFont, str, 0, c);
-    else
-        txtSurf = TTF_RenderText_Blended(sdlFont, str, 0, c);
+    SurfacePtr txtSurf(p->font->isSolid()
+        ? TTF_RenderText_Solid(sdlFont, str, 0, c)
+        : TTF_RenderText_Blended(sdlFont, str, 0, c), SDL_DestroySurface);
 
     if (!txtSurf)
         throw Exception(Exception::SDLError, "Error creating text: %s",
                         SDL_GetError());
 
-    p->ensureFormat(txtSurf, SDL_PIXELFORMAT_ABGR8888);
+    txtSurf = p->ensureFormat(std::move(txtSurf), SDL_PIXELFORMAT_ABGR8888);
 
     if (p->font->getShadow())
     {
@@ -3010,26 +3009,16 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
     if (scaledOutlineSize)
     {
-        SDL_Surface *outline;
-        TTF_Font *sdlOutline;
-        try {
-            sdlOutline = p->font->getSdlFont(scaledOutlineSize);
-        } catch (const Exception &e) {
-            SDL_DestroySurface(txtSurf);
-            throw e;
-        }
-        if (p->font->isSolid())
-            outline = TTF_RenderText_Solid(sdlOutline, str, 0, co);
-        else
-            outline = TTF_RenderText_Blended(sdlOutline, str, 0, co);
+        TTF_Font *sdlOutline = p->font->getSdlFont(scaledOutlineSize);
+        SurfacePtr outline(p->font->isSolid()
+            ? TTF_RenderText_Solid(sdlOutline, str, 0, co)
+            : TTF_RenderText_Blended(sdlOutline, str, 0, co), SDL_DestroySurface);
 
-        if (!outline) {
-            SDL_DestroySurface(txtSurf);
+        if (!outline)
             throw Exception(Exception::SDLError, "Error creating text outline: %s",
                             SDL_GetError());
-        }
 
-        p->ensureFormat(outline, SDL_PIXELFORMAT_ABGR8888);
+        outline = p->ensureFormat(std::move(outline), SDL_PIXELFORMAT_ABGR8888);
 
         // Enterbrain's runtime crops the top row and left column of the text
         // when blitting it onto the outline. We allow the user to optionally
@@ -3049,9 +3038,8 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
                                          }) + outlineCropUndo};
         SDL_Rect outRect = {doubleOutlineSize - outlineCropUndo, doubleOutlineSize - outlineCropUndo, 0, 0};
 
-        blendText(txtSurf, inRect, c, outline, outRect, co, p->font->getShadow());
-        SDL_DestroySurface(txtSurf);
-        txtSurf = outline;
+        blendText(txtSurf.get(), inRect, c, outline.get(), outRect, co, p->font->getShadow());
+        txtSurf = std::move(outline);
     }
 
     IntRect destRect(alignX, alignY,
@@ -3063,7 +3051,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
     IntRect sourceRect(scaledOutlineSize, scaledOutlineSize, destRect.w / squeeze, destRect.h);
 
-    Bitmap txtBitmap(txtSurf, nullptr, true);
+    Bitmap txtBitmap(txtSurf.release(), nullptr, true);
     bool smooth = squeeze != 1.0f;
     stretchBlt(destRect, txtBitmap, sourceRect, 255, smooth);
 }
