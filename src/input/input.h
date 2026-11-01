@@ -103,7 +103,6 @@ public:
     
     bool getControllerConnected();
     const char *getControllerName();
-    int getControllerPowerLevel();
     
     bool getTextInputMode();
     void setTextInputMode(bool mode);

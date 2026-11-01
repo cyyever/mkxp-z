@@ -413,7 +413,7 @@ struct SettingsMenuPrivate
 		{
 			dstRect.w = alignW;
 			dstRect.x = x;
-			SDL_BlitSurfaceScaled(txtSurf, 0, surf, &dstRect);
+			SDL_BlitSurfaceScaled(txtSurf, 0, surf, &dstRect, SDL_SCALEMODE_NEAREST);
 		}
 	}
 

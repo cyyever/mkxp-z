@@ -155,15 +155,15 @@ std::unordered_map<int, int> vKeyToScancode{
     m(0xaa, AC_SEARCH),
     // 0xab BROWSER_FAVORITES
     m(0xac, AC_HOME),
-    m(0xad, AUDIOMUTE),
+    m(0xad, MUTE),
     m(0xae, VOLUMEDOWN),
     m(0xaf, VOLUMEUP),
-    m(0xb0, AUDIONEXT),
-    m(0xb1, AUDIOPREV),
-    m(0xb2, AUDIOSTOP),
-    m(0xb3, AUDIOPLAY),
-    m(0xb4, MAIL),
-    m(0xb5, MEDIASELECT),
+    m(0xb0, MEDIA_NEXT_TRACK),
+    m(0xb1, MEDIA_PREVIOUS_TRACK),
+    m(0xb2, MEDIA_STOP),
+    m(0xb3, MEDIA_PLAY),
+    // 0xb4 LAUNCH_MAIL has no SDL3 scancode
+    m(0xb5, MEDIA_SELECT),
     // 0xb6 LAUNCH_APP1
     // 0xb7 LAUNCH_APP2
     // 0xb8-0xb9 reserved
@@ -197,7 +197,7 @@ std::unordered_map<int, int> vKeyToScancode{
     m(0xf7, CRSEL),
     m(0xf8, EXSEL),
     // 0xf9 EREOF
-    m(0xfa, AUDIOPLAY), // PLAY, guessing
+    m(0xfa, MEDIA_PLAY), // PLAY, guessing
     // 0xfb ZOOM
     // 0xfc NONAME
     // 0xfd PA1
@@ -224,24 +224,21 @@ std::unordered_map<std::string, int> strToScancode{
     m(ALTERASE),
     m(APOSTROPHE),
     m(APPLICATION),
-    m(AUDIOMUTE),
-    m(AUDIONEXT),
-    m(AUDIOPLAY),
-    m(AUDIOPREV),
-    m(AUDIOSTOP),
+    // Keep existing script/config names for media keys renamed by SDL3.
+    {"AUDIOMUTE", SDL_SCANCODE_MUTE},
+    {"AUDIONEXT", SDL_SCANCODE_MEDIA_NEXT_TRACK},
+    {"AUDIOPLAY", SDL_SCANCODE_MEDIA_PLAY},
+    {"AUDIOPREV", SDL_SCANCODE_MEDIA_PREVIOUS_TRACK},
+    {"AUDIOSTOP", SDL_SCANCODE_MEDIA_STOP},
     m(B),
     m(BACKSLASH),
     m(BACKSPACE),
-    m(BRIGHTNESSDOWN),
-    m(BRIGHTNESSUP),
     m(C),
-    m(CALCULATOR),
     m(CANCEL),
     m(CAPSLOCK),
     m(CLEAR),
     m(CLEARAGAIN),
     m(COMMA),
-    m(COMPUTER),
     m(COPY),
     m(CRSEL),
     m(CURRENCYSUBUNIT),
@@ -250,10 +247,9 @@ std::unordered_map<std::string, int> strToScancode{
     m(D),
     m(DECIMALSEPARATOR),
     m(DELETE),
-    m(DISPLAYSWITCH),
     m(DOWN),
     m(E),
-    m(EJECT),
+    {"EJECT", SDL_SCANCODE_MEDIA_EJECT},
     m(END),
     m(EQUALS),
     m(ESCAPE),
@@ -282,9 +278,6 @@ std::unordered_map<std::string, int> strToScancode{
     m(INSERT),
     m(J),
     m(K),
-    m(KBDILLUMDOWN),
-    m(KBDILLUMTOGGLE),
-    m(KBDILLUMUP),
     m(KP_0),
     m(KP_00),
     m(KP_000),
@@ -350,12 +343,17 @@ std::unordered_map<std::string, int> strToScancode{
     m(LGUI),
     m(LSHIFT),
     m(M),
-    m(MAIL),
-    m(MEDIASELECT),
+    {"MEDIASELECT", SDL_SCANCODE_MEDIA_SELECT},
     m(MENU),
     m(MINUS),
     m(MODE),
     m(MUTE),
+    m(MEDIA_NEXT_TRACK),
+    m(MEDIA_PREVIOUS_TRACK),
+    m(MEDIA_PLAY),
+    m(MEDIA_STOP),
+    m(MEDIA_EJECT),
+    m(MEDIA_SELECT),
     m(N),
     m(NUMLOCKCLEAR),
     m(O),
@@ -401,7 +399,6 @@ std::unordered_map<std::string, int> strToScancode{
     m(VOLUMEDOWN),
     m(VOLUMEUP),
     m(W),
-    m(WWW),
     m(X),
     m(Y),
     m(Z),
@@ -424,13 +421,17 @@ std::unordered_map<std::string, int> strToScancode{
 };
 
 #undef m
-#define m(ctrl) {#ctrl, SDL_CONTROLLER_BUTTON_##ctrl}
+#define m(ctrl) {#ctrl, SDL_GAMEPAD_BUTTON_##ctrl}
 
+// Script names retain the SDL2/Xbox labels; SDL3 names face buttons by position.
 std::unordered_map<std::string, SDL_GamepadButton> strToGCButton {
-    m(A), m(B), m(X), m(Y),
+    {"A", SDL_GAMEPAD_BUTTON_SOUTH}, {"B", SDL_GAMEPAD_BUTTON_EAST},
+    {"X", SDL_GAMEPAD_BUTTON_WEST}, {"Y", SDL_GAMEPAD_BUTTON_NORTH},
     m(BACK), m(GUIDE), m(START),
-    m(LEFTSTICK), m(RIGHTSTICK),
-    m(LEFTSHOULDER), m(RIGHTSHOULDER),
+    {"LEFTSTICK", SDL_GAMEPAD_BUTTON_LEFT_STICK},
+    {"RIGHTSTICK", SDL_GAMEPAD_BUTTON_RIGHT_STICK},
+    {"LEFTSHOULDER", SDL_GAMEPAD_BUTTON_LEFT_SHOULDER},
+    {"RIGHTSHOULDER", SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER},
     m(DPAD_UP), m(DPAD_DOWN), m(DPAD_LEFT), m(DPAD_RIGHT)
     
 };
@@ -1479,15 +1480,6 @@ const char *Input::getControllerName()
     return (getControllerConnected()) ?
     SDL_GetGamepadName(shState->eThread().controller()) :
     0;
-}
-
-int Input::getControllerPowerLevel()
-{
-    if (!getControllerConnected())
-        return SDL_POWERSTATE_UNKNOWN;
-    
-    SDL_Joystick *js = SDL_GetGamepadJoystick(shState->eThread().controller());
-    return SDL_GetJoystickPowerInfo(js, nullptr);
 }
 
 bool Input::getTextInputMode()
