@@ -39,6 +39,11 @@ reports include `rate`, `channels`, `sdl_audio_format`, `bits_per_sample`, `fram
 bytes; verification itself compares full bytes, not hashes. Exit status is zero
 only on verified success; diagnostics go to stderr.
 
+Legacy save thumbnails can also be BMP. If the selected SDL3_image build
+rejects a BMP, the tool uses SDL3's existing `SDL_LoadBMP` loader, reports that
+fallback explicitly, and verifies the new PNG against its normalized pixels.
+The original thumbnail remains read-only.
+
 The vendored JPEG decoder is stb_image through SDL3_image. SDL_sound's MP3
 (dr_mp3) and Ogg/Vorbis (stb_vorbis) decoders return F32, which stays F32 in WAV.
 This preserves the chosen decoder output; it cannot recover detail previously
@@ -51,8 +56,11 @@ the resulting ordinary WAV through SDL_sound; the JSON decoder field explicitly
 identifies the fallback. A-law is expanded to its normative signed 16-bit PCM,
 without quantizing those decoded values.
 
-The engine currently uses a separate libvorbis S16 path for streamed Ogg music.
-The tool's stb_vorbis F32 output is not asserted to be bit-identical to that path.
+Default engine builds decode PNG images and WAV/FLAC audio. Enabling
+`asset_conversion_tools` additionally builds JPEG, MP3 and Vorbis decoding for
+this offline tool; runtime Bitmap loading and saving still require PNG.
+The tool's stb_vorbis F32 output is not asserted to be bit-identical to older
+engine versions' libvorbis S16 path.
 Ogg loop tags, explicit filename references and extension collisions require a
 separate game migration audit before replacing assets or disabling decoders.
 The existing WMA-to-PCM16 FFmpeg assembly stage remains necessary for WMA input
@@ -60,7 +68,7 @@ unsupported by SDL_sound; the tool can verify/repackage that staged WAV, without
 claiming to undo the earlier decode/conversion.
 
 The Python regression test generates its own PNG and integer/float WAV fixtures.
-It checks alpha, Unicode paths, exact PCM bits including float signed zero and
+It checks alpha, legacy 24-bit BMP pixels, Unicode paths, exact PCM bits including float signed zero and
 subnormals, known A-law sample values, stereo/rate preservation, and
 overwrite/source-collision refusal.
 Real game assets belong in a separate staging audit, never in the source tree.

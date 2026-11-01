@@ -151,60 +151,6 @@ global_dependencies += sdl3
 
 # SDL3 owns the platform backends. Native OpenGL remains until the GPU port.
 
-ogg = dependency('ogg', allow_fallback: false, method: 'pkg-config', required: get_option('ogg_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not ogg.found()
-    ogg_options = cmake.subproject_options()
-    ogg_options.add_cmake_defines(cmake_base_options + {
-        'BUILD_SHARED_LIBS': false,
-        'BUILD_TESTING': false,
-        'BUILD_FRAMEWORK': false,
-    })
-    foreach opt, val : cmake_override_options
-        ogg_options.set_override_option(opt, val)
-    endforeach
-    ogg = cmake.subproject('ogg', options: ogg_options).dependency('ogg')
-    ogg_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('libogg-' + ogg.version()) / 'include', '-I' + meson.project_build_root() / 'subprojects' / ('libogg-' + ogg.version()) / '__CMake_build' / 'include']
-    meson.override_dependency('ogg', ogg, static: true)
-else
-    ogg_includes = ['-I' + ogg.get_variable(pkgconfig: 'includedir')]
-endif
-global_dependencies += ogg
-
-vorbis = dependency('vorbis', allow_fallback: false, required: get_option('vorbis_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not vorbis.found()
-    vorbis_internal_cflags = []
-    vorbis_external_cflags = []
-    if ogg.type_name() == 'internal'
-        vorbis_internal_cflags += ogg_includes
-    else
-        vorbis_external_cflags += ogg_includes
-    endif
-    vorbis_options = cmake.subproject_options()
-    vorbis_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_C_FLAGS': run_command(quotetool, vorbis_internal_cflags + vorbis_external_cflags, check: true).stdout().strip(),
-        'CMAKE_CXX_FLAGS': run_command(quotetool, vorbis_internal_cflags + vorbis_external_cflags, check: true).stdout().strip(),
-        'BUILD_SHARED_LIBS': false,
-        'BUILD_TESTING': false,
-        'BUILD_FRAMEWORK': false,
-    })
-    foreach opt, val : cmake_override_options
-        vorbis_options.set_override_option(opt, val)
-    endforeach
-    vorbis = declare_dependency(dependencies: [
-        ogg,
-        cmake.subproject('vorbis', options: vorbis_options).dependency('vorbis'),
-    ])
-    vorbisfile = declare_dependency(dependencies: [
-        vorbis,
-        cmake.subproject('vorbis', options: vorbis_options).dependency('vorbisfile'),
-    ])
-    meson.override_dependency('vorbis', vorbis, static: true)
-    meson.override_dependency('vorbisfile', vorbisfile, static: true)
-else
-    vorbisfile = dependency('vorbisfile', allow_fallback: false, required: true)
-endif
-global_dependencies += [vorbis, vorbisfile]
-
 sdl3_sound = dependency('sdl3_sound', allow_fallback: false,
     required: get_option('sdl_sound_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_sound.found()
@@ -217,8 +163,8 @@ if not sdl3_sound.found()
         # File decoders only: SDL3's native audio playback backends stay enabled.
         'SDLSOUND_DECODER_WAV': true,
         'SDLSOUND_DECODER_FLAC': true,
-        'SDLSOUND_DECODER_VORBIS': true,
-        'SDLSOUND_DECODER_MP3': true,
+        'SDLSOUND_DECODER_VORBIS': get_option('asset_conversion_tools'),
+        'SDLSOUND_DECODER_MP3': get_option('asset_conversion_tools'),
         'SDLSOUND_DECODER_AIFF': false,
         'SDLSOUND_DECODER_AU': false,
         'SDLSOUND_DECODER_VOC': false,
@@ -226,8 +172,7 @@ if not sdl3_sound.found()
         'SDLSOUND_DECODER_SHN': false,
         'SDLSOUND_DECODER_MODPLUG': false,
         'SDLSOUND_DECODER_MIDI': false,
-        # Keep the macOS CoreAudio file decoder until legacy WAV migration is
-        # deployed; unlike SDL_sound's WAV decoder, it can accept A-law inputs.
+        'SDLSOUND_DECODER_COREAUDIO': get_option('asset_conversion_tools'),
     })
     sdl3_sound = declare_dependency(dependencies: [sdl3,
         cmake.subproject('sdl3_sound', options: sound_options).dependency('SDL3_sound-static')])
@@ -417,8 +362,10 @@ global_dependencies += pixman
 sdl3_image = dependency('sdl3_image', allow_fallback: false,
     required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_image.found()
-    # Built with PNG and JPG only (stb_image decoders, built-in writers); see sdl3_image-png-jpg.patch.
-    sdl3_image = subproject('sdl3_image', default_options: meson_base_options).get_variable('sdl3_image_dep')
+    # Legacy JPEG is needed only to rebuild PNG assets from original archives.
+    sdl3_image = subproject('sdl3_image', default_options: meson_base_options + {
+        'legacy_jpeg': get_option('asset_conversion_tools'),
+    }).get_variable('sdl3_image_dep')
 endif
 global_dependencies += sdl3_image
 
@@ -484,7 +431,6 @@ main_source = files(
     'audio/audiostream.cpp',
     'audio/sdlsoundsource.cpp',
     'audio/soundemitter.cpp',
-    'audio/vorbissource.cpp',
 
     'display/autotiles.cpp',
     'display/bitmap.cpp',

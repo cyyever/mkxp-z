@@ -20,6 +20,7 @@
  */
 
 #include "util/paths.h"
+#include "util/png-io.h"
 
 #include "bitmap.h"
 
@@ -455,9 +456,9 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
 {
     SDL_Surface *surface = nullptr;
     
-    bool tryRead(SDL_IOStream *ops, const char *ext)
+    bool tryRead(SDL_IOStream *ops, const char *)
     {
-        surface = IMG_LoadTyped_IO(ops, 1, ext);
+        surface = image::loadPng(ops);
         return surface != nullptr;
     }
 };
@@ -2552,38 +2553,13 @@ void Bitmap::saveToFile(const char *filename)
         getRaw(surf->pixels, surf->w * surf->h * 4);
     }
     
-    // Try and determine the intended image format from the filename extension
-    const char *period = strrchr(filename, '.');
-    int filetype = 0;
-    if (period) {
-        period++;
-        std::string ext;
-        for (int i = 0; i < (int)strlen(period); i++) {
-            ext += tolower(period[i]);
-        }
-        
-        if (!ext.compare("png")) {
-            filetype = 1;
-        }
-        else if (!ext.compare("jpg") || !ext.compare("jpeg")) {
-            filetype = 2;
-        }
-    }
-    
-    std::string fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
-    bool saved;
-    switch (filetype) {
-        case 2:
-            saved = IMG_SaveJPG(surf, fn_normalized.c_str(), 90);
-            break;
-        case 1:
-            saved = IMG_SavePNG(surf, fn_normalized.c_str());
-            break;
-        case 0: default:
-            saved = SDL_SaveBMP(surf, fn_normalized.c_str());
-            break;
-    }
-    
+    const char *extension = strrchr(filename, '.');
+    if (!extension || SDL_strcasecmp(extension, ".png") != 0)
+        throw Exception(Exception::ArgumentError, "Bitmap output must use a .png filename");
+
+    const auto fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
+    const bool saved = IMG_SavePNG(surf, fn_normalized.c_str());
+
     if (!saved) throw Exception(Exception::SDLError, "%s", SDL_GetError());
 }
 

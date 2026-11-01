@@ -191,19 +191,8 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 
 	bool tryRead(SDL_IOStream *ops, const char *ext)
 	{
-		/* Try to read ogg file signature */
-		char sig[5] = { 0 };
-		SDL_ReadIO(ops, sig, 4);
-		SDL_SeekIO(ops, 0, SDL_IO_SEEK_SET);
-
 		try
 		{
-			if (!strcmp(sig, "OggS"))
-			{
-				source = createVorbisSource(ops, looped);
-				return true;
-			}
-
 			source = createSDLSource(ops, ext, STREAM_BUF_SIZE, looped);
 		}
 		catch (const Exception &e)

@@ -52,10 +52,6 @@ ALDataSource *createSDLSource(SDL_IOStream *ops, const char *, uint32_t, bool lo
     SDL_CloseIO(ops);
     return new GeneratedSource(looped, requestedSource == "empty", requestedSource == "mono");
 }
-ALDataSource *createVorbisSource(SDL_IOStream *, bool) {
-    throw std::runtime_error("unexpected Vorbis source");
-}
-
 static void require(bool condition, const char *message) {
     if (!condition) throw std::runtime_error(message);
 }

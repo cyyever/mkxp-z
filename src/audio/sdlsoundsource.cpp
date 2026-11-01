@@ -20,6 +20,7 @@
 */
 
 #include "aldatasource.h"
+#include "runtime-codecs.h"
 #include "exception.h"
 #include "sdl-util.h"
 
@@ -46,6 +47,11 @@ struct SDLSoundSource : ALDataSource
 			SDL_CloseIO(srcOps);
 			throw Exception(Exception::SDLError, "SDL_sound: %s", Sound_GetError());
 		}
+        if (!isRuntimeAudio(sample)) {
+            Sound_FreeSample(sample);
+            SDL_CloseIO(srcOps);
+            throw Exception(Exception::SDLError, "Audio assets must use WAV or FLAC decoding");
+        }
 	}
 
 	~SDLSoundSource()

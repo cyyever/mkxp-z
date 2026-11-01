@@ -61,7 +61,4 @@ ALDataSource *createSDLSource(SDL_IOStream *ops,
 			                  uint32_t maxBufSize,
 			                  bool looped);
 
-ALDataSource *createVorbisSource(SDL_IOStream *ops,
-                                 bool looped);
-
 #endif // ALDATASOURCE_H
