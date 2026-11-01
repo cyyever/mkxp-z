@@ -32,11 +32,8 @@ inline SDL_IOStream *borrowIO(SDL_IOStream *source) {
 }
 
 inline bool readFileSDL(const char *path, std::string &out) {
-    SDL_IOStream *stream = SDL_IOFromFile(path, "rb");
-    if (!stream)
-        return false;
     size_t size = 0;
-    std::unique_ptr<void, decltype(&SDL_free)> data(SDL_LoadFile_IO(stream, &size, true), SDL_free);
+    std::unique_ptr<void, decltype(&SDL_free)> data(SDL_LoadFile(path, &size), SDL_free);
     if (!data)
         return false;
     out.append(static_cast<const char *>(data.get()), size);
