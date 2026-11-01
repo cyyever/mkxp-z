@@ -5,7 +5,7 @@
 #include <SDL3/SDL_init.h>
 #include <algorithm>
 #include <cstring>
-#include <sstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -18,6 +18,7 @@ struct TestStream {
     size_t offset = 0;
     size_t chunk = 1024;
     bool failRead = false;
+    bool failReadAfterChunk = false;
     bool failClose = false;
     bool failSize = false;
     bool failSeek = false;
@@ -28,6 +29,7 @@ static SDL_IOStream *testStream(const char *kind) {
     data->bytes = std::string("a\0\xffz", 4);
     if (!std::strcmp(kind, "@short")) data->chunk = 1;
     if (!std::strcmp(kind, "@error")) data->failRead = true;
+    if (!std::strcmp(kind, "@partialerror")) { data->failReadAfterChunk = true; data->chunk = 1; }
     if (!std::strcmp(kind, "@closeerror")) data->failClose = true;
     if (!std::strcmp(kind, "@unknownsize")) data->failSize = true;
     if (!std::strcmp(kind, "@noseek")) data->failSeek = true;
@@ -51,7 +53,7 @@ static SDL_IOStream *testStream(const char *kind) {
     };
     ioInterface.read = [](void *opaque, void *buffer, size_t requested, SDL_IOStatus *status) -> size_t {
         auto &data = *static_cast<TestStream *>(opaque);
-        if (data.failRead) {
+        if (data.failRead || (data.failReadAfterChunk && data.offset > 0)) {
             SDL_SetError("injected read failure");
             *status = SDL_IO_STATUS_ERROR;
             return 0;
@@ -93,41 +95,27 @@ static VALUE openFileInt(VALUE, VALUE kind) {
 }
 static VALUE live(VALUE) { return INT2NUM(liveStreams); }
 static VALUE closed(VALUE) { return INT2NUM(closedStreams); }
-static VALUE verifyBuffer(VALUE) {
-    bool success = true;
-    SDL_IOStream *source = testStream("@short");
-    SDL_IOStream *borrowed = borrowIO(source);
+static VALUE verifyLoad(VALUE) {
+    const int liveBefore = liveStreams, closedBefore = closedStreams;
+    bool success;
     {
-        SDLRWBuf<4, 8> buffer(borrowed);
-        std::istream input(&buffer);
-        char first = 0, second = 0;
-        input.get(first);
-        input.get(second);
-        input.unget();
-        input.unget();
-        char firstAgain = 0, secondAgain = 0;
-        input.get(firstAgain);
-        input.get(secondAgain);
-        std::string rest((std::istreambuf_iterator<char>(input)), {});
-        success = first == 'a' && second == 0 && firstAgain == first && secondAgain == second
-               && rest == std::string("\xffz", 2);
+        std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> source(testStream("@short"), SDL_CloseIO);
+        std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> borrowed(borrowIO(source.get()), SDL_CloseIO);
+        std::string bytes;
+        success = readFileSDL(borrowed.get(), bytes) && bytes == std::string("a\0\xffz", 4);
+        borrowed.reset();
+        success = success && liveStreams == liveBefore + 1 && closedStreams == closedBefore;
+        Uint8 firstByte = 0;
+        success = success && SDL_SeekIO(source.get(), 0, SDL_IO_SEEK_SET) == 0
+                  && SDL_ReadU8(source.get(), &firstByte) && firstByte == 97;
     }
-    SDL_CloseIO(borrowed);
-    success = success && liveStreams == 1; // Borrowed handle never owns source.
-    SDL_SeekIO(source, 0, SDL_IO_SEEK_SET);
-    Uint8 firstByte = 0;
-    success = success && SDL_ReadU8(source, &firstByte) && firstByte == 97;
-    // The source is still usable after its borrowed handle is closed.
-    SDL_CloseIO(source);
-    source = testStream("@error");
-    {
-        SDLRWBuf<> buffer(source);
-        std::istream input(&buffer);
-        char byte;
-        input.get(byte);
-        success = success && input.bad();
+    success = success && liveStreams == liveBefore && closedStreams == closedBefore + 1;
+    for (const char *kind : {"@error", "@partialerror"}) {
+        std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> source(testStream(kind), SDL_CloseIO);
+        std::string bytes = "unchanged";
+        success = success && !readFileSDL(source.get(), bytes) && bytes == "unchanged";
     }
-    SDL_CloseIO(source);
+    success = success && liveStreams == liveBefore && closedStreams == closedBefore + 3;
     return success ? Qtrue : Qfalse;
 }
 
@@ -142,7 +130,7 @@ int main(int argc, char **argv) {
     rb_define_global_function("fileint_test_open", RUBY_METHOD_FUNC(openFileInt), 1);
     rb_define_global_function("fileint_test_live", RUBY_METHOD_FUNC(live), 0);
     rb_define_global_function("fileint_test_closed", RUBY_METHOD_FUNC(closed), 0);
-    rb_define_global_function("fileint_test_buffer", RUBY_METHOD_FUNC(verifyBuffer), 0);
+    rb_define_global_function("fileint_test_load", RUBY_METHOD_FUNC(verifyLoad), 0);
     char noGems[] = "--disable-gems";
     std::vector<char *> args{argv[0], noGems};
     args.insert(args.end(), argv + 1, argv + argc);

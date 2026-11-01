@@ -9,7 +9,10 @@
 #include <SDL3/SDL_filesystem.h>
 #include <assert.h>
 
+#include <algorithm>
 #include <ranges>
+#include <sstream>
+#include <utility>
 #include <memory>
 #include <format>
 #include <vector>
@@ -377,13 +380,14 @@ void Config::readGameINI() {
     }
     
     std::string iniFileName(execName + ".ini");
-    SDLRWStream iniFile(iniFileName.c_str(), "r");
+    std::string iniData;
     
     bool convSuccess = false;
-    if (iniFile)
+    if (readFileSDL(iniFileName.c_str(), iniData))
     {
+        std::istringstream iniFile(std::move(iniData));
         INIConfiguration ic;
-        if (ic.load(iniFile.stream()))
+        if (ic.load(iniFile))
         {
             GUARD(game.title = ic.getStringProperty("Game", "Title"););
             GUARD(game.scripts = ic.getStringProperty("Game", "Scripts"););
