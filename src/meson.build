@@ -703,7 +703,7 @@ endif
 global_include_dirs += include_directories('.',
     'audio',
     'crypto',
-    'display', 'display/gl', 'display/libnsgif', 'display/libnsgif/utils',
+    'display', 'display/gl',
     'etc',
     'filesystem',
     'input',
@@ -744,8 +744,6 @@ main_source = files(
     'display/viewport.cpp',
     'display/window.cpp',
 
-    'display/libnsgif/libnsgif.c',
-    'display/libnsgif/lzw.c',
 
     'display/gl/gl-debug.cpp',
     'display/gl/gl-fun.cpp',

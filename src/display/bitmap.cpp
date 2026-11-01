@@ -58,7 +58,6 @@
 #include <cstring>
 
 extern "C" {
-#include "libnsgif/libnsgif.h"
 }
 
 #define GUARD_MEGA \
@@ -109,54 +108,6 @@ static IntRect normalizedRect(const IntRect &rect)
     return norm;
 }
 
-
-// libnsgif loading callbacks, taken pretty much straight from their tests
-
-static void *gif_bitmap_create(int width, int height)
-{
-    /* ensure a stupidly large bitmap is not created */
-    return calloc(width * height, 4);
-}
-
-
-static void gif_bitmap_set_opaque(void *bitmap, bool opaque)
-{
-    (void) opaque;  /* unused */
-    (void) bitmap;  /* unused */
-    assert(bitmap);
-}
-
-
-static bool gif_bitmap_test_opaque(void *bitmap)
-{
-    (void) bitmap;  /* unused */
-    assert(bitmap);
-    return false;
-}
-
-
-static unsigned char *gif_bitmap_get_buffer(void *bitmap)
-{
-    assert(bitmap);
-    return (unsigned char *)bitmap;
-}
-
-
-static void gif_bitmap_destroy(void *bitmap)
-{
-    assert(bitmap);
-    free(bitmap);
-}
-
-
-static void gif_bitmap_modified(void *bitmap)
-{
-    (void) bitmap;  /* unused */
-    assert(bitmap);
-    return;
-}
-
-// --------------------
 
 struct BitmapPrivate
 {
@@ -495,68 +446,12 @@ struct BitmapPrivate
 
 struct BitmapOpenHandler : FileSystem::OpenHandler
 {
-    // Non-GIF
-    SDL_Surface *surface;
-    
-    // GIF
-    std::string error;
-    gif_animation *gif;
-    unsigned char *gif_data;
-    size_t gif_data_size;
-    
-    
-    BitmapOpenHandler()
-    : surface(0), gif(0), gif_data(0), gif_data_size(0)
-    {}
+    SDL_Surface *surface = nullptr;
     
     bool tryRead(SDL_IOStream *ops, const char *ext)
     {
-        if (IMG_isGIF(ops)) {
-            // Use libnsgif to initialise the gif data
-            gif = new gif_animation;
-            
-            gif_bitmap_callback_vt gif_bitmap_callbacks = {
-                gif_bitmap_create,
-                gif_bitmap_destroy,
-                gif_bitmap_get_buffer,
-                gif_bitmap_set_opaque,
-                gif_bitmap_test_opaque,
-                gif_bitmap_modified
-            };
-            
-            gif_create(gif, &gif_bitmap_callbacks);
-            
-            gif_data_size = SDL_GetIOSize(ops);
-            
-            gif_data = new unsigned char[gif_data_size];
-            SDL_SeekIO(ops, 0, SDL_IO_SEEK_SET);
-            SDL_ReadIO(ops, gif_data, gif_data_size);
-            
-            int status;
-            do {
-                status = gif_initialise(gif, gif_data_size, gif_data);
-                if (status != GIF_OK && status != GIF_WORKING) {
-                    gif_finalise(gif);
-                    delete gif;
-                    delete gif_data;
-                    error = "Failed to initialize GIF (Error " + std::to_string(status) + ")";
-                    return false;
-                }
-            } while (status != GIF_OK);
-            
-            // Decode the first frame
-            status = gif_decode_frame(gif, 0);
-            if (status != GIF_OK && status != GIF_WORKING) {
-                error = "Failed to decode first GIF frame. (Error " + std::to_string(status) + ")";
-                gif_finalise(gif);
-                delete gif;
-                delete gif_data;
-                return false;
-            }
-        } else {
-            surface = IMG_LoadTyped_IO(ops, 1, ext);
-        }
-        return (surface || gif);
+        surface = IMG_LoadTyped_IO(ops, 1, ext);
+        return surface != nullptr;
     }
 };
 
@@ -583,11 +478,7 @@ Bitmap::Bitmap(const char *filename)
     try {
         shState->fileSystem().openRead(handler, filename);
         
-        if (!handler.error.empty()) {
-            // Not loaded with SDL, but I want it to be caught with the same exception type
-            throw Exception(Exception::SDLError, "Error loading image '%s': %s", filename, handler.error.c_str());
-        }
-        else if (!handler.gif && !handler.surface) {
+        if (!handler.surface) {
             throw Exception(Exception::SDLError, "Error loading image '%s': %s",
                             filename, SDL_GetError());
         }
@@ -597,115 +488,6 @@ Bitmap::Bitmap(const char *filename)
         throw e;
     }
     
-    if (handler.gif) {
-        if (handler.gif->width >= (uint32_t)glState.caps.maxTexSize || handler.gif->height > (uint32_t)glState.caps.maxTexSize)
-        {
-            if (hiresBitmap)
-                delete hiresBitmap;
-            throw new Exception(Exception::MKXPError, "Animation too large (%ix%i, max %ix%i)",
-                                handler.gif->width, handler.gif->height, glState.caps.maxTexSize, glState.caps.maxTexSize);
-        }
-        
-        p = new BitmapPrivate(this);
-        if (handler.gif->width > INT16_MAX || handler.gif->height > INT16_MAX)
-        {
-            p->pixmanUseRegion32 = true;
-            pixman_region_fini(&p->tainted);
-            pixman_region32_init(&p->tainted32);
-        }
-
-        p->selfHires = hiresBitmap;
-        
-        if (handler.gif->frame_count == 1) {
-            TEXFBO texfbo;
-            try {
-                texfbo = shState->texPool().request(handler.gif->width, handler.gif->height);
-            }
-            catch (const Exception &e)
-            {
-                gif_finalise(handler.gif);
-                delete handler.gif;
-                delete handler.gif_data;
-                
-                delete p;
-                if (hiresBitmap)
-                    delete hiresBitmap;
-                
-                throw e;
-            }
-            
-            TEX::bind(texfbo.tex);
-            TEX::uploadImage(handler.gif->width, handler.gif->height, handler.gif->frame_image, GL_RGBA);
-            gif_finalise(handler.gif);
-            delete handler.gif;
-            delete handler.gif_data;
-            
-            p->gl = texfbo;
-            if (p->selfHires != nullptr) {
-                p->gl.selfHires = &p->selfHires->getGLTypes();
-            }
-            p->addTaintedArea(rect());
-            return;
-        }
-        
-        p->animation.enabled = true;
-        p->animation.width = handler.gif->width;
-        p->animation.height = handler.gif->height;
-        
-        // Guess framerate based on the first frame's delay
-        p->animation.fps = 1 / ((float)handler.gif->frames[handler.gif->decoded_frame].frame_delay / 100);
-        if (p->animation.fps < 0) p->animation.fps = shState->graphics().getFrameRate();
-        
-        // Loop gif (Either it's looping or it's not, at the moment)
-        p->animation.loop = handler.gif->loop_count >= 0;
-        
-        int fcount = handler.gif->frame_count;
-        int fcount_partial = handler.gif->frame_count_partial;
-        if (fcount > fcount_partial) {
-            Debug() << "Non-fatal error reading" << filename << ": Only decoded" << fcount_partial << "out of" << fcount << "frames";
-        }
-        for (int i = 0; i < fcount_partial; i++) {
-            if (i > 0) {
-                int status = gif_decode_frame(handler.gif, i);
-                if (status != GIF_OK && status != GIF_WORKING) {
-                    releaseResources();
-                    
-                    gif_finalise(handler.gif);
-                    delete handler.gif;
-                    delete handler.gif_data;
-                    
-                    throw Exception(Exception::MKXPError, "Failed to decode GIF frame %i out of %i (Status %i)",
-                                    i + 1, fcount_partial, status);
-                }
-            }
-            
-            TEXFBO texfbo;
-            try {
-                texfbo = shState->texPool().request(p->animation.width, p->animation.height);
-            }
-            catch (const Exception &e)
-            {
-                releaseResources();
-                
-                gif_finalise(handler.gif);
-                delete handler.gif;
-                delete handler.gif_data;
-                
-                throw e;
-            }
-            
-            TEX::bind(texfbo.tex);
-            TEX::uploadImage(p->animation.width, p->animation.height, handler.gif->frame_image, GL_RGBA);
-            p->animation.frames.push_back(texfbo);
-        }
-        
-        gif_finalise(handler.gif);
-        delete handler.gif;
-        delete handler.gif_data;
-        p->addTaintedArea(rect());
-        return;
-    }
-
     SDL_Surface *imgSurf = handler.surface;
 
     initFromSurface(imgSurf, hiresBitmap, hiresBitmap && hiresBitmap->isMega());
