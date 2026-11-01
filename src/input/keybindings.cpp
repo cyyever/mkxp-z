@@ -19,14 +19,18 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
+#include <format>
+#include <fstream>
 #include <iterator>
+#include <span>
+#include <type_traits>
+#include <utility>
 
 #include "keybindings.h"
 
 #include "config.h"
-#include "util.h"
-
-#include <stdio.h>
+#include "paths.h"
 
 struct KbBindingData
 {
@@ -100,9 +104,6 @@ static const KbBindingData defaultKbBindings2[] =
 	{ SDL_SCANCODE_Z,      Input::C     }
 };
 
-static constexpr auto defaultKbBindingsN = std::size(defaultKbBindings);
-static constexpr auto defaultKbBindings1N = std::size(defaultKbBindings1);
-static constexpr auto defaultKbBindings2N = std::size(defaultKbBindings2);
 
 static const CtrlBindingData defaultCtrlBindings[] =
 {
@@ -121,7 +122,6 @@ static const CtrlBindingData defaultCtrlBindings[] =
     { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, Input::Right }
 };
 
-static constexpr auto defaultCtrlBindingsN = std::size(defaultCtrlBindings);
 
 static void addAxisBinding(BDescVec &d, SDL_GamepadAxis axis, AxisDir dir, Input::ButtonCode target)
 {
@@ -141,18 +141,18 @@ BDescVec genDefaultBindings(const Config &conf)
 {
 	BDescVec d;
 
-	for (size_t i = 0; i < defaultKbBindingsN; ++i)
-		defaultKbBindings[i].add(d);
+	for (const auto &binding : defaultKbBindings)
+		binding.add(d);
 
 	if (conf.rgssVersion == 1)
-		for (size_t i = 0; i < defaultKbBindings1N; ++i)
-			defaultKbBindings1[i].add(d);
+		for (const auto &binding : defaultKbBindings1)
+			binding.add(d);
 	else
-		for (size_t i = 0; i < defaultKbBindings2N; ++i)
-			defaultKbBindings2[i].add(d);
+		for (const auto &binding : defaultKbBindings2)
+			binding.add(d);
 
-	for (size_t i = 0; i < defaultCtrlBindingsN; ++i)
-		defaultCtrlBindings[i].add(d);
+	for (const auto &binding : defaultCtrlBindings)
+		binding.add(d);
 
 	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTX, Negative, Input::Left );
 	addAxisBinding(d, SDL_GAMEPAD_AXIS_LEFTX, Positive, Input::Right);
@@ -162,7 +162,7 @@ BDescVec genDefaultBindings(const Config &conf)
 	return d;
 }
 
-#define FORMAT_VER 3
+static constexpr uint32_t FormatVersion = 3;
 
 struct Header
 {
@@ -171,53 +171,35 @@ struct Header
 	uint32_t count;
 };
 
-static void buildPath(const std::string &dir, uint32_t rgssVersion,
-                      char *out, size_t outSize)
+static_assert(std::is_trivially_copyable_v<Header> && std::is_trivially_copyable_v<BindingDesc>);
+
+static std::filesystem::path buildPath(const std::string &dir, uint32_t rgssVersion)
 {
-	snprintf(out, outSize, "%skeybindings.mkxp%u", dir.c_str(), rgssVersion);
+    return paths::fromUtf8(dir) / std::format("keybindings.mkxp{}", rgssVersion);
 }
 
-static bool writeBindings(const BDescVec &d, const std::string &dir,
+static bool writeBindings(const BDescVec &bindings, const std::string &dir,
                           uint32_t rgssVersion)
 {
-	if (dir.empty())
-		return false;
+    if (dir.empty() || !std::in_range<uint32_t>(bindings.size()))
+        return false;
 
-	char path[1024];
-	buildPath(dir, rgssVersion, path, sizeof(path));
-
-	FILE *f = fopen(path, "wb");
-
-	if (!f)
-		return false;
-
-	Header hd;
-	hd.formVer = FORMAT_VER;
-	hd.rgssVer = rgssVersion;
-	hd.count = d.size();
-
-	if (fwrite(&hd, sizeof(hd), 1, f) < 1)
-	{
-		fclose(f);
-		return false;
-	}
-
-	if (fwrite(&d[0], sizeof(d[0]), hd.count, f) < hd.count)
-	{
-		fclose(f);
-		return false;
-	}
-
-	fclose(f);
-	return true;
+    std::ofstream file(buildPath(dir, rgssVersion), std::ios::binary);
+    const Header header{FormatVersion, rgssVersion, static_cast<uint32_t>(bindings.size())};
+    if (!file.write(reinterpret_cast<const char *>(&header), sizeof(header)))
+        return false;
+    const auto bytes = std::as_bytes(std::span(bindings));
+    if (!bytes.empty() && !file.write(reinterpret_cast<const char *>(bytes.data()),
+                                     static_cast<std::streamsize>(bytes.size())))
+        return false;
+    file.close();
+    return bool(file);
 }
 
 void storeBindings(const BDescVec &d, const Config &conf)
 {
     writeBindings(d, conf.customDataPath, conf.rgssVersion);
 }
-
-#define READ(ptr, size, n, f) if (fread(ptr, size, n, f) < n) return false
 
 static bool verifyDesc(const BindingDesc &desc)
 {
@@ -232,17 +214,10 @@ static bool verifyDesc(const BindingDesc &desc)
 	    Input::F5, Input::F6, Input::F7, Input::F8, Input::F9
 	};
 
-	constexpr auto codesN = std::size(codes);
-	size_t i;
+    if (std::ranges::find(codes, desc.target) == std::end(codes))
+        return false;
 
-	for (i = 0; i < codesN; ++i)
-		if (desc.target == codes[i])
-			break;
-
-	if (i == codesN)
-		return false;
-
-	const SourceDesc src = desc.src;
+    const auto &src = desc.src;
 
 	switch (src.type)
 	{
@@ -264,44 +239,23 @@ static bool verifyDesc(const BindingDesc &desc)
 static bool readBindings(BDescVec &out, const std::string &dir,
                          uint32_t rgssVersion)
 {
-	if (dir.empty())
-		return false;
+    if (dir.empty())
+        return false;
 
-	char path[1024];
-	buildPath(dir, rgssVersion, path, sizeof(path));
+    std::ifstream file(buildPath(dir, rgssVersion), std::ios::binary);
+    Header header{};
+    if (!file.read(reinterpret_cast<char *>(&header), sizeof(header)) ||
+        header.formVer != FormatVersion || header.rgssVer != rgssVersion || header.count > 1024)
+        return false;
 
-	FILE *f = fopen(path, "rb");
-
-	if (!f)
-		return false;
-
-	Header hd;
-	if (fread(&hd, sizeof(hd), 1, f) < 1)
-	{
-		fclose(f);
-		return false;
-	}
-
-	if (hd.formVer != FORMAT_VER)
-		return false;
-	if (hd.rgssVer != rgssVersion)
-		return false;
-	/* Arbitrary max value */
-	if (hd.count > 1024)
-		return false;
-
-	out.resize(hd.count);
-	if (fread(&out[0], sizeof(out[0]), hd.count, f) < hd.count)
-	{
-		fclose(f);
-		return false;
-	}
-
-	for (size_t i = 0; i < hd.count; ++i)
-		if (!verifyDesc(out[i]))
-			return false;
-
-	return true;
+    BDescVec bindings(header.count);
+    const auto bytes = std::as_writable_bytes(std::span(bindings));
+    if ((!bytes.empty() && !file.read(reinterpret_cast<char *>(bytes.data()),
+                                     static_cast<std::streamsize>(bytes.size()))) ||
+        !std::ranges::all_of(bindings, verifyDesc))
+        return false;
+    out = std::move(bindings);
+    return true;
 }
 
 BDescVec loadBindings(const Config &conf)
