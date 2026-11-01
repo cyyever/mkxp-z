@@ -336,9 +336,9 @@ try { exp } catch (...) {}
     BINDING_NAME(l);
     BINDING_NAME(r);
     
-    rgssVersion = clamp(rgssVersion, 0, 3);
-    SE.sourceCount = clamp(SE.sourceCount, 1, 64);
-    BGM.trackCount = clamp(BGM.trackCount, 1, 16);
+    rgssVersion = std::clamp(rgssVersion, 0, 3);
+    SE.sourceCount = std::clamp(SE.sourceCount, 1, 64);
+    BGM.trackCount = std::clamp(BGM.trackCount, 1, 16);
     
     // Determine whether to open a console window on... Windows
     winConsole = getEnvironmentBool("MKXPZ_WINDOWS_CONSOLE", editor.debug);

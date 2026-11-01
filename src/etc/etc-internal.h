@@ -279,13 +279,13 @@ struct NormValue
 
 	void operator =(int value)
 	{
-		unNorm = clamp(value, 0, 255);
+		unNorm = std::clamp(value, 0, 255);
 		norm = unNorm / 255.0f;
 	}
 
 	bool operator ==(int value) const
 	{
-		return unNorm == clamp(value, 0, 255);
+		return unNorm == std::clamp(value, 0, 255);
 	}
 
 	operator int() const

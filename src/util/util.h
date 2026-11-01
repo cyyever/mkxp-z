@@ -23,6 +23,10 @@
 #define UTIL_H
 
 #include <algorithm>
+#include <bit>
+#include <limits>
+
+#include "exception.h"
 
 static inline int
 wrapRange(int value, int min, int max)
@@ -51,14 +55,17 @@ static inline T clamp(T value, T min, T max)
 	return value;
 }
 
-static inline int
+static constexpr int
 findNextPow2(int start)
 {
-	int i = 1;
-	while (i < start)
-		i <<= 1;
+    if (start <= 1)
+        return 1;
 
-	return i;
+    constexpr auto largest = std::bit_floor(static_cast<unsigned>(std::numeric_limits<int>::max()));
+    if (static_cast<unsigned>(start) > largest)
+        throw Exception(Exception::ArgumentError, "Power-of-two size exceeds integer range");
+
+    return static_cast<int>(std::bit_ceil(static_cast<unsigned>(start)));
 }
 
 #define DECL_ATTR_DETAILED(name, type, keyword1, keyword2) \
