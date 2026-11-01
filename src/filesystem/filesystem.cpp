@@ -25,6 +25,8 @@
 #include "display/font.h"
 
 #include <memory>
+#include <algorithm>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -95,25 +97,45 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
   const auto requested = paths::fromRgss(filename);
   const auto file = p->havePathCache ? DirectorySearch::key(paths::toUtf8(requested.filename().u8string()))
                                    : paths::toUtf8(requested.filename().u8string());
-  size_t matches = 0;
+  bool matched = false, missing = false;
+  std::vector<fs::path> failedDecodes;
   const auto tryFile = [&](const std::string &name, const fs::path &actual) {
     if (!name.starts_with(file) || (name.size() != file.size() && name[file.size()] != '.')) return false;
-    if (actual.empty() || !fs::is_regular_file(actual)) return false;
-    ++matches;
+    if (actual.empty() || std::ranges::find(failedDecodes, actual) != failedDecodes.end()) return false;
+    const auto status = fs::status(actual); // Same single stat as is_regular_file(path).
+    if (!fs::is_regular_file(status)) {
+      missing |= !fs::exists(status);
+      return false;
+    }
+    matched = true;
     const auto dot = name.find_last_of('.');
     const char *ext = dot == std::string::npos ? nullptr : name.c_str() + dot + 1;
     // OpenHandler takes ownership, including on a failed decode.
-    return handler.tryRead(openStream(actual), ext);
+    if (handler.tryRead(openStream(actual), ext)) return true;
+    failedDecodes.push_back(actual); // Only failed decodes allocate; successful hits do not.
+    return false;
   };
   try {
     if (p->havePathCache) {
-      for (const auto &[name, entry] : p->search.cachedList(requested.parent_path()))
-        if (tryFile(name, entry.actual)) return;
+      for (int attempt = 0; attempt < 2; ++attempt) {
+        missing = false;
+        for (const auto &[name, entry] : p->search.cachedList(requested.parent_path())) {
+          if (tryFile(name, entry.actual)) return;
+          if (missing) break;
+        }
+        // A deleted winning mount can hide the same name in a later mount.
+        // Refresh outside iteration, once, on a stale match or a complete miss.
+        if (attempt != 0 || (!missing && matched)) break;
+        p->search.invalidateCache(requested.parent_path());
+      }
     } else {
       for (const auto &[name, actual] : p->search.list(requested.parent_path()))
         if (tryFile(name, actual)) return;
     }
-    if (!matches) throw Exception(Exception::NoFileError, "%s", filename);
+    if (!matched) {
+      // filename may be a desensitize() cache view invalidated by the retry.
+      throw Exception(Exception::NoFileError, "%s", paths::toUtf8(requested.u8string()).c_str());
+    }
   } catch (const fs::filesystem_error &error) {
     throw Exception(Exception::IOError, "%s", error.what());
   }
