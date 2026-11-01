@@ -28,10 +28,6 @@ binding_source = [files(
     'tilemapvx-binding.cpp'
 )]
 
-if get_option('steamworks_path') != ''
-    binding_source += files('cusl-binding.cpp')
-endif
-
 if miniffi == true
     binding_source += files('miniffi-binding.cpp')
     binding_source += files('miniffi.cpp')

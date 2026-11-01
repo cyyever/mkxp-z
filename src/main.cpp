@@ -69,10 +69,6 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
 #endif
 
-#ifdef MKXPZ_STEAM
-#include "steamshim_child.h"
-#endif
-
 #ifdef SDL_PLATFORM_APPLE
 #include <Availability.h>
 #include "TouchBar.h"
@@ -297,15 +293,6 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-#ifdef MKXPZ_STEAM
-    if (!STEAMSHIM_init()) {
-      showInitError("Failed to initialize Steamworks. The application cannot "
-                    "continue launching.");
-      SDL_Quit();
-      return 0;
-    }
-#endif
-
     assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
     printRgssVersion(conf.rgssVersion);
 
@@ -314,10 +301,6 @@ int main(int argc, char *argv[]) {
       showInitError(std::string("Error initializing SDL_image: ") +
                     SDL_GetError());
       SDL_Quit();
-
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
 
       return 0;
     }
@@ -328,10 +311,6 @@ int main(int argc, char *argv[]) {
       IMG_Quit();
       SDL_Quit();
 
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
-
       return 0;
     }
 
@@ -341,10 +320,6 @@ int main(int argc, char *argv[]) {
       TTF_Quit();
       IMG_Quit();
       SDL_Quit();
-
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
 
       return 0;
     }
@@ -368,9 +343,6 @@ int main(int argc, char *argv[]) {
                           " cannot run from the Downloads directory.\n\n" +
                           "Please move the application to the Applications folder (or anywhere else) " +
                           "and try again.");
-#ifdef MKXPZ_STEAM
-            STEAMSHIM_deinit();
-#endif
             return 0;
         }
     }
@@ -413,9 +385,6 @@ int main(int argc, char *argv[]) {
       IMG_Quit();
       SDL_Quit();
 
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
       return 0;
     }
 
@@ -510,9 +479,6 @@ int main(int argc, char *argv[]) {
       WSACleanup();
 #endif
 
-#ifdef MKXPZ_STEAM
-    STEAMSHIM_deinit();
-#endif
     Sound_Quit();
     TTF_Quit();
     IMG_Quit();

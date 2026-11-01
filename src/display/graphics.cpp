@@ -51,11 +51,6 @@
 
 #include <mutex>
 
-#ifdef MKXPZ_STEAM
-#include "steamshim_child.h"
-#endif
-
-
 #include <algorithm>
 #include <errno.h>
 #include <functional>
@@ -833,11 +828,6 @@ void Graphics::update(bool checkForShutdown) {
     
     p->checkSyncLock();
     
-    
-#ifdef MKXPZ_STEAM
-    if (STEAMSHIM_alive())
-        STEAMSHIM_pump();
-#endif
     
     if (p->frozen)
         return;

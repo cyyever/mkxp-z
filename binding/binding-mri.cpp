@@ -107,11 +107,6 @@ void fileIntBindingInit();
 void MiniFFIBindingInit();
 #endif
 
-#ifdef MKXPZ_STEAM
-void CUSLBindingInit();
-#endif
-
-
 RB_METHOD(mkxpDelta);
 RB_METHOD(mriPrint);
 RB_METHOD(mriP);
@@ -190,11 +185,6 @@ static void mriBindingInit() {
 #ifdef MKXPZ_MINIFFI
     MiniFFIBindingInit();
 #endif
-    
-#ifdef MKXPZ_STEAM
-    CUSLBindingInit();
-#endif
-    
     
     if (rgssVer >= 3) {
         _rb_define_module_function(rb_mKernel, "rgss_main", mriRgssMain);
