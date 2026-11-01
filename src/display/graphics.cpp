@@ -50,7 +50,8 @@
 #include "input.h"
 #include "sprite.h"
 
-#include <SDL3/SDL.h>
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
 

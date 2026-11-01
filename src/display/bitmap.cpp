@@ -29,7 +29,11 @@
 #include <string_view>
 #include <utility>
 
-#include <SDL3/SDL.h>
+#include <SDL3/SDL_blendmode.h>
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_pixels.h>
+#include <SDL3/SDL_stdinc.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3/SDL_rect.h>
 #include <SDL3/SDL_surface.h>
