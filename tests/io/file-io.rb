@@ -83,6 +83,6 @@ begin
 ensure
   File.delete(filename) if File.exist?(filename)
 end
-check(fileint_test_buffer, 'short-buffer putback/error or borrowed ownership failed')
+check(fileint_test_load, 'native SDL load changed binary bytes, failure output, or borrowed ownership')
 check(fileint_test_live == 0, 'native stream leaked')
 puts 'Ruby/SDL file IO checks passed'

@@ -3,10 +3,7 @@
 
 #include <SDL3/SDL_iostream.h>
 
-#include <algorithm>
 #include <string>
-#include <iostream>
-#include <cstring>
 #include <memory>
 
 // A decoder may own its IO handle while the underlying stream must survive
@@ -31,85 +28,23 @@ inline SDL_IOStream *borrowIO(SDL_IOStream *source) {
     return SDL_OpenIO(&ioInterface, source);
 }
 
-inline bool readFileSDL(const char *path, std::string &out) {
+// Reads from the current position without taking ownership. Keep the stream
+// alive until status is checked: SDL_LoadFile_IO can return data after an error.
+inline bool readFileSDL(SDL_IOStream *stream, std::string &out) {
+    if (!stream)
+        return false;
     size_t size = 0;
-    std::unique_ptr<void, decltype(&SDL_free)> data(SDL_LoadFile(path, &size), SDL_free);
-    if (!data)
+    std::unique_ptr<void, decltype(&SDL_free)> data(SDL_LoadFile_IO(stream, &size, false), SDL_free);
+    const auto status = SDL_GetIOStatus(stream);
+    if (!data || (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF))
         return false;
     out.append(static_cast<const char *>(data.get()), size);
     return true;
 }
 
-template<size_t bufSize = 248, size_t pbSize = 8>
-class SDLRWBuf : public std::streambuf
-{
-public:
-	SDLRWBuf(SDL_IOStream *ops)
-	    : ops(ops)
-	{
-		char *end = buf + bufSize + pbSize;
-		setg(end, end, end);
-	}
-
-private:
-	int_type underflow()
-	{
-		if (!ops)
-			return traits_type::eof();
-
-		if (gptr() < egptr())
-			return traits_type::to_int_type(*gptr());
-
-		char *base = buf;
-		char *start = base;
-
-		const auto putback = std::min<size_t>(pbSize, gptr() - eback());
-		memmove(base, gptr() - putback, putback);
-		start += putback;
-
-		size_t n = SDL_ReadIO(ops, start, bufSize);
-		if (n == 0) {
-            const auto status = SDL_GetIOStatus(ops);
-            if (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF)
-                throw std::ios_base::failure(SDL_GetError());
-			return traits_type::eof();
-        }
-
-		setg(base, start, start + n);
-
-		return underflow();
-	}
-
-	SDL_IOStream *ops;
-	char buf[bufSize+pbSize];
-};
-
-class SDLRWStream
-{
-public:
-	SDLRWStream(const char *filename,
-	            const char *mode)
-	    : ops(SDL_IOFromFile(filename, mode), SDL_CloseIO),
-	      buf(ops.get()),
-	      s(&buf)
-	{}
-
-	~SDLRWStream() = default;
-
-	operator bool() const
-	{
-		return static_cast<bool>(ops);
-	}
-
-	std::istream &stream()
-	{
-		return s;
-	}
-
-private:
-	std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> ops;
-	SDLRWBuf<> buf;
-	std::istream s;
-};
+inline bool readFileSDL(const char *path, std::string &out) {
+    std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(SDL_IOFromFile(path, "rb"), SDL_CloseIO);
+    return stream && readFileSDL(stream.get(), out);
+}
 
 #endif // SDLUTIL_H
