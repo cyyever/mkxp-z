@@ -19,6 +19,9 @@ endif
 registry_python = find_program('python3', 'python')
 registry_tool = files('../tools/shaders/embed-registry.py')
 registry_extra = have_extra_shaders ? ['--extra-shaders'] : []
+foreach metadata : gpu_shader_entrypoint_maps
+    registry_extra += ['--entrypoints', metadata]
+endforeach
 global_dependencies += declare_dependency(sources: custom_target(
     'gpu-embedded-registry',
     output: 'gpu-embedded-shaders.h',
