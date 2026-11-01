@@ -30,7 +30,6 @@
 #include "audio-util.h"
 
 #include <SDL3/SDL.h>
-#include <SDL3_image/SDL_image.h>
 #include <SDL3_sound/SDL_sound.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
@@ -132,7 +131,7 @@ static void showInitError(const std::string &msg) {
   else
     iconSrc = SDL_IOFromFile(conf.iconPath.c_str(), "rb");
 
-  SDL_Surface *iconImg = IMG_Load_IO(iconSrc, true);
+  SDL_Surface *iconImg = SDL_LoadPNG_IO(iconSrc, true);
 
   if (iconImg) {
     SDL_SetWindowIcon(win, iconImg);

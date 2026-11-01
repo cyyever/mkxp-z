@@ -358,15 +358,16 @@ if not pixman.found()
 endif
 global_dependencies += pixman
 
-sdl3_image = dependency('sdl3_image', version: '>=3.4.8', allow_fallback: false,
-    required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not sdl3_image.found()
-    # Legacy JPEG is needed only to rebuild PNG assets from original archives.
-    sdl3_image = subproject('sdl3_image', default_options: meson_base_options + {
-        'legacy_jpeg': get_option('asset_conversion_tools'),
-    }).get_variable('sdl3_image_dep')
+if get_option('asset_conversion_tools')
+    sdl3_image = dependency('sdl3_image', version: '>=3.4.8', allow_fallback: false,
+        required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+    if not sdl3_image.found()
+        # Legacy JPEG is needed only to rebuild PNG assets from original archives.
+        sdl3_image = subproject('sdl3_image', default_options: meson_base_options + {
+            'legacy_jpeg': true,
+        }).get_variable('sdl3_image_dep')
+    endif
 endif
-global_dependencies += sdl3_image
 
 
 

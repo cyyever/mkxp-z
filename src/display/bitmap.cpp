@@ -30,7 +30,6 @@
 #include <utility>
 
 #include <SDL3/SDL.h>
-#include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3/SDL_rect.h>
 #include <SDL3/SDL_surface.h>
@@ -2508,7 +2507,7 @@ void Bitmap::saveToFile(const char *filename)
     }
 
     const auto fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
-    const bool saved = IMG_SavePNG(surf, fn_normalized.c_str());
+    const bool saved = SDL_SavePNG(surf, fn_normalized.c_str());
 
     if (!saved) throw Exception(Exception::SDLError, "%s", SDL_GetError());
 }
