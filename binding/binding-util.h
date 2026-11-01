@@ -70,6 +70,15 @@ struct Exception;
 
 void raiseRbExc(Exception *exc);
 
+// Trivial state: Ruby raises only after all C++ catch scopes have unwound.
+struct RbNativeException {
+    VALUE klass = Qnil;
+    char *message = nullptr;
+    bool outOfMemory = false;
+};
+RbNativeException captureRbNativeException() noexcept;
+[[noreturn]] void raiseRbNativeException(RbNativeException error);
+
 void *drop_gvl_guard(void *(*func)(void *), void *args,
                             rb_unblock_function_t *ubf, void *data2);
 
@@ -211,9 +220,9 @@ static inline void _rb_define_module_function(VALUE module, const char *name,
 GFX_LOCK;                                                                \
 try {                                                                    \
 exp                                                                      \
-} catch (const Exception &exc) {                                         \
+} catch (...) {                                         \
 GFX_UNLOCK;                                                              \
-throw exc;                                                               \
+throw;                                                               \
 }                                                                        \
 GFX_UNLOCK;                                                              \
 }
@@ -308,15 +317,15 @@ inline void rb_check_argc(int actual, int expected) {
  * leaks memory even if we catch by value */
 #define RB_METHOD_GUARD(name) RB_METHOD(name)   \
 {                                               \
-    Exception *exc = 0;                         \
-    try{                                        \
+    RbNativeException error;                    \
+    try {                                       \
 
 #define RB_METHOD_GUARD_END                     \
-    } catch (const Exception &e) {              \
-        exc = new Exception(e);                 \
+    } catch (...) {                             \
+        error = captureRbNativeException();     \
     }                                           \
-    if (exc) {                                  \
-        raiseRbExc(exc);                        \
+    if (error.klass != Qnil || error.outOfMemory) { \
+        raiseRbNativeException(error);          \
     }                                           \
     return Qnil;                                \
 }
