@@ -703,19 +703,19 @@ struct InputPrivate
     uint8_t *rawButtonStatesOld;
     
     // Gamepad axes & mouse coordinates
-    int16_t axisStateArray[SDL_GAMEPAD_AXIS_COUNT];
-    int mousePos[2];
-    bool mouseInWindow;
+    int16_t axisStateArray[SDL_GAMEPAD_AXIS_COUNT]{};
+    int mousePos[2]{};
+    bool mouseInWindow = false;
     
     Input::ButtonCode repeating;
-    int rawRepeating;
-    int buttonRepeating;
+    int rawRepeating = -1;
+    int buttonRepeating = -1;
     
     unsigned int repeatCount;
-    unsigned int rawRepeatCount;
-    unsigned int buttonRepeatCount;
+    unsigned int rawRepeatCount = 0;
+    unsigned int buttonRepeatCount = 0;
     
-    double repeatTime, rawRepeatTime, buttonRepeatTime;
+    double repeatTime = 0, rawRepeatTime = 0, buttonRepeatTime = 0;
     
     unsigned int repeatStart;
     unsigned int repeatDelay;
@@ -814,6 +814,16 @@ struct InputPrivate
         return statesOld[mapToIndex[code]];
     }
     
+    static int scancodeForVKey(int code) {
+        const auto entry = vKeyToScancode.find(code);
+        return entry == vKeyToScancode.end() ? -1 : entry->second;
+    }
+
+    static void checkControllerButton(int button) {
+        if (button < 0 || button >= SDL_GAMEPAD_BUTTON_COUNT)
+            throw Exception(Exception::ArgumentError, "Controller button index out of range: %d", button);
+    }
+
     ButtonState getStateRaw(int code, bool useVKey)
     {
         ButtonState b;
@@ -847,17 +857,12 @@ struct InputPrivate
                     break;
                     
                 default:
-                    ButtonState b;
-                    try
-                {
-                    scancode = vKeyToScancode[code];
-                }
-                    catch (...) {}
-                    if (scancode == -1) return b;
+                    scancode = scancodeForVKey(code);
                     break;
             }
         }
         
+        if (scancode < 0 || scancode >= SDL_SCANCODE_COUNT) return b;
         b.pressed = rawStates[scancode];
         b.triggered = (rawStates[scancode] && !rawStatesOld[scancode]);
         b.released = (!rawStates[scancode] && rawStatesOld[scancode]);
@@ -868,6 +873,7 @@ struct InputPrivate
     }
     
     ButtonState getControllerButtonState(int button) {
+        checkControllerButton(button);
         ButtonState b;
         
         b.pressed = rawButtonStates[button];
@@ -1350,15 +1356,8 @@ bool Input::controllerIsReleasedEx(int button) {
 }
 
 unsigned int Input::repeatcount(int code, bool isVKey) {
-    int c = code;
-    if (isVKey) {
-        try {
-            c = vKeyToScancode[code];
-        }
-        catch (...) {
-            return 0;
-        }
-    }
+    const int c = isVKey ? InputPrivate::scancodeForVKey(code) : code;
+    if (c < 0 || c >= SDL_SCANCODE_COUNT) return 0;
     if (c != p->rawRepeating)
         return 0;
     
@@ -1366,6 +1365,7 @@ unsigned int Input::repeatcount(int code, bool isVKey) {
 }
 
 unsigned int Input::controllerRepeatcount(int button) {
+    InputPrivate::checkControllerButton(button);
     if (button != p->buttonRepeating)
         return 0;
     
@@ -1373,12 +1373,8 @@ unsigned int Input::controllerRepeatcount(int button) {
 }
 
 double Input::repeatTimeEx(int code, bool isVKey) {
-    int c = code;
-    if (isVKey) {
-        try { c = vKeyToScancode[code]; }
-        catch (...) { return 0; }
-    }
-    
+    const int c = isVKey ? InputPrivate::scancodeForVKey(code) : code;
+    if (c < 0 || c >= SDL_SCANCODE_COUNT) return 0;
     if (c != p->rawRepeating)
         return 0;
     
@@ -1386,6 +1382,7 @@ double Input::repeatTimeEx(int code, bool isVKey) {
 }
 
 double Input::controllerRepeatTimeEx(int button) {
+    InputPrivate::checkControllerButton(button);
     if (button != p->buttonRepeating)
         return 0;
     
