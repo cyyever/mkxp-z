@@ -24,6 +24,7 @@
 
 #include <SDL3/SDL_iostream.h>
 #include <string>
+#include <memory>
 
 
 struct FileSystemPrivate;
@@ -73,7 +74,7 @@ public:
 	const char *desensitize(const char *filename);
 
 private:
-	FileSystemPrivate *p;
+	std::unique_ptr<FileSystemPrivate> p;
 };
 
 

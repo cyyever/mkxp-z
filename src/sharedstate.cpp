@@ -109,18 +109,8 @@ struct SharedStatePrivate
 		if (gl.ReleaseShaderCompiler)
 			gl.ReleaseShaderCompiler();
 
-		std::string archPath = config.execName + ".rgssad";
-
 		for (size_t i = 0; i < config.patches.size(); ++i)
 			fileSystem.addPath(config.patches[i].c_str());
-
-		/* Check if a game archive exists */
-		FILE *tmp = fopen(archPath.c_str(), "rb");
-		if (tmp)
-		{
-			fileSystem.addPath(archPath.c_str());
-			fclose(tmp);
-		}
 
 		fileSystem.addPath(".");
 

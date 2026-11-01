@@ -128,36 +128,6 @@ else
 endif
 global_dependencies += zlib
 
-physfs = dependency('physfs', allow_fallback: false, required: get_option('physfs_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not physfs.found()
-    physfs_options = cmake.subproject_options()
-    physfs_options.add_cmake_defines(cmake_base_options + {
-        'CMAKE_OBJC_FLAGS': run_command(quotetool, '-fno-objc-arc', '-fno-objc-weak', check: true).stdout().strip(),
-        'PHYSFS_BUILD_STATIC': true,
-        'PHYSFS_BUILD_SHARED': false,
-        'PHYSFS_BUILD_TEST': false,
-        'PHYSFS_BUILD_DOCS': false,
-    })
-    foreach opt, val : cmake_override_options
-        physfs_options.set_override_option(opt, val)
-    endforeach
-    physfs = declare_dependency(dependencies: [
-        cmake.subproject('physfs', options: physfs_options).dependency('physfs-static'),
-        host_system == 'darwin'
-            ? dependency(
-                'appleframeworks',
-                modules: [
-                    'Foundation',
-                    'IOKit',
-                ],
-                required: true,
-            )
-            : [],
-    ])
-    meson.override_dependency('physfs', physfs, static: true)
-endif
-global_dependencies += physfs
-
 sdl3 = dependency('sdl3', version: '>=3.4', allow_fallback: false,
     required: get_option('sdl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3.found()
@@ -728,8 +698,6 @@ main_source = files(
     'audio/sdlsoundsource.cpp',
     'audio/soundemitter.cpp',
     'audio/vorbissource.cpp',
-
-    'crypto/rgssad.cpp',
 
     'display/autotiles.cpp',
     'display/autotilesvx.cpp',
