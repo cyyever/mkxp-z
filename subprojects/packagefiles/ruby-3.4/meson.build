@@ -83,7 +83,10 @@ else
     baseruby = run_command(quotetool, find_program('ruby').cmd_array(), check: true).stdout().strip()
 
     # Ruby's generated makefiles use GNU make, including on FreeBSD.
-    meson.override_find_program('make', find_program('gmake', 'make'))
+    gmake = find_program('gmake', required: false)
+    if gmake.found()
+        meson.override_find_program('make', gmake)
+    endif
     ruby = declare_dependency(
         dependencies: [
             ruby_deps,
