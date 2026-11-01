@@ -1,6 +1,7 @@
 """Prepare the Ruby source tree for the minimal embedded runtime.
 
-mkxp-z only links the zlib extension; no bundled gems are installed.
+The games require zlib; Unix builds also need monitor for Ruby's installer.
+No bundled gems are installed.
 """
 from pathlib import Path
 import sys

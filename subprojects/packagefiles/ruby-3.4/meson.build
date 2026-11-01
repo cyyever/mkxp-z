@@ -24,10 +24,11 @@ if build_machine.system() in ['windows', 'cygwin']
     destdir = run_command(subproject('common').get_variable('cygpath'), '-m', destdir, check: true).stdout().strip()
 endif
 
-# MSYS2 exports PKG_CONFIG as a native Windows path; Ruby's Makefile expands it unquoted in sh, which strips the backslashes.
-ruby_env_extra = {}
+# external_project sets PKG_CONFIG after applying user environment overrides.
+# A configure argument wins; PATH lookup also avoids Windows path quoting in make.
+ruby_configure_extra = []
 if build_machine.system() in ['windows', 'cygwin']
-    ruby_env_extra += {'PKG_CONFIG': run_command(subproject('common').get_variable('cygpath'), '-u', find_program('pkg-config').full_path(), check: true).stdout().strip()}
+    ruby_configure_extra += 'PKG_CONFIG=pkg-config'
 endif
 
 baseruby = run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('ruby').cmd_array() : find_program('ruby')), check: true).stdout().strip()
@@ -109,8 +110,9 @@ else
                     '--disable-shared',
                     '--disable-yjit',
                     '--disable-install-doc',
-                    # mkxp-z only needs zlib (auto-required by the binding); the supported games load no other extension.
-                    '--with-ext=zlib',
+                    # Ruby's Unix installer loads RubyGems, which requires monitor.
+                    # The games themselves only require zlib.
+                    '--with-ext=zlib,monitor',
                     '--with-static-linked-ext',
                     '--disable-rubygems',
                     '--without-gmp',
@@ -128,7 +130,7 @@ else
                     'CFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cflags, check: true).stdout().strip() + ' ' + get_option('cflags'),
                     'CXXFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cppflags, check: true).stdout().strip() + ' ' + get_option('cppflags'),
                     'LDFLAGS=' + run_command(subproject('common').get_variable('quotetool'), ldflags, check: true).stdout().strip() + ' ' + get_option('ldflags'),
-                ],
+                ] + ruby_configure_extra,
                 cross_configure_options: [
                     '--host=@HOST@',
                     '--host=' + subproject('common').get_variable('host_triplet'),
@@ -153,7 +155,7 @@ else
                     'rb_cv_gcc_sync_builtins': 'no',
                     'rb_cv_prog_gnu_ld': subproject('common').get_variable('c_linker_is_gnu') ? 'yes' : 'no',
                     'rb_cv_symbol_prefix': meson.get_compiler('c').symbols_have_underscore_prefix() ? '_' : 'NONE',
-                } + ruby_env_extra,
+                },
                 depends: [
                     # Force Meson to fully build all of our vendored dependencies that are required by Ruby before building Ruby itself
                     executable(
@@ -176,6 +178,9 @@ else
                     meson.get_compiler('c').find_library('dl', required: false),
                     meson.get_compiler('c').find_library('rt', required: false),
                 ]
+                : [],
+            host_machine.system() == 'darwin'
+                ? [dependency('appleframeworks', modules: ['CoreFoundation'])]
                 : [],
             host_machine.system() in ['windows', 'cygwin']
                 ? [
@@ -213,6 +218,7 @@ else
                 : [],
             meson.project_build_root() / 'build' / 'ext' / 'extinit.a',
             meson.project_build_root() / 'build' / 'ext' / 'zlib' / 'zlib.a',
+            meson.project_build_root() / 'build' / 'ext' / 'monitor' / 'monitor.a',
             meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
             meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
             meson.project_build_root() / 'build' / 'enc' / 'libtrans.a',
