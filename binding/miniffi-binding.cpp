@@ -43,6 +43,19 @@ static SDL_FunctionPointer MiniFFI_GetFunctionHandle(SDL_SharedObject *libhandle
     return SDL_LoadFunction(libhandle, func);
 }
 
+static int miniFFIType(char code) {
+    switch (code) {
+        case 'V': case 'v': return _T_VOID;
+        case 'N': case 'n': case 'L': case 'l': return _T_NUMBER;
+        case 'P': case 'p': return _T_POINTER;
+        case 'I': case 'i': return _T_INTEGER;
+        case 'B': case 'b': return _T_BOOL;
+        default:
+            throw Exception(Exception::ArgumentError, "Invalid MiniFFI type code: %u",
+                            static_cast<unsigned char>(code));
+    }
+}
+
 // MiniFFI.new(library, function[, imports[, exports]])
 // Yields itself in blocks
 
@@ -73,110 +86,32 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
     rb_iv_set(self, "_libname", libname);
     
     VALUE ary_imports = rb_ary_new();
-    VALUE *entry;
-    switch (TYPE(imports)) {
-        case T_NIL:
-            break;
-        case T_ARRAY:
-            entry = RARRAY_PTR(imports);
-            for (int i = 0; i < RARRAY_LEN(imports); i++) {
-                SafeStringValue(entry[i]);
-                switch (*(char *)RSTRING_PTR(entry[i])) {
-                    case 'N':
-                    case 'n':
-                    case 'L':
-                    case 'l':
-                        rb_ary_push(ary_imports, INT2FIX(_T_NUMBER));
-                        break;
-                        
-                    case 'P':
-                    case 'p':
-                        rb_ary_push(ary_imports, INT2FIX(_T_POINTER));
-                        break;
-                        
-                    case 'I':
-                    case 'i':
-                        rb_ary_push(ary_imports, INT2FIX(_T_INTEGER));
-                        break;
-                        
-                    case 'B':
-                    case 'b':
-                        rb_ary_push(ary_imports, INT2FIX(_T_BOOL));
-                        break;
-                }
-            }
-            break;
-        default:
-            SafeStringValue(imports);
-            const char *s = RSTRING_PTR(imports);
-            for (int i = 0; i < RSTRING_LEN(imports); i++) {
-                switch (*s++) {
-                    case 'N':
-                    case 'n':
-                    case 'L':
-                    case 'l':
-                        rb_ary_push(ary_imports, INT2FIX(_T_NUMBER));
-                        break;
-                        
-                    case 'P':
-                    case 'p':
-                        rb_ary_push(ary_imports, INT2FIX(_T_POINTER));
-                        break;
-                        
-                    case 'I':
-                    case 'i':
-                        rb_ary_push(ary_imports, INT2FIX(_T_INTEGER));
-                        break;
-                        
-                    case 'B':
-                    case 'b':
-                        rb_ary_push(ary_imports, INT2FIX(_T_BOOL));
-                        break;
-                }
-            }
-            break;
-    }
-    
-    if (MINIFFI_MAX_ARGS < RARRAY_LEN(ary_imports))
-        throw Exception(Exception::RuntimeError, "too many parameters: %ld/%ld\n",
-                 RARRAY_LEN(ary_imports), MINIFFI_MAX_ARGS);
-    
-    rb_iv_set(self, "_imports", ary_imports);
-    int ex;
-    if (NIL_P(exports)) {
-        ex = _T_VOID;
-    } else {
-        SafeStringValue(exports);
-        switch (*RSTRING_PTR(exports)) {
-            case 'V':
-            case 'v':
-                ex = _T_VOID;
-                break;
-                
-            case 'N':
-            case 'n':
-            case 'L':
-            case 'l':
-                ex = _T_NUMBER;
-                break;
-                
-            case 'P':
-            case 'p':
-                ex = _T_POINTER;
-                break;
-                
-            case 'I':
-            case 'i':
-                ex = _T_INTEGER;
-                break;
-                
-            case 'B':
-            case 'b':
-                ex = _T_BOOL;
-                break;
+    auto appendImport = [&](char code) {
+        const int type = miniFFIType(code);
+        // Win32API's V/v import marker denotes no argument.
+        if (type == _T_VOID) return;
+        if (RARRAY_LEN(ary_imports) >= MINIFFI_MAX_ARGS)
+            throw Exception(Exception::ArgumentError, "Too many MiniFFI parameters (maximum %ld)", MINIFFI_MAX_ARGS);
+        rb_ary_push(ary_imports, INT2FIX(type));
+    };
+    if (RB_TYPE_P(imports, RUBY_T_ARRAY)) {
+        for (long i = 0; i < RARRAY_LEN(imports); ++i) {
+            VALUE entry = rb_ary_entry(imports, i);
+            SafeStringValue(entry);
+            appendImport(*RSTRING_PTR(entry));
         }
+    } else if (!NIL_P(imports)) {
+        SafeStringValue(imports);
+        for (long i = 0; i < RSTRING_LEN(imports); ++i)
+            appendImport(RSTRING_PTR(imports)[i]);
     }
-    rb_iv_set(self, "_exports", INT2FIX(ex));
+    rb_iv_set(self, "_imports", ary_imports);
+    int exportType = _T_VOID;
+    if (!NIL_P(exports)) {
+        SafeStringValue(exports);
+        exportType = miniFFIType(*RSTRING_PTR(exports));
+    }
+    rb_iv_set(self, "_exports", INT2FIX(exportType));
     if (rb_block_given_p())
         rb_yield(self);
     return Qnil;
@@ -195,7 +130,7 @@ void* miniffi_call_cb(void *args) {
     }
 
 RB_METHOD_GUARD(MiniFFI_call) {
-    MiniFFIFuncArgs param;
+    MiniFFIFuncArgs param{};
 #define params param.params
     VALUE func = rb_iv_get(self, "_func");
     VALUE own_imports = rb_iv_get(self, "_imports");
@@ -224,9 +159,12 @@ RB_METHOD_GUARD(MiniFFI_call) {
                 }
                 break;
                 
-            case _T_BOOL:
-                rb_bool_arg(rb_ary_entry(args, i), (bool*)&lParam);
+            case _T_BOOL: {
+                bool value = false;
+                rb_bool_arg(rb_ary_entry(args, i), &value);
+                lParam = value ? 1 : 0;
                 break;
+            }
                 
             case _T_INTEGER:
 #if INTPTR_MAX == INT64_MAX
