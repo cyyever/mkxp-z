@@ -28,7 +28,7 @@
 #include "graphics.h"
 
 #include <assert.h>
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 class Disposable
 {

@@ -22,7 +22,7 @@
 #ifndef ETC_H
 #define ETC_H
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 #include "serializable.h"
 #include "etc-internal.h"

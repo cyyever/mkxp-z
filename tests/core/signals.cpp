@@ -1,4 +1,4 @@
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 #include <memory>
 #include <stdexcept>

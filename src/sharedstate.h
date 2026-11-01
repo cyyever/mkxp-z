@@ -22,7 +22,7 @@
 #ifndef SHAREDSTATE_H
 #define SHAREDSTATE_H
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 #define shState SharedState::instance
 #define glState shState->_glState()

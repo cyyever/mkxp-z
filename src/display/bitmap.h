@@ -26,7 +26,7 @@
 #include "etc-internal.h"
 #include "etc.h"
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 class Font;
 class ShaderBase;

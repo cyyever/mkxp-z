@@ -36,7 +36,7 @@
 #include "texpool.h"
 #include "glstate.h"
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 template<typename T>
 struct Sides

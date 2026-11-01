@@ -51,7 +51,7 @@
 
 #include "debugwriter.h"
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 #include <algorithm>
 #include <cmath>

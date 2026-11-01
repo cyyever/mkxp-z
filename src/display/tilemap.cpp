@@ -42,7 +42,7 @@
 #include "tileatlas.h"
 #include "tilemap-common.h"
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 #include <string.h>
 #include <stdint.h>

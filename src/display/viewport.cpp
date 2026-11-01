@@ -30,7 +30,7 @@
 
 #include <SDL3/SDL_rect.h>
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 struct ViewportPrivate
 {

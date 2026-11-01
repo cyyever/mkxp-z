@@ -37,7 +37,7 @@
 #include <assert.h>
 #include <vector>
 
-#include "util/signal.h"
+#include "util/engine-signal.h"
 
 static inline int
 wrap(int value, int range)

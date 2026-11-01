@@ -25,7 +25,7 @@
 #include "serializable.h"
 
 #include <stdint.h>
-#include "util/signal.h"
+#include "util/engine-signal.h"
 #include <vector>
 
 class Table : public Serializable
