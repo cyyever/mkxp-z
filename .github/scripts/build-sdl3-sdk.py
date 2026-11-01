@@ -94,13 +94,15 @@ def main() -> None:
     install("freetype", ["-DBUILD_SHARED_LIBS=OFF", *[
         f"-DFT_DISABLE_{dependency}=ON" for dependency in ("ZLIB", "BZIP2", "PNG", "HARFBUZZ", "BROTLI")
     ]])
+    # SDL_image 3.4 uses native SDL PNG; avoid its optional libpng dependency.
     image_options = ["-DSDLIMAGE_SAMPLES=OFF", "-DSDLIMAGE_TESTS=OFF", "-DSDLIMAGE_INSTALL=ON",
                      "-DSDLIMAGE_INSTALL_CPACK=OFF", "-DSDLIMAGE_VENDORED=OFF",
                      "-DSDLIMAGE_BACKEND_STB=ON", "-DSDLIMAGE_BACKEND_IMAGEIO=OFF",
                      "-DSDLIMAGE_BACKEND_WIC=OFF", "-DSDLIMAGE_PNG=ON", "-DSDLIMAGE_JPG=ON",
-                     "-DSDLIMAGE_PNG_SAVE=ON", "-DSDLIMAGE_JPG_SAVE=ON"]
+                     "-DSDLIMAGE_PNG_SAVE=ON", "-DSDLIMAGE_JPG_SAVE=ON",
+                     "-DSDLIMAGE_PNG_LIBPNG=OFF"]
     image_options += [f"-DSDLIMAGE_{format}=OFF" for format in
-                      ("AVIF", "BMP", "GIF", "JXL", "LBM", "PCX", "PNM", "QOI", "SVG",
+                      ("ANI", "AVIF", "BMP", "GIF", "JXL", "LBM", "PCX", "PNM", "QOI", "SVG",
                        "TGA", "TIF", "WEBP", "XCF", "XPM", "XV")]
     install("sdl3_image", image_options)
     install("sdl3_ttf", ["-DSDLTTF_SAMPLES=OFF", "-DSDLTTF_INSTALL=ON",

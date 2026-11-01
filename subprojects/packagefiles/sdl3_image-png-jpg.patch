@@ -1,56 +1,25 @@
---- a/meson.build
-+++ b/meson.build
-@@ -3,23 +3,18 @@
- 
- sdl_dep = dependency('sdl3', version: '>=3.2.4')
- 
--png_dep = dependency('libpng')
--jpg_dep = dependency('libjpeg', required: false)
--
--img_args = []
--
--# These are enabled by default it seems.
--#img_args = ['-DWANT_LIBPNG']
--#if jpg_dep.found()
--#  img_args += '-DWANT_JPEGLIB'
--#endif
-+# Decode PNG with bundled stb_image; JPEG is only for offline asset conversion.
-+img_args = ['-DSDL_IMAGE_USE_COMMON_BACKEND', '-DUSE_STBIMAGE', '-DLOAD_PNG']
-+if get_option('legacy_jpeg')
-+  img_args += '-DLOAD_JPG'
-+endif
- 
- subdir('src')
- img_lib = library('sdl3_image',
-   img_src,
-   c_args: img_args,
-   include_directories: 'include',
--  dependencies: [png_dep, sdl_dep])
-+  dependencies: [sdl_dep])
- 
- sdl3_image_dep = declare_dependency(include_directories: 'include',
-   link_with: img_lib)
---- /dev/null
-+++ b/meson_options.txt
-@@ -0,0 +1 @@
-+option('legacy_jpeg', type: 'boolean', value: false, description: 'Enable JPEG decoding for offline asset conversion')
---- a/src/meson.build
-+++ b/src/meson.build
-@@ -1,4 +1,5 @@
- img_src = files(
-+  'IMG.c',
-   'IMG_avif.c',
-   'IMG_bmp.c',
-   'IMG_gif.c',
 --- a/src/IMG_stb.c
 +++ b/src/IMG_stb.c
-@@ -48,7 +48,9 @@
+@@ -21,7 +21,7 @@
+
+ #include <SDL3_image/SDL_image.h>
+
+-#ifdef USE_STBIMAGE
++#if defined(USE_STBIMAGE) && defined(LOAD_JPG)
+
+ #define malloc SDL_malloc
+ #define realloc SDL_realloc
+@@ -47,7 +47,6 @@
+ #define STBI_NEON
  #endif
  #define STBI_NO_STDIO
- #define STBI_ONLY_PNG
-+#ifdef LOAD_JPG
+-#define STBI_ONLY_PNG
  #define STBI_ONLY_JPEG
-+#endif
  #define STBI_NO_GIF
  #define STBI_NO_HDR
- #define STBI_NO_LINEAR
+@@ -253,4 +252,4 @@
+     return surface;
+ }
+
+-#endif /* USE_STBIMAGE */
++#endif /* USE_STBIMAGE && LOAD_JPG */
