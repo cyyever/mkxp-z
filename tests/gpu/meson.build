@@ -33,4 +33,12 @@ if host_machine.system() == 'windows'
     )
     test('gpu-shader-pixels', shader_tests, args: [meson.current_build_dir()] + extra_shader_args,
         depends: shaders, timeout: 30)
+    frame_tests = executable('gpu-frame-tests',
+        'frame-batches.cpp', '../../src/display/gpu-device.cpp', '../../src/display/gpu-shader.cpp',
+        '../../src/display/gpu-frame.cpp',
+        include_directories: include_directories('../../src'),
+        dependencies: sdl,
+    )
+    test('gpu-frame-batches', frame_tests, args: [meson.current_build_dir()],
+        depends: shaders, timeout: 30)
 endif
