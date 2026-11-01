@@ -135,6 +135,9 @@ if get_option('force32') == true
 endif
 
 subdir('src')
+if get_option('asset_conversion_tools')
+    subdir('tools/asset-convert')
+endif
 subdir('binding')
 subdir('shader')
 subdir('assets')

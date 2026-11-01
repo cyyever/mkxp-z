@@ -214,6 +214,20 @@ if not sdl3_sound.found()
         'SDLSOUND_BUILD_SHARED': false,
         'SDLSOUND_BUILD_TEST': false,
         'SDLSOUND_INSTALL': false,
+        # File decoders only: SDL3's native audio playback backends stay enabled.
+        'SDLSOUND_DECODER_WAV': true,
+        'SDLSOUND_DECODER_FLAC': true,
+        'SDLSOUND_DECODER_VORBIS': true,
+        'SDLSOUND_DECODER_MP3': true,
+        'SDLSOUND_DECODER_AIFF': false,
+        'SDLSOUND_DECODER_AU': false,
+        'SDLSOUND_DECODER_VOC': false,
+        'SDLSOUND_DECODER_RAW': false,
+        'SDLSOUND_DECODER_SHN': false,
+        'SDLSOUND_DECODER_MODPLUG': false,
+        'SDLSOUND_DECODER_MIDI': false,
+        # Keep the macOS CoreAudio file decoder until legacy WAV migration is
+        # deployed; unlike SDL_sound's WAV decoder, it can accept A-law inputs.
     })
     sdl3_sound = declare_dependency(dependencies: [sdl3,
         cmake.subproject('sdl3_sound', options: sound_options).dependency('SDL3_sound-static')])
