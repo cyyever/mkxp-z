@@ -1,4 +1,5 @@
-#include "util/text-encoding.h"
+#include "util/encoding.h"
+#include "util/font-encoding.h"
 
 #include <stdexcept>
 #include <string_view>
@@ -10,25 +11,43 @@ void require(bool condition) {
         throw std::runtime_error("text encoding boundary failure");
 }
 
+template<class Function>
+void requireFailure(Function operation) {
+    bool failed = false;
+    try {
+        operation();
+    } catch (const Exception &) {
+        failed = true;
+    }
+    require(failed);
+}
+
 int main() {
     for (auto text : {""sv, "Untitled"sv, "\xe9\x9b\xa8\xe8\xa1\x80"sv,
                       "\xc2\x80"sv, "\xf4\x8f\xbf\xbf"sv, "a\0b"sv}) {
         require(Encoding::validUtf8(text));
-        require(Encoding::textCharset(text) == "UTF-8"sv);
+        require(Encoding::convertString(text) == text);
     }
     for (auto text : {"\x80"sv, "\xc0\xaf"sv, "\xe0\x80\x80"sv,
                       "\xed\xa0\x80"sv, "\xf4\x90\x80\x80"sv,
-                      "\xf5\x80\x80\x80"sv, "\xe9\x9b"sv, "\xc2x"sv})
+                      "\xf5\x80\x80\x80"sv, "\xe9\x9b"sv, "\xc2x"sv,
+                      "\xd3\xea\xd1\xaa"sv, // Legacy Chinese bytes.
+                      "\xef\xbb\xbf\xff"sv,
+                      "\xff\xfe\0A"sv, "\xfe\xff\0A"sv, // UTF-16 BOMs.
+                      "\0\0\xfe\xff\0\0\0A"sv}) { // UTF-32 BOM.
         require(!Encoding::validUtf8(text));
+        requireFailure([&] { Encoding::convertString(text); });
+    }
+    require(Encoding::convertString("\xef\xbb\xbfhello"sv) == "hello");
 
-    require(Encoding::textCharset("\xd3\xea\xd1\xaa"sv) == "GB18030"sv);
-    require(Encoding::textCharset("\xff\xfe\0\0"sv) == "UTF-32"sv);
-    require(Encoding::textCharset("\0\0\xfe\xff"sv) == "UTF-32"sv);
-    require(Encoding::textCharset("\xff\xfe"sv) == "UTF-16"sv);
-    require(Encoding::textCharset("\xfe\xff"sv) == "UTF-16"sv);
-    // A BOM commits even malformed input to Unicode; conversion must fail
-    // rather than retrying it as the legacy Chinese fallback.
-    require(Encoding::textCharset("\xef\xbb\xbf\xff"sv) == "UTF-8"sv);
-    require(!Encoding::validUtf8("\xef\xbb\xbf\xff"sv));
-    require(Encoding::textCharset("\xff\xfe\xff"sv) == "UTF-16"sv);
+    // Font metadata is a fixed binary record format, not game text input.
+    const auto expected = "A\0\xe9\x9b\xa8\xe8\xa1\x80\xf0\x9f\x8e\xae"sv;
+    require(FontEncoding::decodeName("\0A\0\0\x96\xe8\x88\x40\xd8\x3c\xdf\xae"sv) == expected);
+    require(FontEncoding::decodeName("\0\0\0A\0\0\0\0\0\0\x96\xe8\0\0\x88\x40\0\x01\xf3\xae"sv, true) == expected);
+    require(FontEncoding::decodeName("\x07\xff\x08\0\xd7\xff\xe0\0\xdb\xff\xdf\xff"sv)
+            == "\xdf\xbf\xe0\xa0\x80\xed\x9f\xbf\xee\x80\x80\xf4\x8f\xbf\xbf"sv);
+    for (auto bytes : {"\xff"sv, "\xd8\0"sv, "\xd8\0\0A"sv, "\xdc\0"sv})
+        requireFailure([&] { FontEncoding::decodeName(bytes); });
+    for (auto bytes : {"\0\0\xd8\0"sv, "\0\x11\0\0"sv, "\0\0\0"sv})
+        requireFailure([&] { FontEncoding::decodeName(bytes, true); });
 }

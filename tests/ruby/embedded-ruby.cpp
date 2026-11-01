@@ -2,6 +2,8 @@
 #include "binding-util.h"
 #include <vector>
 
+extern "C" void Init_json_settings_test();
+
 struct Payload { int value = 42; };
 DEF_TYPE(Payload);
 
@@ -24,6 +26,7 @@ int main(int argc, char **argv) {
     ruby_sysinit(&argc, &argv);
     RUBY_INIT_STACK;
     ruby_init();
+    Init_json_settings_test();
     rb_define_global_function("verify_native_class", RUBY_METHOD_FUNC(verifyNativeClass), 0);
     rb_define_global_function("verify_typed_data", RUBY_METHOD_FUNC(verifyTypedData), 0);
     char noGems[] = "--disable-gems";

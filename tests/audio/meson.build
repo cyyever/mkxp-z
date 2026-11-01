@@ -1,5 +1,5 @@
 project('mkxp-audio-tests', 'cpp', default_options: {'cpp_std': 'c++26,c++latest'})
-sdl = dependency('sdl3', version: '>=3.4')
+sdl = dependency('SDL3', version: '>=3.4', method: 'cmake', modules: ['SDL3::SDL3'])
 stream_tests = executable('audio-stream-tests',
     'audio-stream.cpp', '../../src/audio/alstream.cpp',
     include_directories: include_directories('support', '../../src/audio', '../../src/util'),

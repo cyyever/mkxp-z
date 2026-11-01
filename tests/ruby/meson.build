@@ -23,11 +23,19 @@ ruby_runtime = ruby_project.get_variable('ruby')
 embedded_ruby = executable(
     'embedded-ruby',
     'embedded-ruby.cpp',
+    'json-settings.cpp',
+    '../../binding/json-binding.cpp',
     dependencies: ruby_runtime,
-    include_directories: include_directories('../../binding', '../../src/util'),
+    include_directories: include_directories('../../binding', '../../src', '../../src/util'),
     override_options: engine_standards,
 )
 test('ruby-rgss', embedded_ruby, args: [files('rgss.rb')], env: {
+    'RUBYLIB': ruby_project.get_variable('ruby_build_dir') / 'dist/lib/ruby/3.4.0',
+    'RUBYOPT': '',
+}, timeout: 120)
+
+# Exercise the production settings converters independently of engine/assets.
+test('ruby-json-settings', embedded_ruby, args: [files('json-settings.rb')], env: {
     'RUBYLIB': ruby_project.get_variable('ruby_build_dir') / 'dist/lib/ruby/3.4.0',
     'RUBYOPT': '',
 }, timeout: 120)

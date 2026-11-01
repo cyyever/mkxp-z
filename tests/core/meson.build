@@ -1,6 +1,18 @@
+normalization_native_sources = []
+normalization_deps = []
+normalization_objcpp_args = []
+if host_machine.system() == 'darwin'
+    normalization_native_sources += files('../../src/filesystem/filename-normalization.mm')
+    normalization_deps += dependency('appleframeworks', modules: ['Foundation'])
+    normalization_objcpp_args += '-fobjc-arc'
+endif
+
 core_tests = executable(
     'portable-core-tests',
     'portable-core.cpp',
+    normalization_native_sources,
+    dependencies: normalization_deps,
+    objcpp_args: normalization_objcpp_args,
     include_directories: include_directories('../../src'),
     override_options: engine_standards + {'warning_level': '3', 'werror': true},
 )
@@ -27,8 +39,33 @@ if host_machine.system() == 'darwin'
     objcpp_tests = executable(
         'portable-core-objcpp-tests',
         'portable-core.mm',
+        normalization_native_sources,
+        dependencies: normalization_deps,
+        objcpp_args: normalization_objcpp_args,
         include_directories: include_directories('../../src'),
         override_options: engine_standards + {'warning_level': '3', 'werror': true},
     )
     test('portable-core-objcpp', objcpp_tests)
 endif
+
+normalization_tests = executable(
+    'filename-normalization-tests',
+    'filename-normalization.cpp',
+    normalization_native_sources,
+    dependencies: normalization_deps,
+    objcpp_args: normalization_objcpp_args,
+    include_directories: include_directories('../../src'),
+    override_options: engine_standards + {'warning_level': '3', 'werror': true},
+)
+test('filename-normalization', normalization_tests)
+
+directory_cache_tests = executable(
+    'directory-cache-tests',
+    'directory-cache.cpp',
+    normalization_native_sources,
+    dependencies: normalization_deps,
+    objcpp_args: normalization_objcpp_args,
+    include_directories: include_directories('../../src'),
+    override_options: engine_standards + {'warning_level': '3', 'werror': true},
+)
+test('directory-cache', directory_cache_tests)
