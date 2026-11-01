@@ -1,6 +1,12 @@
 project('mkxp-z', 'c', 'cpp', version: '2.4.2', meson_version: '>=1.10.0',
         default_options: {'cpp_std': 'c++26,c++latest'})
 
+# Old interpreter bindings were removed; reject incompatible requests before
+# dependency fallback can try downloading an unavailable Ruby version.
+if get_option('mri_version').version_compare('<3.4')
+    error('mkxp-z requires Ruby 3.4 or newer')
+endif
+
 c_std = 'gnu11,c11'
 # MSVC exposes its implemented C++26 features through /std:c++latest.
 cpp_std = 'c++26,c++latest'
@@ -22,8 +28,10 @@ host_system = host_machine.system()
 host_endian = host_machine.endian()
 exe_name = meson.project_name() + '.' + host_machine.cpu()
 
-is_bsd = host_system in ['dragonfly', 'freebsd', 'netbsd', 'openbsd']
-is_unix = is_bsd or host_system in ['linux']
+if host_system not in ['windows', 'darwin', 'linux', 'freebsd']
+    error('Supported targets are desktop Windows, macOS, Linux and FreeBSD.')
+endif
+is_unix = host_system in ['linux', 'freebsd']
 
 default_system_disabled = get_option('default_system').disabled()
 default_system_enabled = get_option('default_system').enabled()
@@ -36,10 +44,17 @@ global_sources = []
 global_dependencies = []
 global_include_dirs = []
 global_args = []
+if host_system == 'windows'
+    global_args += ['-DNOMINMAX', '-D_WIN32_WINNT=0x0A00', '-DWINVER=0x0A00']
+endif
 global_cpp_args = []
 global_objc_args = ['-fobjc-arc', '-fobjc-weak']
 global_objcpp_args = []
 global_link_args = []
+if host_system == 'darwin'
+    global_args += '-mmacosx-version-min=27.0'
+    global_link_args += '-mmacosx-version-min=27.0'
+endif
 # External projects keep their own language baseline.
 dependency_cpp_std = 'gnu++14,c++14'
 
@@ -60,13 +75,10 @@ sizeof = {'void*': compilers['cpp'].sizeof('void*'),
 win64 = (sizeof['void*'] != sizeof['long'])
 
 global_args += '-DMKXPZ_VERSION="@0@"'.format(meson.project_version())
-global_args += '-DHAVE_NANOSLEEP'
 
 if get_option('gfx_backend') == 'gl'
     use_gles_by_default = false
 elif get_option('gfx_backend') == 'gles'
-    use_gles_by_default = true
-elif host_system == 'android'
     use_gles_by_default = true
 elif host_system == 'darwin'
     # If the host machine is macOS (as opposed to iOS, tvOS, etc.), use OpenGL by default, otherwise use OpenGL ES by default
@@ -80,7 +92,7 @@ if use_gles_by_default
     global_args += '-DMKXPZ_USE_GLES_BY_DEFAULT'
 endif
 
-if host_system in ['windows', 'cygwin'] and host_machine.cpu_family() == 'x86'
+if host_system in ['windows', 'cygwin'] and host_machine.cpu_family() == 'x86' and compilers['cpp'].get_argument_syntax() != 'msvc'
     global_args += '-masm=intel'
 endif
 
@@ -93,7 +105,9 @@ endif
 # ====================
 
 # Suppress warnings
-global_args += ['-Wno-non-virtual-dtor', '-Wno-reorder', '-Wno-uninitialized', '-Wno-unknown-pragmas', '-Wno-stringop-truncation']
+if compilers['cpp'].get_argument_syntax() != 'msvc'
+    global_args += ['-Wno-non-virtual-dtor', '-Wno-reorder', '-Wno-uninitialized', '-Wno-unknown-pragmas', '-Wno-stringop-truncation']
+endif
 if compilers['cpp'].get_id() == 'clang'
     global_args += ['-Wno-undefined-var-template', '-Wno-delete-non-abstract-non-virtual-dtor']
 endif
@@ -111,7 +125,13 @@ if get_option('workdir_current')
 endif
 
 if get_option('force32') == true
-    global_args += '-m32'
+    if compilers['cpp'].get_argument_syntax() == 'msvc'
+        if host_machine.cpu_family() != 'x86'
+            error('For a 32-bit MSVC build, configure from an x86 developer shell.')
+        endif
+    else
+        global_args += '-m32'
+    endif
 endif
 
 subdir('src')

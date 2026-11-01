@@ -148,24 +148,24 @@ MKXPZTouchBar *_sharedTouchBar;
 }
 
 -(void)simulateKeyDown:(SDL_Scancode)scancode {
-    SDL_Event e;
+    SDL_Event e{};
     e.key.type = SDL_EVENT_KEY_DOWN;
-    e.key.state = SDL_PRESSED;
-    e.key.timestamp = SDL_GetTicks();
+    e.key.down = true;
+    e.key.timestamp = SDL_GetTicksNS();
     e.key.scancode = scancode;
-    e.key.key = SDL_GetKeyFromScancode(scancode);
-    e.key.windowID = 1;
+    e.key.key = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+    e.key.windowID = SDL_GetWindowID(shState->sdlWindow());
     SDL_PushEvent(&e);
 }
 
 -(void)simulateKeyUp:(SDL_Scancode)scancode {
-    SDL_Event e;
+    SDL_Event e{};
     e.key.type = SDL_EVENT_KEY_UP;
-    e.key.state = SDL_RELEASED;
-    e.key.timestamp = SDL_GetTicks();
+    e.key.down = false;
+    e.key.timestamp = SDL_GetTicksNS();
     e.key.scancode = scancode;
-    e.key.key = SDL_GetKeyFromScancode(scancode);
-    e.key.windowID = 1;
+    e.key.key = SDL_GetKeyFromScancode(scancode, SDL_KMOD_NONE, false);
+    e.key.windowID = SDL_GetWindowID(shState->sdlWindow());
     SDL_PushEvent(&e);
 }
 
