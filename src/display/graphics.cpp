@@ -22,8 +22,6 @@
 #include "graphics.h"
 
 #include <memory>
-#include <chrono>
-#include <thread>
 
 #include "audio.h"
 #include "binding.h"
@@ -291,58 +289,53 @@ private:
     bool brightEffect;
 };
 
+/* All timestamps and durations are SDL_GetTicksNS() nanoseconds. */
 struct FPSLimiter {
-    uint64_t lastTickCount;
+    Uint64 lastTickCount;
     
-    /* ticks per frame */
-    int64_t tpf;
-    
-    /* Ticks per second */
-    const uint64_t tickFreq;
+    /* nanoseconds per frame */
+    Sint64 tpf;
     
     bool disabled;
     
     /* Data for frame timing adjustment */
     struct {
         /* Last tick count */
-        uint64_t last;
+        Uint64 last;
         
         /* How far behind/in front we are for ideal frame timing */
-        int64_t idealDiff;
+        Sint64 idealDiff;
         
         bool resetFlag;
     } adj;
     
     FPSLimiter(uint16_t desiredFPS)
-    : lastTickCount(SDL_GetPerformanceCounter()),
-    tickFreq(SDL_GetPerformanceFrequency()), disabled(false) {
+    : lastTickCount(SDL_GetTicksNS()), disabled(false) {
         setDesiredFPS(desiredFPS);
         
-        adj.last = SDL_GetPerformanceCounter();
+        adj.last = lastTickCount;
         adj.idealDiff = 0;
         adj.resetFlag = false;
     }
     
-    void setDesiredFPS(uint16_t value) { tpf = tickFreq / value; }
+    void setDesiredFPS(uint16_t value) { tpf = SDL_NS_PER_SECOND / value; }
     
     void delay() {
         if (disabled)
             return;
         
-        int64_t tickDelta = SDL_GetPerformanceCounter() - lastTickCount;
-        int64_t toDelay = tpf - tickDelta;
+        Sint64 tickDelta = SDL_GetTicksNS() - lastTickCount;
+        Sint64 toDelay = tpf - tickDelta;
         
         /* Compensate for the last delta
          * to the ideal timestep */
         toDelay -= adj.idealDiff;
         
-        if (toDelay < 0)
-            toDelay = 0;
+        if (toDelay > 0)
+            SDL_DelayPrecise(toDelay);
         
-        delayTicks(toDelay);
-        
-        uint64_t now = lastTickCount = SDL_GetPerformanceCounter();
-        int64_t diff = now - adj.last;
+        Uint64 now = lastTickCount = SDL_GetTicksNS();
+        Sint64 diff = now - adj.last;
         adj.last = now;
         
         /* Recalculate our temporal position
@@ -366,12 +359,6 @@ struct FPSLimiter {
             return false;
         
         return adj.idealDiff > tpf;
-    }
-    
-private:
-    void delayTicks(uint64_t ticks) {
-        std::this_thread::sleep_for(
-            std::chrono::duration<double>(static_cast<double>(ticks) / tickFreq));
     }
 };
 
