@@ -24,10 +24,11 @@ if build_machine.system() in ['windows', 'cygwin']
     destdir = run_command(subproject('common').get_variable('cygpath'), '-m', destdir, check: true).stdout().strip()
 endif
 
-# MSYS2 exports PKG_CONFIG as a native Windows path; Ruby's Makefile expands it unquoted in sh, which strips the backslashes.
-ruby_env_extra = {}
+# external_project sets PKG_CONFIG after applying user environment overrides.
+# A configure argument wins; PATH lookup also avoids Windows path quoting in make.
+ruby_configure_extra = []
 if build_machine.system() in ['windows', 'cygwin']
-    ruby_env_extra += {'PKG_CONFIG': run_command(subproject('common').get_variable('cygpath'), '-u', find_program('pkg-config').full_path(), check: true).stdout().strip()}
+    ruby_configure_extra += 'PKG_CONFIG=pkg-config'
 endif
 
 baseruby = run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('ruby').cmd_array() : find_program('ruby')), check: true).stdout().strip()
@@ -129,7 +130,7 @@ else
                     'CFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cflags, check: true).stdout().strip() + ' ' + get_option('cflags'),
                     'CXXFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cppflags, check: true).stdout().strip() + ' ' + get_option('cppflags'),
                     'LDFLAGS=' + run_command(subproject('common').get_variable('quotetool'), ldflags, check: true).stdout().strip() + ' ' + get_option('ldflags'),
-                ],
+                ] + ruby_configure_extra,
                 cross_configure_options: [
                     '--host=@HOST@',
                     '--host=' + subproject('common').get_variable('host_triplet'),
@@ -154,7 +155,7 @@ else
                     'rb_cv_gcc_sync_builtins': 'no',
                     'rb_cv_prog_gnu_ld': subproject('common').get_variable('c_linker_is_gnu') ? 'yes' : 'no',
                     'rb_cv_symbol_prefix': meson.get_compiler('c').symbols_have_underscore_prefix() ? '_' : 'NONE',
-                } + ruby_env_extra,
+                },
                 depends: [
                     # Force Meson to fully build all of our vendored dependencies that are required by Ruby before building Ruby itself
                     executable(
