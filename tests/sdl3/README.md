@@ -13,15 +13,16 @@ scaled blits, opaque/borrowed IO ownership and EOF, font measurement/rendering,
 window resizing and user events. `tests/audio` covers streaming playback states.
 `tests/io` additionally checks the production Ruby IO bindings and Marshal cleanup.
 
-After a full engine build, run the integration smoke with a working OpenGL
-display (Linux CI uses Mesa software rendering and Xvfb):
+After a full engine build, run the integration smoke from a desktop session
+with a working SDL_GPU backend (the Windows build uses Direct3D 12):
 
-```sh
-xvfb-run -a python3 tests/sdl3/engine-smoke.py build/mkxp-z.x86_64
+```powershell
+python tests/sdl3/engine-smoke.py build-msvc/mkxp-z.x86_64.exe
 ```
 
-On Windows, use the same script with `build-msvc/mkxp-z.x86_64.exe` from a desktop
-session. It uses isolated temporary files and bundled assets, and checks image
+The executable path is the output of your full engine build. Dummy video and
+an Xvfb/OpenGL-only environment are insufficient for this renderer.
+The smoke uses isolated temporary files and bundled assets, and checks image
 loading/saving with the path cache enabled, font cloning/rendering and GC, JSON
 settings, Windows function pointers, an 800x600 resize and screenshot disposal.
 No game archives or speakers are required. It is not a gameplay test.
