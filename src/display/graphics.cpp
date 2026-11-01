@@ -22,8 +22,6 @@
 #include "graphics.h"
 
 #include <memory>
-#include <chrono>
-#include <thread>
 
 #include "audio.h"
 #include "binding.h"
@@ -297,9 +295,6 @@ struct FPSLimiter {
     /* ticks per frame */
     int64_t tpf;
     
-    /* Ticks per second */
-    const uint64_t tickFreq;
-    
     bool disabled;
     
     /* Data for frame timing adjustment */
@@ -314,34 +309,32 @@ struct FPSLimiter {
     } adj;
     
     FPSLimiter(uint16_t desiredFPS)
-    : lastTickCount(SDL_GetPerformanceCounter()),
-    tickFreq(SDL_GetPerformanceFrequency()), disabled(false) {
+    : lastTickCount(SDL_GetTicksNS()),
+    disabled(false) {
         setDesiredFPS(desiredFPS);
         
-        adj.last = SDL_GetPerformanceCounter();
+        adj.last = SDL_GetTicksNS();
         adj.idealDiff = 0;
         adj.resetFlag = false;
     }
     
-    void setDesiredFPS(uint16_t value) { tpf = tickFreq / value; }
+    void setDesiredFPS(uint16_t value) { tpf = SDL_NS_PER_SECOND / value; }
     
     void delay() {
         if (disabled)
             return;
         
-        int64_t tickDelta = SDL_GetPerformanceCounter() - lastTickCount;
+        int64_t tickDelta = SDL_GetTicksNS() - lastTickCount;
         int64_t toDelay = tpf - tickDelta;
         
         /* Compensate for the last delta
          * to the ideal timestep */
         toDelay -= adj.idealDiff;
         
-        if (toDelay < 0)
-            toDelay = 0;
+        if (toDelay > 0)
+            SDL_DelayNS(toDelay);
         
-        delayTicks(toDelay);
-        
-        uint64_t now = lastTickCount = SDL_GetPerformanceCounter();
+        uint64_t now = lastTickCount = SDL_GetTicksNS();
         int64_t diff = now - adj.last;
         adj.last = now;
         
@@ -368,11 +361,6 @@ struct FPSLimiter {
         return adj.idealDiff > tpf;
     }
     
-private:
-    void delayTicks(uint64_t ticks) {
-        std::this_thread::sleep_for(
-            std::chrono::duration<double>(static_cast<double>(ticks) / tickFreq));
-    }
 };
 
 struct GraphicsPrivate {
