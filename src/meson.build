@@ -468,6 +468,7 @@ main_source = files(
     'input/keybindings.cpp',
 
 
+    'system/folder-dialog.cpp',
     host_system == 'darwin' ? 'system/systemImplApple.mm' : 'system/systemImpl.cpp',
 )
 

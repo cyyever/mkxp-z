@@ -6,7 +6,6 @@
 //
 
 #import <AppKit/AppKit.h>
-#import <SDL3/SDL.h>
 
 #import <sys/sysctl.h>
 #import "system.h"
@@ -76,33 +75,5 @@ std::string systemImpl::getDefaultGameRoot() {
             }
         }
         return std::string(NSTOPATH(defaultGameRoot));
-    }
-}
-
-std::string systemImpl::selectPath(SDL_Window *win, const char *msg, const char *prompt) {
-    @autoreleasepool {
-        NSOpenPanel *panel = [NSOpenPanel openPanel];
-        panel.canChooseDirectories = true;
-        panel.canChooseFiles = false;
-
-        if (msg) panel.message = @(msg);
-        if (prompt) panel.prompt = @(prompt);
-        //panel.directoryURL = [NSURL fileURLWithPath:NSFileManager.defaultManager.currentDirectoryPath];
-
-        NSWindow *nativeWindow = (__bridge NSWindow *)SDL_GetPointerProperty(
-            SDL_GetWindowProperties(win), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr);
-
-        [panel beginSheetModalForWindow:nativeWindow completionHandler:^(NSModalResponse res){
-            [NSApp stopModalWithCode:res];
-        }];
-
-        [NSApp runModalForWindow:nativeWindow];
-
-        // The window needs to be brought to the front again after the OpenPanel closes
-        [nativeWindow makeKeyAndOrderFront:nil];
-        if (panel.URLs.count > 0)
-            return std::string(NSTOPATH(panel.URLs[0].path));
-
-        return std::string();
     }
 }

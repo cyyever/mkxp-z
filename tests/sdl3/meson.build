@@ -11,3 +11,12 @@ migration_tests = executable('sdl3-migration-tests', 'migration.cpp',
 test('SDL3 image, IO, font and window migration', migration_tests,
     args: files('../../assets/liberation.ttf'),
     env: {'SDL_VIDEO_DRIVER': 'dummy', 'SDL_AUDIO_DRIVER': 'dummy'}, timeout: 30)
+
+# Compile the actual helper with only the dialog entrypoint replaced; no UI is opened.
+folder_dialog_tests = executable('sdl3-folder-dialog-tests',
+    'folder-dialog.cpp', '../../src/system/folder-dialog.cpp',
+    include_directories: include_directories('../../src'),
+    dependencies: [sdl, dependency('threads')],
+    cpp_args: '-DSDL_ShowFileDialogWithProperties=TestShowFileDialogWithProperties')
+test('SDL3 folder dialog callbacks and main-thread event pumping', folder_dialog_tests,
+    env: {'SDL_VIDEO_DRIVER': 'dummy'}, timeout: 30)
