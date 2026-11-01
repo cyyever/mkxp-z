@@ -22,7 +22,7 @@ begin
   bitmap.dispose
   GC.start
 
-  if RUBY_PLATFORM.include?('mswin') || RUBY_PLATFORM.include?('mingw')
+  if RUBY_PLATFORM.include?('mswin')
     pid = MiniFFI.new('kernel32.dll', 'GetCurrentProcessId', [], 'L').call
     raise 'native function pointer was truncated' unless pid > 0
   end
