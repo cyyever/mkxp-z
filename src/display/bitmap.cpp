@@ -266,11 +266,6 @@ struct BitmapPrivate
         animation.updateTimer();
     }
 
-    void allocSurface()
-    {
-        surface = SDL_CreateSurface(getRenderTarget().width, getRenderTarget().height, SDL_GetPixelFormatForMasks(format->bits_per_pixel, format->Rmask, format->Gmask, format->Bmask, format->Amask));
-    }
-
     void clearTaintedArea()
     {
         if( pixmanUseRegion32)
@@ -1565,6 +1560,7 @@ void Bitmap::stretchBlt(IntRect destRect,
 
     SDL_Surface *srcSurf = source.megaSurface();
     SDL_Surface *blitTemp = 0;
+    std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> ownedBlitTemp(nullptr, SDL_DestroySurface);
     bool touchesTaintedArea = mode != NORMAL || opacity < 255 || p->touchesTaintedArea(destRect);
 
     const bool scaleIsOne = sourceRect.w == destRect.w && sourceRect.h == destRect.h;
@@ -1584,6 +1580,10 @@ void Bitmap::stretchBlt(IntRect destRect,
         {
             // SDL can't handle negative dimensions when blitting, so we have to do it manually
             blitTemp = SDL_CreateSurface(sourceRect.w, sourceRect.h, SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+
+            ownedBlitTemp.reset(blitTemp);
+            if (!blitTemp)
+                throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s", SDL_GetError());
 
             bool flipW = destRect.w < 0;
             bool flipH = destRect.y < 0;
@@ -1651,6 +1651,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                     /* We have to resize it here anyway, so use software resizing */
                     blitTemp =
                         SDL_CreateSurface(abs(destRect.w), abs(destRect.h), SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask, p->format->Gmask, p->format->Bmask, p->format->Amask));
+                    ownedBlitTemp.reset(blitTemp);
                     if (!blitTemp)
                         throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s",
                                         SDL_GetError());
@@ -1719,7 +1720,6 @@ void Bitmap::stretchBlt(IntRect destRect,
 
                 if (!success)
                 {
-                    SDL_DestroySurface(blitTemp);
                     throw Exception(Exception::SDLError, "Failed to blit surface: %s", SDL_GetError());
                 }
 
@@ -1819,9 +1819,6 @@ void Bitmap::stretchBlt(IntRect destRect,
                 TEX::setSmooth(false);
         }
     }
-
-    if (blitTemp)
-        SDL_DestroySurface(blitTemp);
 
     p->addTaintedArea(destRect);
     p->onModified();
@@ -2279,19 +2276,23 @@ void Bitmap::createSurface() const
 {
     if (p->surface)
         return;
-    p->allocSurface();
-
-    p->bindFBO();
-
-    renderState.viewport.pushSet(IntRect(0, 0, width(), height()));
+    const auto &target = p->getRenderTarget();
+    std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
+        SDL_CreateSurface(target.width, target.height,
+                          SDL_GetPixelFormatForMasks(p->format->bits_per_pixel, p->format->Rmask,
+                                                     p->format->Gmask, p->format->Bmask, p->format->Amask)),
+        SDL_DestroySurface);
+    if (!surface)
+        throw Exception(Exception::SDLError, "Failed to prepare bitmap readback: %s", SDL_GetError());
 
     gpu::flushRenderCommands();
-    const auto pixels = gpu::renderDevice().downloadRGBA(p->getRenderTarget().tex.resource());
+    const auto pixels = gpu::renderDevice().downloadRGBA(target.tex.resource());
     if (!SDL_ConvertPixels(width(), height(), SDL_PIXELFORMAT_RGBA32, pixels.data(), width()*4,
-                           p->surface->format, p->surface->pixels, p->surface->pitch))
+                           surface->format, surface->pixels, surface->pitch))
         throw Exception(Exception::SDLError, "%s", SDL_GetError());
 
-    renderState.viewport.pop();
+    // Publish the cache only after both readback and conversion have succeeded.
+    p->surface = surface.release();
 }
 
 Color Bitmap::getPixel(int x, int y) const
@@ -2474,6 +2475,10 @@ void Bitmap::saveToFile(const char *filename)
 {
     guardDisposed();
 
+    const char *extension = strrchr(filename, '.');
+    if (!extension || SDL_strcasecmp(extension, ".png") != 0)
+        throw Exception(Exception::ArgumentError, "Bitmap output must use a .png filename");
+
     SDL_Surface *surf;
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> ownedSurface(nullptr, SDL_DestroySurface);
 
@@ -2489,10 +2494,6 @@ void Bitmap::saveToFile(const char *filename)
         ownedSurface.reset(surf);
         getRaw(surf->pixels, surf->w * surf->h * 4);
     }
-
-    const char *extension = strrchr(filename, '.');
-    if (!extension || SDL_strcasecmp(extension, ".png") != 0)
-        throw Exception(Exception::ArgumentError, "Bitmap output must use a .png filename");
 
     const auto fn_normalized = paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(filename)).lexically_normal().make_preferred().u8string());
     const bool saved = IMG_SavePNG(surf, fn_normalized.c_str());
