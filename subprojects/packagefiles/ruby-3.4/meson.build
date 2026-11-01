@@ -1,4 +1,4 @@
-project('ruby-3.4', 'c', 'cpp', meson_version: '>=1.4.0')
+project('ruby-3.4', 'c', 'cpp', meson_version: '>=1.10.0')
 
 common = subproject('common')
 python = common.get_variable('python')
@@ -80,7 +80,7 @@ else
 
     ldflags += get_option('c_link_args')
 
-    baseruby = run_command(quotetool, (meson.version().version_compare('>=1.10.0') ? find_program('ruby').cmd_array() : find_program('ruby')), check: true).stdout().strip()
+    baseruby = run_command(quotetool, find_program('ruby').cmd_array(), check: true).stdout().strip()
 
     # Ruby's generated makefiles use GNU make, including on FreeBSD.
     meson.override_find_program('make', find_program('gmake', 'make'))
@@ -93,7 +93,7 @@ else
                     '--srcdir=' + source_dir,
                     '--prefix=' + '@PREFIX@',
                     '--prefix=/',
-                    meson.version().version_compare('>=1.7.0') ? '--bindir=' + '@PREFIX@' / '@BINDIR@' : [],
+                    '--bindir=' + '@PREFIX@' / '@BINDIR@',
                     '--bindir=/bin',
                     '--libdir=' + '@PREFIX@' / '@LIBDIR@',
                     '--libdir=/lib',
@@ -138,7 +138,7 @@ else
                     # Disable LTO while running link tests for Ruby extensions if the linker is LLD (LLVM linker) and we are building for 32-bit ARM.
                     # Otherwise, the link tests may fail due to https://github.com/llvm/llvm-project/issues/108262.
                     'MKXP_DISABLE_LTO_FOR_LINK_TESTS': (cc.get_linker_id().split('.')[-1] == 'lld' or cc.get_linker_id() == 'lld-link') and host_machine.cpu_family() == 'arm' ? 'yes' : 'no',
-                    'YACC': run_command(quotetool, (meson.version().version_compare('>=1.10.0') ? find_program('bison').cmd_array() : find_program('bison')), check: true).stdout().strip(),
+                    'YACC': run_command(quotetool, find_program('bison').cmd_array(), check: true).stdout().strip(),
                     'ac_cv_func___builtin_setjmp': 'no',
                     'ac_cv_func_crypt': 'no',
                     'ac_cv_func_crypt_r': 'no',

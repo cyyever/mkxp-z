@@ -1,4 +1,4 @@
-project('common', 'c', 'cpp', meson_version: '>=1.4.0')
+project('common', 'c', 'cpp', meson_version: '>=1.10.0')
 
 python = import('python').find_installation(required: true)
 
@@ -7,7 +7,7 @@ install_directory = [python, files('install-directory.py')[0]]
 # GNU archive tools are used only by Ruby's Autotools build.
 is_msvc = meson.get_compiler('c').get_argument_syntax() == 'msvc'
 if not is_msvc
-    ar = meson.version().version_compare('>=1.10.0') ? find_program('ar').cmd_array() : [find_program('ar')]
+    ar = find_program('ar').cmd_array()
     ranlib = ar + 's'
 endif
 
