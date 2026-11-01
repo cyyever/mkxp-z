@@ -101,12 +101,15 @@ if not zlib.found()
     zlib_options = cmake.subproject_options()
     zlib_options.add_cmake_defines(cmake_base_options + {
         'BUILD_SHARED_LIBS': false,
-        'ZLIB_BUILD_EXAMPLES': false,
+        'ZLIB_BUILD_SHARED': false,
+        'ZLIB_BUILD_STATIC': true,
+        'ZLIB_BUILD_TESTING': false,
+        'ZLIB_INSTALL': false,
     })
     foreach opt, val : cmake_override_options
         zlib_options.set_override_option(opt, val)
     endforeach
-    zlib = cmake.subproject('zlib', options: zlib_options).dependency('z')
+    zlib = cmake.subproject('zlib', options: zlib_options).dependency('zlibstatic')
     zlib_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('zlib-' + zlib.version()), '-I' + meson.project_build_root() / 'subprojects' / ('zlib-' + zlib.version()) / '__CMake_build']
     zlib_libs = ['-L' + meson.project_build_root() / 'subprojects' / ('zlib-' + zlib.version())]
     meson.override_dependency('zlib', zlib, static: true)

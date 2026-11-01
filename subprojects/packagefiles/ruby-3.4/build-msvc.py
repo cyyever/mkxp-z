@@ -39,7 +39,7 @@ for header in ('zlib.h', 'zconf.h'):
     if found is None:
         sys.exit(f'build-msvc.py: {header} not found in {include_dirs}')
     shutil.copy2(found, optdir / 'include' / header)
-library_names = ('z.lib', 'libz.a', 'zs.lib', 'zlibstatic.lib', 'zlib.lib', 'libz.lib')
+library_names = ('z.lib', 'libz.a', 'zs.lib', 'zlibstatic.lib', 'libzlibstatic.a', 'zlib.lib', 'libz.lib')
 library = next((d / n for d in library_dirs for n in library_names if (d / n).is_file()), None)
 if library is None:
     sys.exit(f'build-msvc.py: static zlib not found in {library_dirs}')
