@@ -74,11 +74,22 @@ void CommandBuffer::submit() {
     if (!SDL_SubmitGPUCommandBuffer(pending)) fail("SDL_SubmitGPUCommandBuffer");
 }
 Fence::Fence(SDL_GPUDevice *d, SDL_GPUFence *f) : device(d), fence(f) {}
-Fence::~Fence() { if (fence) SDL_ReleaseGPUFence(device, fence); }
+Fence::~Fence() { release(); }
+void Fence::release() noexcept {
+    if (!fence) return;
+    // Releasing an unfinished explicit fence can let SDL's D3D12 pool reuse it
+    // while a submitted command buffer still tracks its allocator with it.
+    // Ordinary asynchronous flushes use SDL-owned fences instead.
+    if (!SDL_QueryGPUFence(device, fence)) {
+        auto *pending = fence;
+        if (!SDL_WaitForGPUFences(device, true, &pending, 1)) return;
+    }
+    SDL_ReleaseGPUFence(device, std::exchange(fence, nullptr));
+}
 Fence::Fence(Fence &&other) noexcept { *this = std::move(other); }
 Fence &Fence::operator=(Fence &&other) noexcept {
     if (this != &other) {
-        if (fence) SDL_ReleaseGPUFence(device, fence);
+        release();
         device = other.device;
         fence = std::exchange(other.fence, nullptr);
     }
@@ -185,8 +196,29 @@ void Device::generateMipmaps(const Texture &texture) {
     if (texture.mipLevels() <= 1 || (texture.usage & required) != required)
         throw std::invalid_argument("GPU mip generation requires multiple levels and sampler/color-target usage");
     CommandBuffer command(device);
-    SDL_GenerateMipmapsForGPUTexture(command.native(), texture.native());
+    {
+        std::lock_guard lock(renderPassMutex);
+        SDL_GenerateMipmapsForGPUTexture(command.native(), texture.native());
+    }
     command.submitAndWait();
+}
+RenderPass::RenderPass(Device &device, CommandBuffer &command, const SDL_GPUColorTargetInfo &target)
+    : lock(device.renderPassMutex) {
+    command.checkThread();
+    if (command.device != device.native())
+        throw std::invalid_argument("GPU render pass requires a command buffer on this device");
+    pass = SDL_BeginGPURenderPass(command.native(), &target, 1, nullptr);
+    if (!pass) fail("SDL_BeginGPURenderPass");
+}
+RenderPass::~RenderPass() {
+    if (pass) SDL_EndGPURenderPass(pass);
+}
+void Device::blit(CommandBuffer &command, const SDL_GPUBlitInfo &info) {
+    command.checkThread();
+    if (command.device != device)
+        throw std::invalid_argument("GPU blit requires a command buffer on this device");
+    std::lock_guard lock(renderPassMutex);
+    SDL_BlitGPUTexture(command.native(), &info);
 }
 void Device::copy(CommandBuffer &command, const Texture &source, const Texture &destination) {
     command.checkThread();

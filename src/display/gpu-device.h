@@ -3,6 +3,7 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_video.h>
 #include <span>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -39,9 +40,11 @@ public:
     Fence &operator=(Fence &&) noexcept;
     Fence(const Fence &) = delete;
     Fence &operator=(const Fence &) = delete;
+    // Explicit completion fences finish before release, including on unwind.
     void wait() const;
 private:
     friend class CommandBuffer;
+    void release() noexcept;
     Fence(SDL_GPUDevice *, SDL_GPUFence *);
     SDL_GPUDevice *device = nullptr;
     SDL_GPUFence *fence = nullptr;
@@ -59,11 +62,28 @@ public:
     [[nodiscard]] Fence submitWithFence();
 private:
     friend class Device;
+    friend class RenderPass;
     void checkThread() const;
     SDL_GPUDevice *device;
     SDL_GPUCommandBuffer *command;
     std::thread::id thread;
     bool acquiredSwapchain = false;
+};
+
+class Device;
+
+// SDL's debug render-pass state is device-wide. Keep recording one pass at a
+// time across the window and RGSS threads; submission and GPU waits stay outside.
+class RenderPass {
+public:
+    RenderPass(Device &, CommandBuffer &, const SDL_GPUColorTargetInfo &);
+    ~RenderPass();
+    RenderPass(const RenderPass &) = delete;
+    RenderPass &operator=(const RenderPass &) = delete;
+    SDL_GPURenderPass *native() const { return pass; }
+private:
+    std::unique_lock<std::mutex> lock;
+    SDL_GPURenderPass *pass = nullptr;
 };
 
 class Device {
@@ -85,15 +105,18 @@ public:
     void uploadRGBA(const Texture &, std::span<const Uint8>);
     std::vector<Uint8> downloadRGBA(const Texture &, Uint32 mipLevel = 0);
     void generateMipmaps(const Texture &);
+    void blit(CommandBuffer &, const SDL_GPUBlitInfo &);
     void copy(CommandBuffer &, const Texture &source, const Texture &destination);
     // Returns null when minimized. The texture is borrowed until submission;
     // never sample/download it. It is owned by the SDL swapchain.
     SDL_GPUTexture *acquireFrame(CommandBuffer &, Uint32 &width, Uint32 &height);
 private:
+    friend class RenderPass;
     void checkWindowThread() const;
     void checkTexture(const Texture &) const;
     SDL_GPUDevice *device = nullptr;
     SDL_Window *window;
     std::thread::id windowThread;
+    std::mutex renderPassMutex;
 };
 }

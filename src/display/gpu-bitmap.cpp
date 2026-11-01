@@ -61,9 +61,7 @@ void BitmapRenderer::clear(CommandBuffer &command, const Texture &target, SDL_FC
     SDL_GPUColorTargetInfo color{};
     color.texture = target.native(); color.load_op = SDL_GPU_LOADOP_CLEAR;
     color.store_op = SDL_GPU_STOREOP_STORE; color.clear_color = value;
-    auto *pass = SDL_BeginGPURenderPass(command.native(), &color, 1, nullptr);
-    if (!pass) fail("SDL_BeginGPURenderPass");
-    SDL_EndGPURenderPass(pass);
+    RenderPass pass(device, command, color);
 }
 
 void BitmapRenderer::draw(CommandBuffer &command, const Texture &target, SDL_FRect destination,
@@ -102,15 +100,11 @@ void BitmapRenderer::draw(CommandBuffer &command, const Texture &target, SDL_FRe
     SDL_GPUColorTargetInfo color{};
     color.texture = target.native(); color.load_op = SDL_GPU_LOADOP_LOAD;
     color.store_op = SDL_GPU_STOREOP_STORE;
-    auto *pass = SDL_BeginGPURenderPass(command.native(), &color, 1, nullptr);
-    if (!pass) fail("SDL_BeginGPURenderPass");
-    try {
-        SDL_GPUBufferBinding binding{vertices, 0};
-        pipelines.bind(command.native(), pass, program, Blend::Disabled,
-                       SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, binding, textures, vp, parameters);
-        SDL_DrawGPUPrimitives(pass, 6, 1, 0, 0);
-    } catch (...) { SDL_EndGPURenderPass(pass); throw; }
-    SDL_EndGPURenderPass(pass);
+    RenderPass pass(device, command, color);
+    SDL_GPUBufferBinding binding{vertices, 0};
+    pipelines.bind(command.native(), pass.native(), program, Blend::Disabled,
+                   SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, binding, textures, vp, parameters);
+    SDL_DrawGPUPrimitives(pass.native(), 6, 1, 0, 0);
 }
 
 void BitmapRenderer::fill(CommandBuffer &command, const Texture &target,

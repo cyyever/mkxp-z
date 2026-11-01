@@ -142,7 +142,12 @@ Fence RenderContext::submit() {
     pendingResources.clear();
     return result;
 }
-void RenderContext::flush() { auto completion = submit(); }
+void RenderContext::flush() {
+    if (!recording) return;
+    encoder.submitWithoutFence();
+    recording = false;
+    pendingResources.clear();
+}
 std::array<int,2> RenderContext::projectionSize(bool scalingAllowed) const {
     return projectionResolver ? projectionResolver(scalingAllowed) :
         std::array<int,2>{viewportRect.w, viewportRect.h};

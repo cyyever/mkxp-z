@@ -49,9 +49,12 @@ public:
               const DrawState & = {}, const EffectParameters & = {},
               const TilemapParameters & = {});
     [[nodiscard]] Fence submit();
+    // Asynchronous submission whose completion fence remains owned by SDL.
+    void submitWithoutFence();
     // Discards only recorded CPU commands; submitted work remains unaffected.
     void reset();
 private:
+    Fence submitCommands(bool acquireFence);
     struct Draw {
         Program program;
         Uint32 first, count, samplerCount;

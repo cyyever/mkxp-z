@@ -198,7 +198,7 @@ void EventThread::process(RGSSThreadData &rtData)
                 blit.destination.h = height;
                 blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
                 blit.filter = SDL_GPU_FILTER_NEAREST;
-                SDL_BlitGPUTexture(command.native(), &blit);
+                rtData.gpuDevice->blit(command, blit);
             }
             command.submit();
             return true;

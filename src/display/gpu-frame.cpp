@@ -1,5 +1,6 @@
 #include "gpu-frame.h"
 #include <algorithm>
+#include <format>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -12,10 +13,6 @@ namespace {
 [[noreturn]] void fail(const char *operation) {
     throw std::runtime_error(std::string(operation) + ": " + SDL_GetError());
 }
-struct RenderPass {
-    SDL_GPURenderPass *pass;
-    ~RenderPass() { if (pass) SDL_EndGPURenderPass(pass); }
-};
 }
 FrameEncoder::FrameEncoder(Device &d, QuadPipeline &p) : device(d), pipelines(p) {}
 FrameEncoder::~FrameEncoder() {
@@ -69,6 +66,11 @@ void FrameEncoder::draw(Program program, std::span<const QuadVertex> geometry,
         || !std::isfinite(viewport.min_depth) || !std::isfinite(viewport.max_depth)
         || viewport.min_depth < 0 || viewport.max_depth > 1 || viewport.min_depth > viewport.max_depth)
         throw std::invalid_argument("Invalid GPU viewport");
+    if (viewport.x + viewport.w > batch.target.width() ||
+        viewport.y + viewport.h > batch.target.height())
+        throw std::invalid_argument(std::format(
+            "GPU viewport {},{},{}x{} exceeds render target {}x{}",
+            viewport.x, viewport.y, viewport.w, viewport.h, batch.target.width(), batch.target.height()));
     auto scissor = state.scissor.value_or(SDL_Rect{0,0,int(batch.target.width()),int(batch.target.height())});
     if (scissor.w < 0 || scissor.h < 0) throw std::invalid_argument("Invalid GPU scissor size");
     // Clip with wide arithmetic, preserving empty intersections safely.
@@ -106,7 +108,9 @@ void FrameEncoder::ensureBuffer(Uint32 bytes) {
     if (transferBuffer) SDL_ReleaseGPUTransferBuffer(device.native(), transferBuffer);
     vertexBuffer = nextVertices; transferBuffer = nextTransfer; capacity = info.size;
 }
-Fence FrameEncoder::submit() {
+Fence FrameEncoder::submit() { return submitCommands(true); }
+void FrameEncoder::submitWithoutFence() { static_cast<void>(submitCommands(false)); }
+Fence FrameEncoder::submitCommands(bool acquireFence) {
     if (batches.empty()) throw std::logic_error("No GPU frame targets were recorded");
     // Pipeline creation can fail/allocate, so do all of it before opening passes.
     for (const auto &batch : batches)
@@ -133,18 +137,19 @@ Fence FrameEncoder::submit() {
         SDL_GPUColorTargetInfo target{};
         target.texture = batch.target.native(); target.load_op = batch.load;
         target.store_op = SDL_GPU_STOREOP_STORE; target.clear_color = batch.clear;
-        RenderPass pass{SDL_BeginGPURenderPass(command.native(), &target, 1, nullptr)};
-        if (!pass.pass) fail("SDL_BeginGPURenderPass");
+        RenderPass pass(device, command, target);
         for (const auto &draw : batch.draws) {
-            SDL_SetGPUViewport(pass.pass, &draw.viewport);
-            SDL_SetGPUScissor(pass.pass, &draw.scissor);
+            SDL_SetGPUViewport(pass.native(), &draw.viewport);
+            SDL_SetGPUScissor(pass.native(), &draw.scissor);
             const SDL_GPUBufferBinding binding{vertexBuffer,draw.first*static_cast<Uint32>(sizeof(QuadVertex))};
-            pipelines.bind(command.native(), pass.pass, draw.program, draw.blend, batch.target.pixelFormat(),
+            pipelines.bind(command.native(), pass.native(), draw.program, draw.blend, batch.target.pixelFormat(),
                 binding, std::span(draw.samplers).first(draw.samplerCount), draw.vertex, draw.fragment, draw.effects, draw.tilemap);
-            SDL_DrawGPUPrimitives(pass.pass, draw.count, 1, 0, 0);
+            SDL_DrawGPUPrimitives(pass.native(), draw.count, 1, 0, 0);
         }
     }
-    auto fence = command.submitWithFence();
+    Fence fence;
+    if (acquireFence) fence = command.submitWithFence();
+    else command.submit();
     reset();
     return fence;
 }
