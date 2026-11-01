@@ -96,11 +96,6 @@ endif
 meson.add_dist_script(python, files('../distscript.py'), get_option('dist_subprojects'), distscript_vcs_command)
 global_dependencies += declare_dependency(sources: git_hash_file)
 
-gl = dependency('gl', allow_fallback: false, required: get_option('gl_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not gl.found()
-    gl = subproject('mesa', default_options: meson_base_options).get_variable('gl')
-endif
-
 zlib = dependency('zlib', allow_fallback: false, method: 'pkg-config', required: get_option('zlib_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not zlib.found()
     zlib_options = cmake.subproject_options()
