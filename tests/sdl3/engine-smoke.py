@@ -6,10 +6,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import wave
 
 
-def main():
-    binary = Path(sys.argv[1]).resolve(strict=True)
+def run_case(binary, path_cache):
     repository = Path(__file__).resolve().parents[2]
     with tempfile.TemporaryDirectory(prefix='mkxp-engine-smoke-') as temporary:
         fixture = Path(temporary)
@@ -20,13 +20,21 @@ def main():
             'gameFolder': str(fixture),
             'customScript': str(Path(__file__).with_suffix('.rb').resolve()),
             'RTP': [str(repository / 'assets')],
-            'pathCache': True,
+            'pathCache': path_cache,
             'enableSettings': False,
             'winConsole': False,
             'windowTitle': 'SDL3 migration smoke',
             'defScreenW': 640,
             'defScreenH': 480,
         }
+        # Exercise the Ruby audio API through filesystem lookup, SDL_sound and SDL3.
+        for name, channels, rate, sample_width in [('tone', 2, 48000, 2), ('tone-mono', 1, 22050, 1)]:
+            with wave.open(str(fixture / (name + '.wav')), 'wb') as output:
+                output.setnchannels(channels)
+                output.setsampwidth(sample_width)
+                output.setframerate(rate)
+                silence = b'\x80' if sample_width == 1 else b'\x00\x00'
+                output.writeframes(silence * channels * rate * 2)
         (fixture / 'mkxp.json').write_text(json.dumps(configuration), encoding='utf-8')
         # Config reads the INI before applying customScript; avoid unrelated diagnostics.
         (fixture / 'Game.ini').write_text('[Game]\nTitle=SDL3 smoke\n', encoding='utf-8')
@@ -43,7 +51,13 @@ def main():
         if completed.returncode or result != 'PASS':
             raise RuntimeError(f'Engine exit {completed.returncode}: {result}\n'
                                f'{completed.stdout}\n{completed.stderr}')
-        print('PASS: SDL3 image IO, fonts/GC, settings, native FFI, resize and screenshot')
+        print(f'PASS: engine image/IO/fonts/audio/FFI/resize/screenshot, pathCache={path_cache}')
+
+
+def main():
+    binary = Path(sys.argv[1]).resolve(strict=True)
+    for path_cache in (False, True):
+        run_case(binary, path_cache)
 
 
 if __name__ == '__main__':

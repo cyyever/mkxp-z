@@ -128,14 +128,15 @@ void SoundEmitter::play(const std::string &filename,
 
 	if (!SDL_SetAudioStreamFormat(src, &buffer->spec, nullptr))
 		throw Exception(Exception::SDLError, "SDL_SetAudioStreamFormat: %s", SDL_GetError());
+	/* Binding supplies the output format required before queuing PCM. */
+	if (!SDL_BindAudioStream(audioDevice, src))
+		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 	SDL_SetAudioStreamGain(src, rgssVolumeToGain(_volume));
 	SDL_SetAudioStreamFrequencyRatio(src, _pitch);
 	if (!SDL_PutAudioStreamData(src, buffer->pcm.data(), static_cast<int>(buffer->pcm.size())))
 		throw Exception(Exception::SDLError, "SDL_PutAudioStreamData: %s", SDL_GetError());
 	/* No more data follows; let the resampler emit its tail */
 	SDL_FlushAudioStream(src);
-	if (!SDL_BindAudioStream(audioDevice, src))
-		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 }
 
 void SoundEmitter::stop()
