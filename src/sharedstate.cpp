@@ -43,21 +43,7 @@
 #include <chrono>
 
 SharedState *SharedState::instance = 0;
-int SharedState::rgssVersion = 0;
 static GlobalIBO *_globalIBO = 0;
-
-static const char *gameArchExt()
-{
-	if (rgssVer == 1)
-		return ".rgssad";
-	else if (rgssVer == 2)
-		return ".rgss2a";
-	else if (rgssVer == 3)
-		return ".rgss3a";
-
-	assert(!"unreachable");
-	return 0;
-}
 
 struct SharedStatePrivate
 {
@@ -123,7 +109,7 @@ struct SharedStatePrivate
 		if (gl.ReleaseShaderCompiler)
 			gl.ReleaseShaderCompiler();
 
-		std::string archPath = config.execName + gameArchExt();
+		std::string archPath = config.execName + ".rgssad";
 
 		for (size_t i = 0; i < config.patches.size(); ++i)
 			fileSystem.addPath(config.patches[i].c_str());
@@ -176,7 +162,6 @@ void SharedState::initInstance(RGSSThreadData *threadData)
 	 * SharedState depends on GlobalIBO existing,
 	 * Font depends on SharedState existing */
 
-	rgssVersion = threadData->config.rgssVersion;
     
 	_globalIBO = new GlobalIBO();
 	_globalIBO->ensureSize(1);

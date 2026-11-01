@@ -45,7 +45,7 @@ RbData::RbData() {
 
   exc[RGSS] = rb_define_class("RGSSError", rb_eStandardError);
   exc[Reset] =
-      rb_define_class(rgssVer >= 3 ? "RGSSReset" : "Reset", rb_eException);
+      rb_define_class("Reset", rb_eException);
 
   exc[ErrnoENOENT] = rb_const_get(rb_const_get(rb_cObject, rb_intern("Errno")),
                                   rb_intern("ENOENT"));

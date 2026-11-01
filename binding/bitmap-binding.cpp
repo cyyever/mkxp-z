@@ -34,11 +34,6 @@ DEF_TYPE(Bitmap);
 DEF_ALLOCFUNC(Bitmap);
 #endif
 
-static const char *objAsStringPtr(VALUE obj) {
-    VALUE str = rb_obj_as_string(obj);
-    return RSTRING_PTR(str);
-}
-
 void bitmapInitProps(Bitmap *b, VALUE self) {
     /* Wrap properties */
     VALUE fontKlass = rb_const_get(rb_cObject, rb_intern("Font"));
@@ -282,14 +277,7 @@ RB_METHOD_GUARD(bitmapDrawText) {
         VALUE rectObj;
         Rect *rect;
         
-        if (rgssVer >= 2) {
-            VALUE strObj;
-            rb_get_args(argc, argv, "oo|i", &rectObj, &strObj, &align RB_ARG_END);
-            
-            str = objAsStringPtr(strObj);
-        } else {
-            rb_get_args(argc, argv, "oz|i", &rectObj, &str, &align RB_ARG_END);
-        }
+        rb_get_args(argc, argv, "oz|i", &rectObj, &str, &align RB_ARG_END);
         
         rect = getPrivateDataCheck<Rect>(rectObj, RectType);
         
@@ -297,16 +285,8 @@ RB_METHOD_GUARD(bitmapDrawText) {
     } else {
         int x, y, width, height;
         
-        if (rgssVer >= 2) {
-            VALUE strObj;
-            rb_get_args(argc, argv, "iiiio|i", &x, &y, &width, &height, &strObj,
-                        &align RB_ARG_END);
-            
-            str = objAsStringPtr(strObj);
-        } else {
-            rb_get_args(argc, argv, "iiiiz|i", &x, &y, &width, &height, &str,
-                        &align RB_ARG_END);
-        }
+        rb_get_args(argc, argv, "iiiiz|i", &x, &y, &width, &height, &str,
+                    &align RB_ARG_END);
         
         GFX_GUARD_EXC(b->drawText(x, y, width, height, str, align););
     }
@@ -320,14 +300,7 @@ RB_METHOD_GUARD(bitmapTextSize) {
     
     const char *str;
     
-    if (rgssVer >= 2) {
-        VALUE strObj;
-        rb_get_args(argc, argv, "o", &strObj RB_ARG_END);
-        
-        str = objAsStringPtr(strObj);
-    } else {
-        rb_get_args(argc, argv, "z", &str RB_ARG_END);
-    }
+    rb_get_args(argc, argv, "z", &str RB_ARG_END);
     
     IntRect value;
     value = b->textSize(str);
@@ -358,14 +331,6 @@ RB_METHOD_GUARD(BitmapSetFont) {
             rb_iv_set(f, "size", rb_iv_get(propObj, "size"));
             rb_iv_set(f, "bold", rb_iv_get(propObj, "bold"));
             rb_iv_set(f, "italic", rb_iv_get(propObj, "italic"));
-
-            if (rgssVer >= 2) {
-                rb_iv_set(f, "shadow", rb_iv_get(propObj, "shadow"));
-            }
-
-            if (rgssVer >= 3) {
-                rb_iv_set(f, "outline", rb_iv_get(propObj, "outline"));
-            }
         }
     }
     

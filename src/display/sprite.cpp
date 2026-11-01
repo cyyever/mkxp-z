@@ -739,9 +739,6 @@ void Sprite::setY(int value)
     
     if (p->wave.active)
         p->wave.dirty = true;
-    
-    if (rgssVer >= 2)
-        setSpriteY(value);
 }
 
 void Sprite::setOX(int value)
