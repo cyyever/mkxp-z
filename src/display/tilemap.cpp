@@ -271,6 +271,11 @@ struct TilemapPrivate
 
 		/* The number of frames for each autotile */
 		int nATFrames[autotileCount] = {1};
+
+		/* High-resolution copy of the atlas, present only while
+		 * HiRes is enabled and the tileset or an autotile has a
+		 * high-resolution child. Same layout as 'gl', scaled. */
+		TEXFBO hires;
 	} atlas;
 
 	/* Map viewport position */
@@ -400,6 +405,7 @@ struct TilemapPrivate
 			delete elem.zlayers[i];
 
 		shState->releaseAtlasTex(atlas.gl);
+		releaseHiresAtlas();
 
 		/* Destroy tile buffers */
 		RenderOps::vaoFini(tiles.vao);
@@ -563,42 +569,10 @@ struct TilemapPrivate
 		{
 			const uint8_t atInd = atlas.usableATs[i];
 			Bitmap *autotile = autotiles[atInd];
-            autotile->ensureNonAnimated();
-
-			int atW = autotile->width();
-			int atH = autotile->height();
-			int blitW = std::min(atW, atAreaW);
-			int blitH = std::min(atH, autotileH);
-
-			if (autotile->hasHires()) {
-				Debug() << "BUG: High-res Tilemap blit autotiles not implemented";
-			}
+			autotile->ensureNonAnimated();
 
 			RenderOps::blitSource(autotile->getRenderTarget());
-
-			if (atW <= autotileW && tiles.animated && !atlas.smallATs[atInd])
-			{
-				/* Static autotile */
-				for (int j = 0; j < atFrames; ++j)
-					RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
-					                      Vec2i(autotileW*j, atInd*autotileH));
-			}
-			else
-			{
-				/* Animated autotile */
-				if (atlas.smallATs[atInd])
-				{
-					int frames = atW/32;
-					for (int j = 0; j < atFrames*autotileH/32; ++j)
-					{
-						RenderOps::blitRectangle(IntRect(32*(j % frames), 0, 32, 32),
-						                      Vec2i(autotileW*(j % atFrames), atInd*autotileH + 32*(j / atFrames)));
-					}
-				}
-				else
-					RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
-					                      Vec2i(0, atInd*autotileH));
-			}
+			blitAutotileRects(atInd);
 		}
 
 		RenderOps::blitEnd();
@@ -663,22 +637,167 @@ struct TilemapPrivate
 		}
 		else
 		{
-			if (tileset->hasHires()) {
-				Debug() << "BUG: High-res Tilemap regular tileset not implemented";
-			}
-
 			/* Regular tileset */
 			RenderOps::blitBegin(atlas.gl);
 			RenderOps::blitSource(tileset->getRenderTarget());
+			blitTilesetRects(blits);
+			RenderOps::blitEnd();
+		}
 
-			for (size_t i = 0; i < blits.size(); ++i)
+		if (wantsHiresAtlas() && ensureHiresAtlas())
+			buildHiresAtlas(blits);
+		else
+			releaseHiresAtlas();
+	}
+
+	/* Blits autotile 'atInd' from the bound blit source into its
+	 * atlas rows. Rectangles are in logical (low-res) pixels;
+	 * RenderOps scales them to the bound source and target. */
+	void blitAutotileRects(uint8_t atInd)
+	{
+		Bitmap *autotile = autotiles[atInd];
+		int atW = autotile->width();
+		int atH = autotile->height();
+		int blitW = std::min(atW, atAreaW);
+		int blitH = std::min(atH, autotileH);
+
+		if (atW <= autotileW && tiles.animated && !atlas.smallATs[atInd])
+		{
+			/* Static autotile */
+			for (int j = 0; j < atFrames; ++j)
+				RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
+				                      Vec2i(autotileW*j, atInd*autotileH));
+		}
+		else
+		{
+			/* Animated autotile */
+			if (atlas.smallATs[atInd])
 			{
-				const TileAtlas::Blit &blitOp = blits[i];
-
-				RenderOps::blitRectangle(IntRect(blitOp.src.x, blitOp.src.y, tsLaneW, blitOp.h),
-				                      blitOp.dst);
+				int frames = atW/32;
+				for (int j = 0; j < atFrames*autotileH/32; ++j)
+				{
+					RenderOps::blitRectangle(IntRect(32*(j % frames), 0, 32, 32),
+					                      Vec2i(autotileW*(j % atFrames), atInd*autotileH + 32*(j / atFrames)));
+				}
 			}
+			else
+				RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
+				                      Vec2i(0, atInd*autotileH));
+		}
+	}
 
+	void blitTilesetRects(const TileAtlas::BlitVec &blits)
+	{
+		for (size_t i = 0; i < blits.size(); ++i)
+		{
+			const TileAtlas::Blit &blitOp = blits[i];
+
+			RenderOps::blitRectangle(IntRect(blitOp.src.x, blitOp.src.y, tsLaneW, blitOp.h),
+			                      blitOp.dst);
+		}
+	}
+
+	/* A high-resolution atlas is only worth its memory when some
+	 * source actually carries more detail than the logical atlas. */
+	bool wantsHiresAtlas() const
+	{
+		if (!shState->config().enableHires)
+			return false;
+
+		if (!tileset->megaSurface() && tileset->hasHires())
+			return true;
+
+		for (size_t i = 0; i < atlas.usableATs.size(); ++i)
+			if (autotiles[atlas.usableATs[i]]->hasHires())
+				return true;
+
+		return false;
+	}
+
+	bool ensureHiresAtlas()
+	{
+		const double scale = shState->config().textureScalingFactor;
+		const int w = (int) lround(scale * atlas.size.x);
+		const int h = (int) lround(scale * atlas.size.y);
+
+		if (w <= atlas.size.x || h <= atlas.size.y)
+			return false;
+
+		if (w > renderState.caps.maxTexSize || h > renderState.caps.maxTexSize)
+		{
+			static bool warned = false;
+			if (!warned)
+				Debug() << "High-res Tilemap atlas" << w << "x" << h
+				        << "exceeds the maximum texture size; using the logical atlas";
+			warned = true;
+			return false;
+		}
+
+		if (atlas.hires.tex != TEX::ID(0) && atlas.hires.width == w && atlas.hires.height == h)
+			return true;
+
+		releaseHiresAtlas();
+		TEXFBO::init(atlas.hires);
+		TEXFBO::allocEmpty(atlas.hires, w, h);
+		TEXFBO::linkFBO(atlas.hires);
+
+		return true;
+	}
+
+	void releaseHiresAtlas()
+	{
+		if (atlas.hires.tex == TEX::ID(0))
+			return;
+
+		TEXFBO::fini(atlas.hires);
+		atlas.hires = TEXFBO();
+	}
+
+	/* Repeats the logical atlas assembly at high resolution:
+	 * low-res content is enlarged without filtering, so it samples
+	 * exactly like the logical atlas, then every source that has a
+	 * high-resolution child is blitted again from that child. */
+	void buildHiresAtlas(const TileAtlas::BlitVec &blits)
+	{
+		TEXFBO target = atlas.gl;
+		target.selfHires = &atlas.hires;
+		TEXFBO logical = atlas.gl;
+		logical.selfHires = nullptr;
+
+		const IntRect whole(0, 0, atlas.size.x, atlas.size.y);
+
+		RenderOps::blitBegin(target, true, SameScale);
+		RenderOps::blitSource(logical, SameScale);
+		RenderOps::blitRectangle(whole, whole);
+		RenderOps::blitEnd();
+
+		for (size_t i = 0; i < atlas.usableATs.size(); ++i)
+		{
+			const uint8_t atInd = atlas.usableATs[i];
+			Bitmap *autotile = autotiles[atInd];
+
+			if (!autotile->hasHires())
+				continue;
+
+			TEXFBO &source = autotile->getRenderTarget();
+			const IntRect rect(0, 0, autotile->width(), autotile->height());
+			const int scale = RenderOps::blitScaleIsSpecial(target, true, rect, source, rect);
+
+			RenderOps::blitBegin(target, true, scale);
+			RenderOps::blitSource(source, scale);
+			blitAutotileRects(atInd);
+			RenderOps::blitEnd();
+		}
+
+		if (!tileset->megaSurface() && tileset->hasHires())
+		{
+			TEXFBO &source = tileset->getRenderTarget();
+			const IntRect rect(0, 0, tileset->width(), tileset->height());
+			const int scale = RenderOps::blitScaleIsSpecial(target, true, rect, source, rect);
+
+			RenderOps::blitBegin(target, true, scale);
+			RenderOps::blitSource(source, scale);
+			blitTilesetRects(blits);
 			RenderOps::blitEnd();
 		}
 	}
@@ -907,7 +1026,9 @@ struct TilemapPrivate
 
 	void bindAtlas(ShaderBase &shader)
 	{
-		TEX::bind(atlas.gl.tex);
+		/* Texture coordinates stay in logical atlas pixels; the
+		 * high-res atlas shares the layout, so only the texture differs. */
+		TEX::bind(atlas.hires.tex != TEX::ID(0) ? atlas.hires.tex : atlas.gl.tex);
 		shader.setTexSize(atlas.size);
 	}
 
