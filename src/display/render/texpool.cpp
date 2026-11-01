@@ -144,6 +144,8 @@ TEXFBO TexPool::request(int width, int height)
 
 void TexPool::release(TEXFBO &obj)
 {
+	// High-resolution associations belong to the releasing bitmap, not the pool.
+	obj.selfHires = nullptr;
 	if (obj.tex == TEX::ID(0) || obj.fbo == FBO::ID(0))
 	{
 		TEXFBO::fini(obj);
