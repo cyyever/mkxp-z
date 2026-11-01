@@ -22,11 +22,10 @@
 #ifndef FILESYSTEM_H
 #define FILESYSTEM_H
 
-#include <SDL3/SDL_iostream.h>
-#include <string>
 #include <memory>
 
 
+struct SDL_IOStream;
 struct FileSystemPrivate;
 class SharedFontState;
 
