@@ -3,6 +3,17 @@ begin
   raise 'bundled PNG did not load' unless image.width > 0 && image.height > 0
   image.dispose
 
+  override = Bitmap.new('Graphics/cache/Hero')
+  raise 'game asset did not override RTP' unless override.get_pixel(0, 0).red == 255
+  override.dispose
+  stamp = File.mtime('Graphics/cache')
+  File.delete('Graphics/cache/Hero.png')
+  File.utime(stamp, stamp, 'Graphics/cache')
+  fallback = Bitmap.new('Graphics/cache/Hero')
+  pixel = fallback.get_pixel(0, 0)
+  raise 'deleted cached asset did not reveal RTP' unless [pixel.red, pixel.green, pixel.blue] == [0, 255, 0]
+  fallback.dispose
+
   bitmap = Bitmap.new(180, 40)
   bitmap.fill_rect(0, 0, 180, 40, Color.new(120, 50, 20))
   bitmap.font = Font.new('Liberation Sans', 18).dup
