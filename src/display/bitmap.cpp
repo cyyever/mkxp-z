@@ -2431,9 +2431,12 @@ bool Bitmap::getRaw(void *output, int output_size)
 
     guardDisposed();
 
-    if (!p->animation.enabled && (p->surface || p->megaSurface)) {
-        void *src = (p->megaSurface) ? p->megaSurface->pixels : p->surface->pixels;
-        memcpy(output, src, output_size);
+    if (!p->animation.enabled) {
+        if (!p->megaSurface)
+            createSurface();
+        const SDL_Surface *src = p->megaSurface ? p->megaSurface : p->surface;
+        return SDL_ConvertPixels(width(), height(), src->format, src->pixels, src->pitch,
+                                 SDL_PIXELFORMAT_RGBA32, output, width() * 4);
     }
     else {
         FBO::bind(getRenderTarget().fbo);
@@ -2467,8 +2470,12 @@ void Bitmap::replaceRaw(void *pixel_data, int size)
         TEX::uploadImage(w, h, pixel_data, SDL_PIXELFORMAT_RGBA32);
     }
 
+    // Keep an existing CPU cache coherent with the exact replacement bytes.
+    const bool updatedSurface = !p->animation.enabled && p->surface && SDL_ConvertPixels(
+        w, h, SDL_PIXELFORMAT_RGBA32, pixel_data, w * 4,
+        p->surface->format, p->surface->pixels, p->surface->pitch);
     taintArea(IntRect(0,0,w,h));
-    p->onModified();
+    p->onModified(!updatedSurface);
 }
 
 void Bitmap::saveToFile(const char *filename)
@@ -2481,6 +2488,10 @@ void Bitmap::saveToFile(const char *filename)
 
     SDL_Surface *surf;
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> ownedSurface(nullptr, SDL_DestroySurface);
+
+    // Nonanimated readbacks share the same cache as getPixel/getRaw.
+    if (!p->animation.enabled && !p->megaSurface)
+        createSurface();
 
     if (p->surface || p->megaSurface) {
         surf = (p->surface) ? p->surface : p->megaSurface;
