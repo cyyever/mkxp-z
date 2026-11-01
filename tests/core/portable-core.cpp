@@ -2,6 +2,7 @@
 #include "filesystem/directory-search.h"
 #include "util/exception.h"
 #include "util/serial-util.h"
+#include "util/util.h"
 
 #include <array>
 #include <chrono>
@@ -188,8 +189,31 @@ void testSerialization() {
     }
 }
 
+void testPowerOfTwoSizes() {
+    static_assert(findNextPow2(-1) == 1);
+    static_assert(findNextPow2(0) == 1);
+    static_assert(findNextPow2(1) == 1);
+    constexpr int largest = static_cast<int>(std::bit_floor(static_cast<unsigned>(std::numeric_limits<int>::max())));
+    check(findNextPow2(std::numeric_limits<int>::min()) == 1, "negative texture size retains minimum");
+    for (unsigned power = 1; power <= static_cast<unsigned>(largest); power <<= 1) {
+        const int size = static_cast<int>(power);
+        check(findNextPow2(size) == size, "power-of-two size stays exact");
+        if (size > 2)
+            check(findNextPow2(size - 1) == size, "round size upward at each bit boundary");
+        if (size < largest)
+            check(findNextPow2(size + 1) == size * 2, "round size above each bit boundary");
+    }
+    for (const int size : {largest + 1, std::numeric_limits<int>::max()}) {
+        bool rejected = false;
+        try { findNextPow2(size); }
+        catch (const Exception &error) { rejected = error.type == Exception::ArgumentError; }
+        check(rejected, "unrepresentable texture size is rejected before integer overflow");
+    }
+}
+
 int main() {
     try {
+        testPowerOfTwoSizes();
         testSerialization();
         testFilesystem();
         testDirectorySearch();
