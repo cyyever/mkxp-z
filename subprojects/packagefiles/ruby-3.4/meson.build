@@ -36,164 +36,215 @@ ruby_deps = [
     dependency('zlib', required: true),
 ]
 
-ruby = declare_dependency(
-    dependencies: [
-        ruby_deps,
-        import('unstable-external_project').add_project(
-            'configure',
-            configure_options: [
-                '--srcdir=' + srcdir,
-                '--prefix=' + '@PREFIX@',
-                '--prefix=/',
-                meson.version().version_compare('>=1.7.0') ? '--bindir=' + '@PREFIX@' / '@BINDIR@' : [],
-                '--bindir=/bin',
-                '--libdir=' + '@PREFIX@' / '@LIBDIR@',
-                '--libdir=/lib',
-                '--includedir=' + '@PREFIX@' / '@INCLUDEDIR@',
-                '--includedir=/include',
-                '--with-rubyhdrdir=/include',
-                '--with-rubyarchhdrdir=/include',
-                '--with-destdir=' + destdir,
-                '--with-baseruby=' + baseruby,
-                '--with-soname=ruby',
-                '--disable-shared',
-                '--disable-yjit',
-                '--disable-install-doc',
-                # mkxp-z only needs zlib (auto-required by the binding); the supported games load no other extension.
-                '--with-ext=zlib',
-                '--with-static-linked-ext',
-                '--disable-rubygems',
-                '--without-gmp',
-                '--enable-mkmf-verbose',
-                'CC=' + run_command(subproject('common').get_variable('quotetool'), meson.get_compiler('c').cmd_array(), check: true).stdout().strip(),
-                'CXX=' + run_command(subproject('common').get_variable('quotetool'), meson.get_compiler('cpp').cmd_array(), check: true).stdout().strip(),
-                'AR=' + run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('ar'), check: true).stdout().strip(),
-                'RANLIB=' + run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('ranlib'), check: true).stdout().strip(),
-                'AS=false',
-                'LD=false',
-                'NM=false',
-                'OBJCOPY=false',
-                'OBJDUMP=false',
-                'STRIP=false',
-                'CFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cflags, check: true).stdout().strip() + ' ' + get_option('cflags'),
-                'CXXFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cppflags, check: true).stdout().strip() + ' ' + get_option('cppflags'),
-                'LDFLAGS=' + run_command(subproject('common').get_variable('quotetool'), ldflags, check: true).stdout().strip() + ' ' + get_option('ldflags'),
-            ],
-            cross_configure_options: [
-                '--host=@HOST@',
-                '--host=' + subproject('common').get_variable('host_triplet'),
-            ],
-            env: {
-                'CONFIG_SITE': ' ',
-                'MKXP_LIBGCC': meson.get_compiler('c').has_link_argument('-lgcc') ? '-lgcc' : '',
-                # Disable LTO while running link tests for Ruby extensions if the linker is LLD (LLVM linker) and we are building for 32-bit ARM.
-                # Otherwise, the link tests may fail due to https://github.com/llvm/llvm-project/issues/108262.
-                'MKXP_DISABLE_LTO_FOR_LINK_TESTS': (meson.get_compiler('c').get_linker_id().split('.')[-1] == 'lld' or meson.get_compiler('c').get_linker_id() == 'lld-link') and host_machine.cpu_family() == 'arm' ? 'yes' : 'no',
-                'DLLWRAP': 'false',
-                'WINDRES': run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('windres'), check: true).stdout().strip(),
-                'YACC': run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('bison').cmd_array() : find_program('bison')), check: true).stdout().strip(),
-                'ac_cv_func___builtin_setjmp': 'no',
-                'ac_cv_func_crypt': 'no',
-                'ac_cv_func_crypt_r': 'no',
-                'ac_cv_header_crypt_h': 'no',
-                'ac_cv_lib_crypt_crypt': 'no',
-                'ac_cv_lib_z_uncompress': 'yes',
-                'rb_cv_broken_crypt': 'no',
-                'rb_cv_gcc_atomic_builtins': 'yes',
-                'rb_cv_gcc_sync_builtins': 'no',
-                'rb_cv_prog_gnu_ld': subproject('common').get_variable('c_linker_is_gnu') ? 'yes' : 'no',
-                'rb_cv_symbol_prefix': meson.get_compiler('c').symbols_have_underscore_prefix() ? '_' : 'NONE',
-            } + ruby_env_extra,
-            depends: [
-                # Force Meson to fully build all of our vendored dependencies that are required by Ruby before building Ruby itself
-                executable(
-                    'deps',
-                    sources: [
-                        'deps-stub.c',
-                    ],
-                    dependencies: [
-                        ruby_deps,
-                    ],
-                ),
-            ],
-            verbose: true,
-        ).dependency('ruby-static').partial_dependency(
-            sources: true,
-        ),
-        host_machine.system() not in ['windows', 'cygwin', 'darwin']
-            ? [
-                meson.get_compiler('c').find_library('atomic', required: false),
-                meson.get_compiler('c').find_library('dl', required: false),
-                meson.get_compiler('c').find_library('rt', required: false),
-            ]
-            : [],
-        host_machine.system() in ['windows', 'cygwin']
-            ? [
-                meson.get_compiler('c').find_library('shell32', required: true),
-                meson.get_compiler('c').find_library('ws2_32', required: true),
-                meson.get_compiler('c').find_library('iphlpapi', required: true),
-                meson.get_compiler('c').find_library('imagehlp', required: true),
-                meson.get_compiler('c').find_library('shlwapi', required: true),
-                meson.get_compiler('c').find_library('bcrypt', required: true),
-            ]
-            : [],
-        host_machine.system() == 'freebsd'
-            ? [
-                meson.get_compiler('c').find_library('procstat', required: true),
-            ]
-            : [],
-        host_machine.system() in ['freebsd', 'netbsd']
-            ? [
-                meson.get_compiler('c').find_library('execinfo', required: true),
-            ]
-            : [],
-    ],
-    compile_args: [
-        '-I' + meson.project_build_root() / 'dist' / 'include',
-    ],
-    link_args: [
-        # If the executable format is ELF, we need this linker flag to export Ruby's symbols from our executable so that gems can find them.
-        # Otherwise, any Ruby gems that have extensions will fail to load with undefined symbol errors.
-        # For non-ELF executable formats (e.g. Mach-O or PE), this behavior is already the default so no linker flag is needed for non-ELF formats.
-        meson.get_compiler('c').first_supported_link_argument('-rdynamic', '-Wl,-export-dynamic'),
-        (host_machine.system() in ['windows', 'cygwin']) and not meson.get_compiler('c').has_header_symbol('math.h', 'lgamma_r')
-            ? [
-                meson.project_build_root() / 'build' / 'lgamma_r.o',
-            ]
-            : [],
-        meson.project_build_root() / 'build' / 'ext' / 'extinit.a',
-        meson.project_build_root() / 'build' / 'ext' / 'zlib' / 'zlib.a',
-        meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
-        meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
-        meson.project_build_root() / 'build' / 'enc' / 'libtrans.a',
-        meson.project_build_root() / 'build' / 'libruby-static.a',
-    ],
-)
+if meson.get_compiler('c').get_argument_syntax() == 'msvc'
+    # MSVC cannot drive Ruby's autoconf build; use Ruby's own mswin build (win32/configure.bat + nmake).
+    ruby_arch = {'x86_64': 'x64-mswin64_140', 'aarch64': 'arm64-mswin64_140'}[host_machine.cpu_family()]
+    ruby_so_prefix = {'x86_64': 'x64', 'aarch64': 'arm64'}[host_machine.cpu_family()]
+    ruby_msvc_build_dir = meson.project_build_root() / 'build'
+    ruby_msvc = custom_target(
+        'ruby-msvc',
+        output: 'ruby-msvc.stamp',
+        command: [
+            subproject('common').get_variable('python'),
+            files('build-msvc.py'),
+            meson.project_source_root(),
+            ruby_msvc_build_dir,
+            meson.project_build_root() / 'dist',
+            get_option('cflags'),
+            get_option('ldflags'),
+            '@OUTPUT@',
+        ],
+        depends: executable('deps', sources: ['deps-stub.c'], dependencies: [ruby_deps]),
+        build_by_default: true,
+        console: true,
+    )
+    ruby = declare_dependency(
+        sources: ruby_msvc,
+        dependencies: [
+            ruby_deps,
+            meson.get_compiler('c').find_library('user32', required: true),
+            meson.get_compiler('c').find_library('advapi32', required: true),
+            meson.get_compiler('c').find_library('shell32', required: true),
+            meson.get_compiler('c').find_library('ws2_32', required: true),
+            meson.get_compiler('c').find_library('iphlpapi', required: true),
+            meson.get_compiler('c').find_library('imagehlp', required: true),
+            meson.get_compiler('c').find_library('shlwapi', required: true),
+            meson.get_compiler('c').find_library('bcrypt', required: true),
+        ],
+        compile_args: [
+            '-I' + meson.project_source_root() / 'include',
+            '-I' + ruby_msvc_build_dir / '.ext' / 'include' / ruby_arch,
+        ],
+        link_args: [
+            ruby_msvc_build_dir / 'ext' / 'extinit.obj',
+            ruby_msvc_build_dir / 'ext' / 'zlib' / 'zlib.lib',
+            ruby_msvc_build_dir / 'enc' / 'encinit.obj',
+            ruby_msvc_build_dir / 'enc' / 'libenc.lib',
+            ruby_msvc_build_dir / 'enc' / 'libtrans.lib',
+            ruby_msvc_build_dir / (ruby_so_prefix + '-vcruntime140-ruby340-static.lib'),
+        ],
+    )
+    ruby_build_dir = meson.project_build_root()
+else
+    ruby = declare_dependency(
+        dependencies: [
+            ruby_deps,
+            import('unstable-external_project').add_project(
+                'configure',
+                configure_options: [
+                    '--srcdir=' + srcdir,
+                    '--prefix=' + '@PREFIX@',
+                    '--prefix=/',
+                    meson.version().version_compare('>=1.7.0') ? '--bindir=' + '@PREFIX@' / '@BINDIR@' : [],
+                    '--bindir=/bin',
+                    '--libdir=' + '@PREFIX@' / '@LIBDIR@',
+                    '--libdir=/lib',
+                    '--includedir=' + '@PREFIX@' / '@INCLUDEDIR@',
+                    '--includedir=/include',
+                    '--with-rubyhdrdir=/include',
+                    '--with-rubyarchhdrdir=/include',
+                    '--with-destdir=' + destdir,
+                    '--with-baseruby=' + baseruby,
+                    '--with-soname=ruby',
+                    '--disable-shared',
+                    '--disable-yjit',
+                    '--disable-install-doc',
+                    # mkxp-z only needs zlib (auto-required by the binding); the supported games load no other extension.
+                    '--with-ext=zlib',
+                    '--with-static-linked-ext',
+                    '--disable-rubygems',
+                    '--without-gmp',
+                    '--enable-mkmf-verbose',
+                    'CC=' + run_command(subproject('common').get_variable('quotetool'), meson.get_compiler('c').cmd_array(), check: true).stdout().strip(),
+                    'CXX=' + run_command(subproject('common').get_variable('quotetool'), meson.get_compiler('cpp').cmd_array(), check: true).stdout().strip(),
+                    'AR=' + run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('ar'), check: true).stdout().strip(),
+                    'RANLIB=' + run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('ranlib'), check: true).stdout().strip(),
+                    'AS=false',
+                    'LD=false',
+                    'NM=false',
+                    'OBJCOPY=false',
+                    'OBJDUMP=false',
+                    'STRIP=false',
+                    'CFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cflags, check: true).stdout().strip() + ' ' + get_option('cflags'),
+                    'CXXFLAGS=' + run_command(subproject('common').get_variable('quotetool'), cppflags, check: true).stdout().strip() + ' ' + get_option('cppflags'),
+                    'LDFLAGS=' + run_command(subproject('common').get_variable('quotetool'), ldflags, check: true).stdout().strip() + ' ' + get_option('ldflags'),
+                ],
+                cross_configure_options: [
+                    '--host=@HOST@',
+                    '--host=' + subproject('common').get_variable('host_triplet'),
+                ],
+                env: {
+                    'CONFIG_SITE': ' ',
+                    'MKXP_LIBGCC': meson.get_compiler('c').has_link_argument('-lgcc') ? '-lgcc' : '',
+                    # Disable LTO while running link tests for Ruby extensions if the linker is LLD (LLVM linker) and we are building for 32-bit ARM.
+                    # Otherwise, the link tests may fail due to https://github.com/llvm/llvm-project/issues/108262.
+                    'MKXP_DISABLE_LTO_FOR_LINK_TESTS': (meson.get_compiler('c').get_linker_id().split('.')[-1] == 'lld' or meson.get_compiler('c').get_linker_id() == 'lld-link') and host_machine.cpu_family() == 'arm' ? 'yes' : 'no',
+                    'DLLWRAP': 'false',
+                    'WINDRES': run_command(subproject('common').get_variable('quotetool'), subproject('common').get_variable('windres'), check: true).stdout().strip(),
+                    'YACC': run_command(subproject('common').get_variable('quotetool'), (meson.version().version_compare('>=1.10.0') ? find_program('bison').cmd_array() : find_program('bison')), check: true).stdout().strip(),
+                    'ac_cv_func___builtin_setjmp': 'no',
+                    'ac_cv_func_crypt': 'no',
+                    'ac_cv_func_crypt_r': 'no',
+                    'ac_cv_header_crypt_h': 'no',
+                    'ac_cv_lib_crypt_crypt': 'no',
+                    'ac_cv_lib_z_uncompress': 'yes',
+                    'rb_cv_broken_crypt': 'no',
+                    'rb_cv_gcc_atomic_builtins': 'yes',
+                    'rb_cv_gcc_sync_builtins': 'no',
+                    'rb_cv_prog_gnu_ld': subproject('common').get_variable('c_linker_is_gnu') ? 'yes' : 'no',
+                    'rb_cv_symbol_prefix': meson.get_compiler('c').symbols_have_underscore_prefix() ? '_' : 'NONE',
+                } + ruby_env_extra,
+                depends: [
+                    # Force Meson to fully build all of our vendored dependencies that are required by Ruby before building Ruby itself
+                    executable(
+                        'deps',
+                        sources: [
+                            'deps-stub.c',
+                        ],
+                        dependencies: [
+                            ruby_deps,
+                        ],
+                    ),
+                ],
+                verbose: true,
+            ).dependency('ruby-static').partial_dependency(
+                sources: true,
+            ),
+            host_machine.system() not in ['windows', 'cygwin', 'darwin']
+                ? [
+                    meson.get_compiler('c').find_library('atomic', required: false),
+                    meson.get_compiler('c').find_library('dl', required: false),
+                    meson.get_compiler('c').find_library('rt', required: false),
+                ]
+                : [],
+            host_machine.system() in ['windows', 'cygwin']
+                ? [
+                    meson.get_compiler('c').find_library('shell32', required: true),
+                    meson.get_compiler('c').find_library('ws2_32', required: true),
+                    meson.get_compiler('c').find_library('iphlpapi', required: true),
+                    meson.get_compiler('c').find_library('imagehlp', required: true),
+                    meson.get_compiler('c').find_library('shlwapi', required: true),
+                    meson.get_compiler('c').find_library('bcrypt', required: true),
+                ]
+                : [],
+            host_machine.system() == 'freebsd'
+                ? [
+                    meson.get_compiler('c').find_library('procstat', required: true),
+                ]
+                : [],
+            host_machine.system() in ['freebsd', 'netbsd']
+                ? [
+                    meson.get_compiler('c').find_library('execinfo', required: true),
+                ]
+                : [],
+        ],
+        compile_args: [
+            '-I' + meson.project_build_root() / 'dist' / 'include',
+        ],
+        link_args: [
+            # If the executable format is ELF, we need this linker flag to export Ruby's symbols from our executable so that gems can find them.
+            # Otherwise, any Ruby gems that have extensions will fail to load with undefined symbol errors.
+            # For non-ELF executable formats (e.g. Mach-O or PE), this behavior is already the default so no linker flag is needed for non-ELF formats.
+            meson.get_compiler('c').first_supported_link_argument('-rdynamic', '-Wl,-export-dynamic'),
+            (host_machine.system() in ['windows', 'cygwin']) and not meson.get_compiler('c').has_header_symbol('math.h', 'lgamma_r')
+                ? [
+                    meson.project_build_root() / 'build' / 'lgamma_r.o',
+                ]
+                : [],
+            meson.project_build_root() / 'build' / 'ext' / 'extinit.a',
+            meson.project_build_root() / 'build' / 'ext' / 'zlib' / 'zlib.a',
+            meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
+            meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
+            meson.project_build_root() / 'build' / 'enc' / 'libtrans.a',
+            meson.project_build_root() / 'build' / 'libruby-static.a',
+        ],
+    )
 
-ruby_build_dir = meson.project_build_root()
+    ruby_build_dir = meson.project_build_root()
 
-miniruby = custom_target(
-    'miniruby',
-    output: 'miniruby',
-    command: [
-        subproject('common').get_variable('python'),
-        files('build-miniruby.py'),
-        baseruby,
-        ruby_build_dir / 'build',
-        '@OUTPUT@',
-    ],
-    depends: [
-        executable(
-            'miniruby-deps',
-            sources: [
-                'deps-stub.c',
-            ],
-            dependencies: [
-                ruby,
-            ],
-        ),
-    ],
-    build_by_default: true,
-)
+    miniruby = custom_target(
+        'miniruby',
+        output: 'miniruby',
+        command: [
+            subproject('common').get_variable('python'),
+            files('build-miniruby.py'),
+            baseruby,
+            ruby_build_dir / 'build',
+            '@OUTPUT@',
+        ],
+        depends: [
+            executable(
+                'miniruby-deps',
+                sources: [
+                    'deps-stub.c',
+                ],
+                dependencies: [
+                    ruby,
+                ],
+            ),
+        ],
+        build_by_default: true,
+    )
+endif
 
 meson.override_dependency('ruby-3.4', ruby, static: true)
