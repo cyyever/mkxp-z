@@ -32,10 +32,6 @@ embedtool = [python, files('embedtool.py')[0]]
 #   Outputs a shell-escaped string containing the given arguments, so that shell splitting the string output by this command yields the original arguments. For example, if the arguments are `hello` and `foo bar` and `foo 'bar'`, the output will be `hello 'foo bar' 'foo '"'"'bar'"'"''`.
 quotetool = [python, files('quotetool.py')[0]]
 
-# sonametool LIBRARY_NAME
-#   Returns the full name of the shared library file for the given library on the host machine. For example, given "X11", this outputs "libX11.so.6" when building for BSD or Linux.
-sonametool = [python, files('sonametool.py')[0], host_machine.system()]
-
 host_triplet_cpu = host_machine.cpu()
 host_triplet_vendor = 'unknown'
 if host_machine.system() in ['windows', 'cygwin']
