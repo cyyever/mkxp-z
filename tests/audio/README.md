@@ -5,7 +5,7 @@ SDL's dummy playback driver, so no speakers or game assets are required. Small
 asset/decoder/suspend test doubles generate PCM while SDL performs the actual
 queueing, conversion, resampling and playback.
 
-With SDL3 >= 3.4 installed and discoverable through pkg-config:
+With SDL3 >= 3.4 installed with its CMake package discoverable through `CMAKE_PREFIX_PATH`:
 
 ```sh
 meson setup build/audio-tests tests/audio

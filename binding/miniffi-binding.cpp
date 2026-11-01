@@ -10,15 +10,13 @@
 #include "miniffi.h"
 #include "binding-util.h"
 
-#if RAPI_MAJOR >= 2
 #include <ruby/thread.h>
-#endif
 
 #if defined(__linux__) || defined(SDL_PLATFORM_APPLE)
 #define MVAL2RB(v) ULONG2NUM(v)
 #define RB2MVAL(v) (mffi_value)NUM2ULONG(v)
 #else
-#ifdef __MINGW64__
+#if defined(_WIN64)
 #define MVAL2RB(v) ULL2NUM(v)
 #define RB2MVAL(v) (mffi_value)NUM2ULL(v)
 #else
@@ -33,13 +31,13 @@
 #define _T_INTEGER 3
 #define _T_BOOL 4
 
-#if RAPI_FULL > 187
-DEF_TYPE_CUSTOMFREE(MiniFFI, SDL_UnloadObject);
-#else
-DEF_ALLOCFUNC_CUSTOMFREE(MiniFFI, SDL_UnloadObject);
-#endif
+static void MiniFFI_Unload(void *handle) {
+    SDL_UnloadObject(static_cast<SDL_SharedObject *>(handle));
+}
 
-static void *MiniFFI_GetFunctionHandle(void *libhandle, const char *func) {
+DEF_TYPE_CUSTOMFREE(MiniFFI, MiniFFI_Unload);
+
+static SDL_FunctionPointer MiniFFI_GetFunctionHandle(SDL_SharedObject *libhandle, const char *func) {
     if (!libhandle)
         return 0;
     return SDL_LoadFunction(libhandle, func);
@@ -54,12 +52,12 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
     SafeStringValue(libname);
     SafeStringValue(func);
 #ifdef SDL_PLATFORM_APPLE
-    void *hlib = SDL_LoadObject(paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(RSTRING_PTR(libname))).lexically_normal().make_preferred().u8string()).c_str());
+    auto *hlib = SDL_LoadObject(paths::toUtf8((std::filesystem::current_path() / paths::fromRgss(RSTRING_PTR(libname))).lexically_normal().make_preferred().u8string()).c_str());
 #else
-    void *hlib = SDL_LoadObject(RSTRING_PTR(libname));
+    auto *hlib = SDL_LoadObject(RSTRING_PTR(libname));
 #endif
     setPrivateData(self, hlib);
-    void *hfunc = MiniFFI_GetFunctionHandle(hlib, RSTRING_PTR(func));
+    auto hfunc = MiniFFI_GetFunctionHandle(hlib, RSTRING_PTR(func));
 #ifdef SDL_PLATFORM_WIN32
     if (hlib && !hfunc) {
         VALUE func_a = rb_str_new3(func);
@@ -185,7 +183,6 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
 }
 RB_METHOD_GUARD_END
 
-#if RAPI_MAJOR >= 2
 typedef struct {
     MINIFFI_FUNC function;
     MiniFFIFuncArgs *args;
@@ -196,7 +193,6 @@ void* miniffi_call_cb(void *args) {
     MFFICallCBArgs *a = (MFFICallCBArgs*)args;
     return (void*)miniffi_call_intern(a->function, a->args, a->nparams);
     }
-#endif
 
 RB_METHOD_GUARD(MiniFFI_call) {
     MiniFFIFuncArgs param;
@@ -244,12 +240,8 @@ RB_METHOD_GUARD(MiniFFI_call) {
         }
         params[i] = lParam;
     }
-#if RAPI_MAJOR >= 2
     MFFICallCBArgs cb_args {ApiFunction, &param, nimport};
     mffi_value ret = (mffi_value)rb_thread_call_without_gvl(miniffi_call_cb, &cb_args, 0, 0);
-#else
-    mffi_value ret = miniffi_call_intern(ApiFunction, &param, nimport);
-#endif
     
     switch (FIX2INT(own_exports)) {
         case _T_NUMBER:
@@ -271,11 +263,7 @@ RB_METHOD_GUARD_END
 
 void MiniFFIBindingInit() {
     VALUE cMiniFFI = rb_define_class("MiniFFI", rb_cObject);
-#if RAPI_FULL > 187
     rb_define_alloc_func(cMiniFFI, classAllocate<&MiniFFIType>);
-#else
-    rb_define_alloc_func(cMiniFFI, MiniFFIAllocate);
-#endif
     _rb_define_method(cMiniFFI, "initialize", MiniFFI_initialize);
     _rb_define_method(cMiniFFI, "call", MiniFFI_call);
     rb_define_alias(cMiniFFI, "Call", "call");

@@ -20,11 +20,11 @@ struct SDL_Window;
 
 #ifdef SDL_PLATFORM_WIN32
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_WINDOWS
-#elif defined SDL_PLATFORM_APPLE
+#elif defined SDL_PLATFORM_MACOS
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_MACOS
-#elif defined __linux__
+#elif defined SDL_PLATFORM_LINUX
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_LINUX
-#elif defined __DragonFly__ || defined __FreeBSD__ || defined __NetBSD__ || defined __OpenBSD__
+#elif defined __FreeBSD__
 #define MKXPZ_PLATFORM MKXPZ_PLATFORM_BSD
 #else
 #error "Can't identify platform."

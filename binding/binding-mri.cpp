@@ -39,6 +39,7 @@
 #include "config.h"
 
 #include "binding-util.h"
+#include "json-binding.h"
 #include "binding.h"
 
 #include "sharedstate.h"
@@ -49,9 +50,7 @@
 extern "C" {
 #include <ruby.h>
 
-#if RAPI_FULL >= 190
 #include <ruby/encoding.h>
-#endif
 }
 
 #ifdef SDL_PLATFORM_WIN32
@@ -147,8 +146,6 @@ RB_METHOD(_kernelCaller);
 RB_METHOD(mkxpStringToUTF8);
 RB_METHOD(mkxpStringToUTF8Bang);
 
-VALUE json2rb(json5pp::value const &v);
-json5pp::value rb2json(VALUE v);
 
 
 static void mriBindingInit() {
@@ -603,9 +600,7 @@ RB_METHOD_GUARD(mkxpStringToUTF8Bang) {
     rb_str_resize(self, ret.length());
     memcpy(RSTRING_PTR(self), ret.c_str(), RSTRING_LEN(self));
     
-#if RAPI_FULL >= 190
     rb_funcall(self, rb_intern("force_encoding"), 1, rb_enc_from_encoding(rb_utf8_encoding()));
-#endif
     
     return self;
 }
@@ -662,68 +657,59 @@ RB_METHOD_GUARD(mkxpLaunch) {
 }
 RB_METHOD_GUARD_END
 
-json5pp::value loadUserSettings() {
-    json5pp::value ret;
-    VALUE cpath = rb_utf8_str_new_cstr(shState->config().userConfPath.c_str());
-    
-    if (rb_funcall(rb_cFile, rb_intern("exists?"), 1, cpath) == Qtrue) {
-        VALUE f = rb_funcall(rb_cFile, rb_intern("open"), 2, cpath, rb_str_new("r", 1));
-        VALUE data = rb_funcall(f, rb_intern("read"), 0);
-        rb_funcall(f, rb_intern("close"), 0);
-        ret = json5pp::parse5(RSTRING_PTR(data));
+static json5pp::value loadUserSettings() {
+    using json_binding::call;
+    VALUE path = call([] { return rb_utf8_str_new_cstr(shState->config().userConfPath.c_str()); });
+    auto settings = json5pp::object({});
+    if (call([&] { return rb_funcall(rb_cFile, rb_intern("exist?"), 1, path); }) == Qtrue) {
+        VALUE data = call([&] { return rb_funcall(rb_cFile, rb_intern("binread"), 1, path); });
+        settings = json5pp::parse5(RSTRING_PTR(data), RSTRING_LEN(data));
+        RB_GC_GUARD(data);
     }
-    
-    if (!ret.is_object())
-        ret = json5pp::object({});
-    
-    return ret;
+    RB_GC_GUARD(path);
+    return settings.is_object() ? std::move(settings) : json5pp::object({});
 }
 
-void saveUserSettings(json5pp::value &settings) {
-    VALUE cpath = rb_utf8_str_new_cstr(shState->config().userConfPath.c_str());
-    VALUE f = rb_funcall(rb_cFile, rb_intern("open"), 2, cpath, rb_str_new("w", 1));
-    rb_funcall(f, rb_intern("write"), 1, rb_utf8_str_new_cstr(settings.stringify5(json5pp::rule::space_indent<>()).c_str()));
-    rb_funcall(f, rb_intern("close"), 0);
+static void saveUserSettings(const json5pp::value &settings) {
+    using json_binding::call;
+    VALUE path = call([] { return rb_utf8_str_new_cstr(shState->config().userConfPath.c_str()); });
+    const auto serialized = settings.stringify5(json5pp::rule::space_indent<>());
+    VALUE data = call([&] { return rb_utf8_str_new(serialized.data(), static_cast<long>(serialized.size())); });
+    call([&] { return rb_funcall(rb_cFile, rb_intern("binwrite"), 2, path, data); });
+    RB_GC_GUARD(path);
+    RB_GC_GUARD(data);
 }
 
 RB_METHOD(mkxpGetJSONSetting) {
     RB_UNUSED_PARAM;
-    
-    VALUE sname;
-    rb_scan_args(argc, argv, "1", &sname);
-    SafeStringValue(sname);
-    
-    auto settings = loadUserSettings();
-    auto &s = settings.as_object();
-    
-    if (s[RSTRING_PTR(sname)].is_null()) {
-        return json2rb(shState->config().raw.as_object()[RSTRING_PTR(sname)]);
-    }
-    
-    return json2rb(s[RSTRING_PTR(sname)]);
-    
+    VALUE name;
+    rb_scan_args(argc, argv, "1", &name);
+    SafeStringValue(name);
+    return json_binding::guard([&] {
+        const auto settings = loadUserSettings();
+        const std::string key(RSTRING_PTR(name), RSTRING_LEN(name));
+        const auto &value = settings[key];
+        return json2rb(value.is_null() ? shState->config().raw[key] : value);
+    });
 }
 
-RB_METHOD_GUARD(mkxpSetJSONSetting) {
+RB_METHOD(mkxpSetJSONSetting) {
     RB_UNUSED_PARAM;
-    
-    VALUE sname, svalue;
-    rb_scan_args(argc, argv, "2", &sname, &svalue);
-    SafeStringValue(sname);
-    
-    auto settings = loadUserSettings();
-    auto &s = settings.as_object();
-    s[RSTRING_PTR(sname)] = rb2json(svalue);
-    saveUserSettings(settings);
-    
-    return Qnil;
+    VALUE name, value;
+    rb_scan_args(argc, argv, "2", &name, &value);
+    SafeStringValue(name);
+    return json_binding::guard([&] {
+        auto settings = loadUserSettings();
+        const std::string key(RSTRING_PTR(name), RSTRING_LEN(name));
+        settings.as_object()[key] = rb2json(value);
+        saveUserSettings(settings);
+        return Qnil;
+    });
 }
-RB_METHOD_GUARD_END
 
 RB_METHOD(mkxpGetAllJSONSettings) {
     RB_UNUSED_PARAM;
-    
-    return json2rb(shState->config().raw);
+    return json_binding::guard([] { return json2rb(shState->config().raw); });
 }
 
 static bool processReset() {
@@ -732,13 +718,9 @@ static bool processReset() {
 	return state;
 }
 
-#if RAPI_FULL > 187
 static VALUE newStringUTF8(const char *string, long length) {
     return rb_enc_str_new(string, length, rb_utf8_encoding());
 }
-#else
-#define newStringUTF8 rb_str_new
-#endif
 
 struct evalArg {
     VALUE string;
@@ -980,20 +962,11 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     VALUE name = rb_class_path(rb_obj_class(exc));
     
     VALUE ds = rb_sprintf("%" PRIsVALUE ": %" PRIsVALUE " (%" PRIsVALUE ")",
-#if RAPI_MAJOR >= 2
                           bt0, exc, name);
-#else
-    // Ruby 1.9's version of this function needs char*
-    RSTRING_PTR(bt0), RSTRING_PTR(exc), RSTRING_PTR(name));
-#endif
     /* omit "useless" last entry (from ruby:1:in `eval') */
     for (long i = 1, btlen = RARRAY_LEN(bt) - 1; i < btlen; ++i)
         rb_str_catf(ds, "\n\tfrom %" PRIsVALUE,
-#if RAPI_MAJOR >= 2
                     rb_ary_entry(bt, i));
-#else
-    RSTRING_PTR(rb_ary_entry(bt, i)));
-#endif
     Debug() << StringValueCStr(ds);
     
     char *s = RSTRING_PTR(bt0);
@@ -1045,7 +1018,6 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
 static void mriBindingExecute() {
     Config &conf = shState->rtData().config;
     
-#if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
      * but not doing it will lead to crashes due to closed
      * stdio streams on some platforms (eg. Windows) */
@@ -1067,18 +1039,11 @@ static void mriBindingExecute() {
     node = ruby_options(rubyArgsC.size(), const_cast<char**>(rubyArgsC.data()));
 #else
     if (conf.jit.enabled) {
-#if RAPI_FULL >= 310
         // Ruby v3.1.0 renamed the --jit options to --mjit.
         std::string verboseLevel("--mjit-verbose=");
         std::string maxCache("--mjit-max-cache=");
         std::string minCalls("--mjit-min-calls=");
         rubyArgsC.push_back("--mjit");
-#else
-        std::string verboseLevel("--jit-verbose=");
-        std::string maxCache("--jit-max-cache=");
-        std::string minCalls("--jit-min-calls=");
-        rubyArgsC.push_back("--jit");
-#endif
         verboseLevel += std::to_string(conf.jit.verboseLevel);
         maxCache += std::to_string(conf.jit.maxCache);
         minCalls += std::to_string(conf.jit.minCalls);
@@ -1105,11 +1070,7 @@ static void mriBindingExecute() {
         // out to the terminal, so let's leave it that way for now
         /*
          VALUE exc = rb_errinfo();
-         #if RAPI_FULL >= 250
          VALUE msg = rb_funcall(exc, rb_intern("full_message"), 0);
-         #else
-         VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
-         #endif
          */
         showMsg("An error occurred while initializing Ruby. (Invalid JIT settings?)");
         ruby_cleanup(state);
@@ -1118,18 +1079,6 @@ static void mriBindingExecute() {
     }
     rb_enc_set_default_internal(rb_enc_from_encoding(rb_utf8_encoding()));
     rb_enc_set_default_external(rb_enc_from_encoding(rb_utf8_encoding()));
-#else
-    ruby_init();
-    rb_eval_string("$KCODE='U'");
-#ifdef SDL_PLATFORM_WIN32
-    if (!conf.winConsole) {
-        VALUE iostr = rb_str_new2("NUL");
-        // Sysinit isn't a thing yet, so send io to /dev/null instead
-        rb_funcall(rb_gv_get("$stderr"), rb_intern("reopen"), 1, iostr);
-        rb_funcall(rb_gv_get("$stdout"), rb_intern("reopen"), 1, iostr);
-    }
-#endif
-#endif
     
     topSelf = Qnil;
     
@@ -1170,11 +1119,7 @@ static void mriBindingExecute() {
     else
         runRMXPScripts(btData);
     
-#if RAPI_FULL > 187
     VALUE exc = rb_errinfo();
-#else
-    VALUE exc = rb_gv_get("$!");
-#endif
     if (!NIL_P(exc) && !rb_obj_is_kind_of(exc, rb_eSystemExit))
         showExc(exc, btData);
     

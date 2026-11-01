@@ -13,7 +13,6 @@
 // Yes, it is still a mess, but it is working.
 
 #import <GameController/GameController.h>
-#include <Availability.h>
 
 #import <SDL3/SDL_scancode.h>
 #import <SDL3/SDL_keyboard.h>
@@ -54,10 +53,6 @@ typedef NSMutableArray<NSNumber*> BindingIndexArray;
     __weak IBOutlet NSButton *bindingButton2;
     __weak IBOutlet NSButton *bindingButton3;
     __weak IBOutlet NSButton *bindingButton4;
-    
-    // For keeping track of which buttons to check for
-    int sysver;
-    
     
     // MKXP Keybindings
     BDescVec *binds;
@@ -137,11 +132,6 @@ typedef NSMutableArray<NSNumber*> BindingIndexArray;
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    sysver = 12;
-    if (@available(macOS 10.14, *)) sysver += 2;
-    if (@available(macOS 10.15, *)) sysver++;
-    if (@available(macOS 11.0, *)) sysver++;
-    
     isListening = false;
     keepCurrentButtonSelection = false;
     
@@ -171,15 +161,15 @@ typedef NSMutableArray<NSNumber*> BindingIndexArray;
 
 #define checkButtonStart if (0) {}
 #define checkButtonEnd else { return; }
-#define checkButtonElement(e, b, n, min) \
-else if (sysver >= min && element == gamepad.e && gamepad.b.isPressed) { \
+#define checkButtonElement(e, b, n) \
+else if (element == gamepad.e && gamepad.b.isPressed) { \
 s.type = CButton; \
 s.d.cb = n; \
 }
 
-#define checkButtonAlt(b, n, min) checkButtonElement(b, b, n, min)
+#define checkButtonAlt(b, n) checkButtonElement(b, b, n)
 
-#define checkButton(b, n, min) checkButtonAlt(button##b, n, min)
+#define checkButton(b, n) checkButtonAlt(button##b, n)
 
 #define setAxisData(a, n) \
 GCControllerAxisInput *axis = gamepad.a; \
@@ -196,42 +186,25 @@ s.d.ca.dir = (axis.value >= 0) ? AxisDir::Positive : AxisDir::Negative;
     d.target = (Input::ButtonCode)currentButtonCode;
     SourceDesc s;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
     checkButtonStart
-    checkButton(A, SDL_GAMEPAD_BUTTON_SOUTH, 12)
-    checkButton(B, SDL_GAMEPAD_BUTTON_EAST, 12)
-    checkButton(X, SDL_GAMEPAD_BUTTON_WEST, 12)
-    checkButton(Y, SDL_GAMEPAD_BUTTON_NORTH, 12)
-    checkButtonElement(dpad, dpad.up, SDL_GAMEPAD_BUTTON_DPAD_UP, 12)
-    checkButtonElement(dpad, dpad.down, SDL_GAMEPAD_BUTTON_DPAD_DOWN, 12)
-    checkButtonElement(dpad, dpad.left, SDL_GAMEPAD_BUTTON_DPAD_LEFT, 12)
-    checkButtonElement(dpad, dpad.right, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, 12)
-    checkButtonAlt(leftShoulder, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, 12)
-    checkButtonAlt(rightShoulder, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, 12)
+    checkButton(A, SDL_GAMEPAD_BUTTON_SOUTH)
+    checkButton(B, SDL_GAMEPAD_BUTTON_EAST)
+    checkButton(X, SDL_GAMEPAD_BUTTON_WEST)
+    checkButton(Y, SDL_GAMEPAD_BUTTON_NORTH)
+    checkButtonElement(dpad, dpad.up, SDL_GAMEPAD_BUTTON_DPAD_UP)
+    checkButtonElement(dpad, dpad.down, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+    checkButtonElement(dpad, dpad.left, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+    checkButtonElement(dpad, dpad.right, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+    checkButtonAlt(leftShoulder, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)
+    checkButtonAlt(rightShoulder, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)
 
-#if defined(__MAC_10_14_1) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_14_1
-    // Requires macOS 10.14.1+
-    checkButtonAlt(leftThumbstickButton, SDL_GAMEPAD_BUTTON_LEFT_STICK, 14)
-    checkButtonAlt(rightThumbstickButton, SDL_GAMEPAD_BUTTON_RIGHT_STICK, 14)
-#else
-#warning "This SDK doesn't support the detection of thumbstick buttons. You will not be able to rebind them from the menu on 10.14.1 or higher."
-#endif
+    checkButtonAlt(leftThumbstickButton, SDL_GAMEPAD_BUTTON_LEFT_STICK)
+    checkButtonAlt(rightThumbstickButton, SDL_GAMEPAD_BUTTON_RIGHT_STICK)
 
-#if defined(__MAC_10_15) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_10_15
-    // Requires macOS 10.15+
-    checkButton(Menu, SDL_GAMEPAD_BUTTON_START, 15)
-    checkButton(Options, SDL_GAMEPAD_BUTTON_BACK, 15)
-#else
-#warning "This SDK doesn't support the detection of Start and Back buttons. You will not be able to rebind them from the menu on 10.15 or higher."
-#endif
-    
-#if defined(__MAC_11_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_11_0
-    // Requires macOS 11.0+
-    checkButton(Home, SDL_GAMEPAD_BUTTON_GUIDE, 16)
-#else
-#warning "This SDK doesn't support the detection of the Guide button. You will not be able to rebind it from the menu on 11.0 or higher."
-#endif
+    checkButton(Menu, SDL_GAMEPAD_BUTTON_START)
+    checkButton(Options, SDL_GAMEPAD_BUTTON_BACK)
+
+    checkButton(Home, SDL_GAMEPAD_BUTTON_GUIDE)
     
     checkAxis(leftThumbstick, xAxis, SDL_GAMEPAD_AXIS_LEFTX)
     checkAxis(leftThumbstick, yAxis, SDL_GAMEPAD_AXIS_LEFTY)
@@ -252,7 +225,6 @@ s.d.ca.dir = (axis.value >= 0) ? AxisDir::Positive : AxisDir::Negative;
     
     checkButtonEnd;
     
-#pragma clang diagnostic pop
     d.src = s;
     binds->push_back(d);
     [self setNotListening:true];

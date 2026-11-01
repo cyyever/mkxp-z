@@ -25,7 +25,7 @@ foreach dep_name : [
     'mount',
     'ncursesw',
     'oboe',
-    host_system != 'android' ? 'opensl' : '',
+    'opensl',
     'opus',
     not is_unix ? 'oss' : '',
     'portaudio',
@@ -100,13 +100,6 @@ gl = dependency('gl', allow_fallback: false, required: get_option('gl_system').d
 if not gl.found()
     gl = subproject('mesa', default_options: meson_base_options).get_variable('gl')
 endif
-
-libiconv = dependency('iconv', allow_fallback: false, required: get_option('iconv_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not libiconv.found()
-    libiconv_options = meson_base_options
-    libiconv = subproject('libiconv', default_options: libiconv_options).get_variable('libiconv')
-endif
-global_dependencies += libiconv
 
 zlib = dependency('zlib', allow_fallback: false, method: 'pkg-config', required: get_option('zlib_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not zlib.found()
@@ -440,7 +433,9 @@ if not ruby.found()
 endif
 global_dependencies += ruby
 
-if host_system in ['windows', 'cygwin']
+if compilers['cpp'].get_argument_syntax() == 'msvc'
+    global_link_args += '/STACK:2097152'
+elif host_system in ['windows', 'cygwin']
     global_link_args += ['-static-libgcc', '-static-libstdc++', '-Wl,-Bstatic', '-lpthread', '-Wl,-Bdynamic', '-Wl,--stack=0x200000']
 else
     global_link_args += ['-static-libstdc++']
@@ -450,12 +445,10 @@ endif
 
 global_include_dirs += include_directories('.',
     'audio',
-    'crypto',
     'display', 'display/gl',
     'etc',
     'filesystem',
     'input',
-    'net',
     'system',
     'util'
 )
@@ -480,7 +473,6 @@ main_source = files(
     'audio/vorbissource.cpp',
 
     'display/autotiles.cpp',
-    'display/autotilesvx.cpp',
     'display/bitmap.cpp',
     'display/font.cpp',
     'display/graphics.cpp',
@@ -516,5 +508,9 @@ main_source = files(
 
     host_system == 'darwin' ? 'system/systemImplApple.mm' : 'system/systemImpl.cpp',
 )
+
+if host_system == 'darwin'
+    main_source += files('filesystem/filename-normalization.mm')
+endif
 
 global_sources += main_source

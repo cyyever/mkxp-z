@@ -25,6 +25,7 @@
 #include "etc.h"
 #include "util.h"
 
+#include <memory>
 #include <vector>
 #include <string>
 
@@ -56,7 +57,7 @@ public:
     void setDefaultFontFamily(const std::string &family);
 
 private:
-	SharedFontStatePrivate *p;
+	std::unique_ptr<SharedFontStatePrivate> p;
 };
 
 struct FontPrivate;
@@ -120,7 +121,7 @@ public:
 	MKXPZ_TTF_FONT *getSdlFont(int outline_size);
 
 private:
-	FontPrivate *p;
+	std::unique_ptr<FontPrivate> p;
 };
 
 #endif // FONT_H

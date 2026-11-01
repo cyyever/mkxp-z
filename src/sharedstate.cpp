@@ -37,8 +37,6 @@
 #include "binding.h"
 #include "exception.h"
 
-#include <unistd.h>
-#include <stdio.h>
 #include <string>
 #include <chrono>
 

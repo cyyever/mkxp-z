@@ -46,11 +46,7 @@ static void parseArgsTableSizes(int argc, VALUE *argv, int *x, int *y, int *z) {
     rb_error_arity(argc, 1, 3);
   }
 }
-#if RAPI_FULL > 187
 DEF_TYPE(Table);
-#else
-DEF_ALLOCFUNC(Table);
-#endif
 
 RB_METHOD(tableInitialize) {
   int x, y, z;

@@ -9,8 +9,8 @@
 #include <SDL3/SDL_filesystem.h>
 #include <assert.h>
 
-#include <stdint.h>
 #include <ranges>
+#include <format>
 #include <vector>
 
 #include "util/paths.h"
@@ -19,12 +19,10 @@
 #include "util/sdl-util.h"
 #include "util/util.h"
 
-#include "util/json5pp.hpp"
 
 #include "util/iniconfig.h"
 #include "util/encoding.h"
 
-#include "system/system.h"
 
 
 namespace json = json5pp;
@@ -77,7 +75,7 @@ bool copyObject(json::value &dest, json::value src, const char *objectName = "")
             destVec[it.first] = it.second;
         }
         else {
-            Debug() << "Invalid variable in configuration:" << objectName << it.first;
+            Debug() << std::format("Invalid configuration value: {}{}", objectName, it.first);
         }
     }
     return true;
@@ -110,10 +108,10 @@ json::value readConfFile(const char *path) {
         ret = json::parse5(Encoding::convertString(cfg));
     }
     catch (const std::exception &e) {
-        Debug() << "Failed to parse" << path << ":" << e.what();
+        Debug() << std::format("{}: {}", path, e.what());
     }
     catch (const Exception &e) {
-        Debug() << "Failed to parse" << path << ":" << "Unknown encoding";
+        Debug() << std::format("{}: text conversion failed", path);
     }
     
     if (!ret.is_object())
@@ -396,22 +394,22 @@ void Config::readGameINI() {
             std::ranges::replace(game.scripts, '\\', '/');
             
             if (game.title.empty()) {
-                Debug() << iniFileName + ": Could not find Game.Title";
+                Debug() << std::format("{}: missing Game.Title", iniFileName);
             }
             
             if (game.scripts.empty())
-                Debug() << iniFileName + ": Could not find Game.Scripts";
+                Debug() << std::format("{}: missing Game.Scripts", iniFileName);
         }
     }
     else
-        Debug() << "Could not read" << iniFileName;
+        Debug() << std::format("Cannot read {}", iniFileName);
     
     try {
         game.title = Encoding::convertString(game.title);
         convSuccess = true;
     }
     catch (const Exception &e) {
-        Debug() << iniFileName + ": Could not determine encoding of Game.Title";
+        Debug() << std::format("{}: invalid Game.Title encoding", iniFileName);
     }
     
     if (game.title.empty() || !convSuccess)

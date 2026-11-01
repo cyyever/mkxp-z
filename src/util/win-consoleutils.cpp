@@ -1,4 +1,6 @@
-#if SDL_PLATFORM_WIN32
+#include <SDL3/SDL_platform_defines.h>
+
+#ifdef SDL_PLATFORM_WIN32
 
 #include "win-consoleutils.h"
 

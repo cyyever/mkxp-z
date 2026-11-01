@@ -28,6 +28,7 @@
 #include "util.h"
 #include "config.h"
 #include "encoding.h"
+#include "util/font-encoding.h"
 
 #include "debugwriter.h"
 
@@ -158,8 +159,8 @@ struct SharedFontStatePrivate
 };
 
 SharedFontState::SharedFontState(const Config &conf)
+    : p(std::make_unique<SharedFontStatePrivate>())
 {
-	p = new SharedFontStatePrivate;
 
 	/* Parse font substitutions */
 	for (size_t i = 0; i < conf.fontSubs.size(); ++i)
@@ -195,25 +196,21 @@ SharedFontState::~SharedFontState()
 				TTF_CloseFont(iter->second[i]);
 	}
 
-	delete p;
 }
 
 static std::string decodeSfntName(const FT_SfntName &aname)
 {
-	std::string str = std::string((const char *)aname.string, (size_t)aname.string_len);
-	if ((aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UNICODE_CS) || aname.platform_id == TT_PLATFORM_APPLE_UNICODE)
-		try
-		{
-			str = Encoding::convertString(str, "UTF-16BE");
-		} catch (Exception)
-		{}
-	else if (aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UCS_4)
-		try
-		{
-			str = Encoding::convertString(str, "UTF-32BE");
-		} catch (Exception)
-		{}
-	return str;
+    const std::string_view text(reinterpret_cast<const char *>(aname.string), aname.string_len);
+    try {
+        if ((aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UNICODE_CS)
+            || aname.platform_id == TT_PLATFORM_APPLE_UNICODE)
+            return FontEncoding::decodeName(text);
+        if (aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UCS_4)
+            return FontEncoding::decodeName(text, true);
+        return Encoding::convertString(text);
+    } catch (const Exception &) {
+        return {}; // Ignore malformed names; other records still identify the font.
+    }
 }
 
 void SharedFontState::initFontSetCB(SDL_IOStream *ops,
@@ -866,8 +863,8 @@ bool Font::doesExist(const char *name)
 
 Font::Font(const std::vector<std::string> *names,
            int size)
+    : p(std::make_unique<FontPrivate>(size ? size : FontPrivate::defaultSize))
 {
-	p = new FontPrivate(size ? size : FontPrivate::defaultSize);
 
 	if (names)
 		setName(*names);
@@ -876,14 +873,10 @@ Font::Font(const std::vector<std::string> *names,
 }
 
 Font::Font(const Font &other)
-{
-	p = new FontPrivate(*other.p);
-}
+    : p(std::make_unique<FontPrivate>(*other.p))
+{}
 
-Font::~Font()
-{
-	delete p;
-}
+Font::~Font() = default;
 
 const Font &Font::operator=(const Font &o)
 {

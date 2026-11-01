@@ -20,39 +20,28 @@
  */
 
 #include <iterator>
-
-#include "src/config.h"
+#include <limits>
 
 #include "binding-util.h"
 
 #include "filesystem.h"
 #include "sharedstate.h"
-#include "src/util/util.h"
 
-#if RAPI_FULL > 187
 #include "ruby/encoding.h"
 #include "ruby/intern.h"
-#else
-#include "intern.h"
-#endif
 
-#if RAPI_MAJOR >= 2
 #include <ruby/thread.h>
-#endif
 
 static void fileIntFreeInstance(void *inst) {
     SDL_IOStream *ops = static_cast<SDL_IOStream *>(inst);
     
-    SDL_CloseIO(ops);
+    if (ops)
+        SDL_CloseIO(ops);
 }
 
-#if RAPI_FULL > 187
 DEF_TYPE_CUSTOMFREE(FileInt, fileIntFreeInstance);
-#else
-DEF_ALLOCFUNC_CUSTOMFREE(FileInt, fileIntFreeInstance);
-#endif
 
-static VALUE fileIntForPath(const char *path, bool rubyExc) {
+static VALUE fileIntForPath(const char *path) {
     VALUE klass = rb_const_get(rb_cObject, rb_intern("FileInt"));
     
     VALUE obj = rb_obj_alloc(klass);
@@ -64,78 +53,85 @@ static VALUE fileIntForPath(const char *path, bool rubyExc) {
     return obj;
 }
 
-#if RAPI_MAJOR >= 2
-typedef struct {
-    SDL_IOStream *ops;
-    void *dst;
-    int length;
-} fileIntReadCbArgs;
-
-void call_RWread_cb(fileIntReadCbArgs *args) {
-    SDL_ReadIO(args->ops, args->dst, args->length);
+static SDL_IOStream *fileIntStream(VALUE self) {
+    auto *ops = getPrivateDataNoRaise<SDL_IOStream>(self);
+    if (!ops)
+        rb_raise(rb_eIOError, "closed stream");
+    return ops;
 }
-#endif
+
+struct FileIntReadArgs {
+    SDL_IOStream *ops;
+    void *destination;
+    size_t requested;
+    size_t count = 0;
+    SDL_IOStatus status = SDL_IO_STATUS_READY;
+    char error[256]{};
+};
+
+static void *fileIntReadInto(void *opaque) {
+    auto &args = *static_cast<FileIntReadArgs *>(opaque);
+    args.count = SDL_ReadIO(args.ops, args.destination, args.requested);
+    args.status = SDL_GetIOStatus(args.ops);
+    if (args.status != SDL_IO_STATUS_READY && args.status != SDL_IO_STATUS_EOF)
+        SDL_strlcpy(args.error, SDL_GetError(), sizeof(args.error));
+    return nullptr;
+}
 
 RB_METHOD(fileIntRead) {
-    
-    int length = -1;
-    rb_get_args(argc, argv, "|i", &length RB_ARG_END);
-    
-    SDL_IOStream *ops = getPrivateData<SDL_IOStream>(self);
-    
-    if (length == -1) {
-        Sint64 cur = SDL_TellIO(ops);
-        Sint64 end = SDL_SeekIO(ops, 0, SEEK_END);
-        
-        // Sometimes SDL_SeekIO will fail for no reason
-        // with encrypted archives, so let's just ask
-        // for the size up front
-        if (end < 0)
-            end = ops->size(ops);
-        
-        length = end - cur;
-        SDL_SeekIO(ops, cur, SEEK_SET);
+    VALUE requested = Qnil;
+    rb_scan_args(argc, argv, "01", &requested);
+    const bool readAll = NIL_P(requested);
+    auto *ops = fileIntStream(self);
+    long length;
+    if (readAll) {
+        const Sint64 position = SDL_TellIO(ops);
+        const Sint64 size = SDL_GetIOSize(ops);
+        if (position < 0 || size < 0)
+            rb_raise(rb_eIOError, "Cannot determine remaining stream size: %s", SDL_GetError());
+        const Sint64 remaining = size > position ? size - position : 0;
+        if (remaining > (std::numeric_limits<long>::max)())
+            rb_raise(rb_eRangeError, "stream is too large for a Ruby string");
+        length = static_cast<long>(remaining);
+    } else {
+        length = NUM2LONG(requested);
+        if (length < 0)
+            rb_raise(rb_eArgError, "negative length %ld given", length);
     }
-    
     if (length == 0)
-        return Qnil;
-    
-    VALUE data = rb_str_new(0, length);
-    
-    
-    
-#if RAPI_MAJOR >= 2
-    fileIntReadCbArgs cbargs {ops, RSTRING_PTR(data), length};
-    rb_thread_call_without_gvl([](void* args) -> void* {
-        call_RWread_cb((fileIntReadCbArgs*)args);
-        return 0;
-    }, (void*)&cbargs, 0, 0);
-#else
-    SDL_ReadIO(ops, RSTRING_PTR(data), length);
-#endif
-    
-    return data;
+        return rb_str_new(nullptr, 0);
+
+    VALUE data = rb_str_new(nullptr, length);
+    FileIntReadArgs args{ops, RSTRING_PTR(data), static_cast<size_t>(length)};
+    rb_thread_call_without_gvl(fileIntReadInto, &args, nullptr, nullptr);
+    if (args.status != SDL_IO_STATUS_READY && args.status != SDL_IO_STATUS_EOF)
+        rb_raise(rb_eIOError, "Cannot read stream: %s", args.error);
+    rb_str_set_len(data, static_cast<long>(args.count));
+    RB_GC_GUARD(self);
+    return args.count == 0 && !readAll ? Qnil : data;
 }
 
 RB_METHOD(fileIntClose) {
     RB_UNUSED_PARAM;
-    
-    SDL_IOStream *ops = getPrivateData<SDL_IOStream>(self);
-    SDL_CloseIO(ops);
-    setPrivateData(self, nullptr);
-    
+    auto *ops = getPrivateDataNoRaise<SDL_IOStream>(self);
+    // setPrivateData would invoke dfree. Detach first so explicit close and
+    // finalization cannot close the same opaque SDL3 stream twice.
+    RTYPEDDATA_DATA(self) = nullptr;
+    if (ops && !SDL_CloseIO(ops))
+        rb_raise(rb_eIOError, "Cannot close stream: %s", SDL_GetError());
     return Qnil;
 }
 
 RB_METHOD(fileIntGetByte) {
     RB_UNUSED_PARAM;
-    
-    SDL_IOStream *ops = getPrivateData<SDL_IOStream>(self);
-    
+    auto *ops = fileIntStream(self);
     unsigned char byte;
-    size_t result = SDL_ReadIO(ops, &byte, 1);
-    
-    return (result == 1) ? rb_fix_new(byte) : Qnil;
+    if (SDL_ReadIO(ops, &byte, 1) == 1)
+        return INT2NUM(byte);
+    const auto status = SDL_GetIOStatus(ops);
+    if (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF)
+        rb_raise(rb_eIOError, "Cannot read stream: %s", SDL_GetError());
+    return Qnil;
 }
 
 RB_METHOD(fileIntBinmode) {
@@ -144,34 +140,26 @@ RB_METHOD(fileIntBinmode) {
     return Qnil;
 }
 
-#if RAPI_FULL <= 187
-RB_METHOD(fileIntPos) {
-    SDL_IOStream *ops = getPrivateData<SDL_IOStream>(self);
-    
-    long long pos = SDL_TellIO(ops); // Will return -1 if it doesn't work
-    return LL2NUM(pos);
-}
-#endif
 
-VALUE
-kernelLoadDataInt(const char *filename, bool rubyExc, bool raw) {
-    //rb_gc_start();
-    
-    VALUE port = fileIntForPath(filename, rubyExc);
-    VALUE result;
-    if (!raw) {
-        VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
-        
-        // FIXME need to catch exceptions here with begin rescue
-        VALUE data = fileIntRead(0, 0, port);
-        result = rb_funcall2(marsh, rb_intern("load"), 1, &data);
-    } else {
-        result = fileIntRead(0, 0, port);
-    }
-    
-    rb_funcall2(port, rb_intern("close"), 0, nullptr);
-    
-    return result;
+struct LoadDataArgs { VALUE port; bool raw; };
+
+static VALUE readData(VALUE opaque) {
+    const auto &args = *reinterpret_cast<LoadDataArgs *>(opaque);
+    VALUE data = fileIntRead(0, nullptr, args.port);
+    if (args.raw)
+        return data;
+    VALUE marshal = rb_const_get(rb_cObject, rb_intern("Marshal"));
+    return rb_funcall(marshal, rb_intern("load"), 1, data);
+}
+
+static VALUE closeData(VALUE port) {
+    return fileIntClose(0, nullptr, port);
+}
+
+VALUE kernelLoadDataInt(const char *filename, bool /* rubyExc */, bool raw) {
+    VALUE port = fileIntForPath(filename);
+    LoadDataArgs args{port, raw};
+    return rb_ensure(readData, reinterpret_cast<VALUE>(&args), closeData, port);
 }
 
 RB_METHOD_GUARD(kernelLoadData) {
@@ -188,31 +176,28 @@ RB_METHOD_GUARD(kernelLoadData) {
 }
 RB_METHOD_GUARD_END
 
+static VALUE writeData(VALUE arguments) {
+    VALUE marshal = rb_const_get(rb_cObject, rb_intern("Marshal"));
+    return rb_funcall(marshal, rb_intern("dump"), 2,
+                      rb_ary_entry(arguments, 0), rb_ary_entry(arguments, 1));
+}
+
+static VALUE closeRubyFile(VALUE file) {
+    return rb_io_close(file);
+}
+
 RB_METHOD(kernelSaveData) {
     RB_UNUSED_PARAM;
-    
-    VALUE obj;
-    VALUE filename;
-    
-    rb_get_args(argc, argv, "oS", &obj, &filename RB_ARG_END);
-    
+    VALUE object, filename;
+    rb_get_args(argc, argv, "oS", &object, &filename RB_ARG_END);
+    VALUE arguments = rb_ary_new_from_args(2, object, Qnil);
     VALUE file = rb_file_open_str(filename, "wb");
-    
-    VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
-    
-    VALUE v[] = {obj, file};
-    rb_funcall2(marsh, rb_intern("dump"), std::size(v), v);
-    
-    rb_io_close(file);
-    
+    rb_ary_store(arguments, 1, file);
+    rb_ensure(writeData, arguments, closeRubyFile, file);
     return Qnil;
 }
-#if RAPI_FULL > 187
-#if RAPI_FULL < 270
-static VALUE stringForceUTF8(VALUE arg)
-#else
+
 static VALUE stringForceUTF8(RB_BLOCK_CALL_FUNC_ARGLIST(arg, callback_arg))
-#endif
 {
     if (RB_TYPE_P(arg, RUBY_T_STRING) && ENCODING_IS_ASCII8BIT(arg))
         rb_enc_associate_index(arg, rb_utf8_encindex());
@@ -220,72 +205,37 @@ static VALUE stringForceUTF8(RB_BLOCK_CALL_FUNC_ARGLIST(arg, callback_arg))
     return arg;
 }
 
-#if RAPI_FULL < 270
-static VALUE customProc(VALUE arg, VALUE proc) {
-    VALUE obj = stringForceUTF8(arg);
-    obj = rb_funcall2(proc, rb_intern("call"), 1, &obj);
-    
-    return obj;
-}
-#endif
 
 RB_METHOD(_marshalLoad) {
     RB_UNUSED_PARAM;
-#if RAPI_FULL < 270
-    VALUE port, proc = Qnil;
-    rb_get_args(argc, argv, "o|o", &port, &proc RB_ARG_END);
-#else
     VALUE port;
     rb_get_args(argc, argv, "o", &port RB_ARG_END);
-#endif
     
     VALUE utf8Proc;
-#if RAPI_FULL < 270
-    if (NIL_P(proc))
-        
-        utf8Proc = rb_proc_new(RUBY_METHOD_FUNC(stringForceUTF8), Qnil);
-    else
-        utf8Proc = rb_proc_new(RUBY_METHOD_FUNC(customProc), proc);
-#else
     utf8Proc = rb_proc_new(stringForceUTF8, Qnil);
-#endif
     
     VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
     
     VALUE v[] = {port, utf8Proc};
     return rb_funcall2(marsh, rb_intern("_mkxp_load_alias"), std::size(v), v);
 }
-#endif
 
 void fileIntBindingInit() {
     VALUE klass = rb_define_class("FileInt", rb_cIO);
-#if RAPI_FULL > 187
     rb_define_alloc_func(klass, classAllocate<&FileIntType>);
-#else
-    rb_define_alloc_func(klass, FileIntAllocate);
-#endif
     
     _rb_define_method(klass, "read", fileIntRead);
     _rb_define_method(klass, "getbyte", fileIntGetByte);
-#if RAPI_FULL <= 187
-    // Ruby doesn't see this as an initialized stream,
-    // so either that has to be fixed or necessary
-    // IO functions have to be overridden
-    rb_define_alias(klass, "getc", "getbyte");
-    _rb_define_method(klass, "pos", fileIntPos);
-#endif
     _rb_define_method(klass, "binmode", fileIntBinmode);
     _rb_define_method(klass, "close", fileIntClose);
     
     _rb_define_module_function(rb_mKernel, "load_data", kernelLoadData);
     _rb_define_module_function(rb_mKernel, "save_data", kernelSaveData);
     
-#if RAPI_FULL > 187
     /* We overload the built-in 'Marshal::load()' function to silently
      * insert our utf8proc that ensures all read strings will be
      * UTF-8 encoded */
     VALUE marsh = rb_const_get(rb_cObject, rb_intern("Marshal"));
     rb_define_alias(rb_singleton_class(marsh), "_mkxp_load_alias", "load");
     _rb_define_module_function(marsh, "load", _marshalLoad);
-#endif
 }

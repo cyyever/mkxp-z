@@ -10,11 +10,6 @@
 
 #import <AppKit/AppKit.h>
 
-#import <vector>
-
-#import "eventthread.h"
-
-
 @interface SettingsMenu : NSViewController <NSTableViewDelegate, NSTableViewDataSource>
 
 +(SettingsMenu*)openWindow;

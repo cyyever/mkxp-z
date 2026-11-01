@@ -28,6 +28,7 @@
 #include <SDL3/SDL_rect.h>
 
 #include <cmath>
+#include <memory>
 
 #include "sharedstate.h"
 #include "graphics.h"
@@ -84,7 +85,7 @@ bool EventThread::allocUserEvents()
 {
     usrIdStart = SDL_RegisterEvents(EVENT_COUNT);
     
-    if (usrIdStart == (uint32_t) -1)
+    if (usrIdStart == 0)
         return false;
     
     return true;
@@ -171,7 +172,7 @@ void EventThread::process(RGSSThreadData &rtData)
     
     textInputBuffer.clear();
 #ifndef SDL_PLATFORM_APPLE
-    SettingsMenu *sMenu = 0;
+    std::unique_ptr<SettingsMenu> sMenu;
 #else
     // Will always be 0
     void *sMenu = 0;
@@ -189,8 +190,7 @@ void EventThread::process(RGSSThreadData &rtData)
         {
             if (sMenu->destroyReq())
             {
-                delete sMenu;
-                sMenu = 0;
+                sMenu.reset();
                 
                 updateCursorState(cursorInWindow && windowFocused, gameScreen);
             }
@@ -308,7 +308,7 @@ void EventThread::process(RGSSThreadData &rtData)
 #ifndef SDL_PLATFORM_APPLE
                     if (!sMenu)
                     {
-                        sMenu = new SettingsMenu(rtData);
+                        sMenu = std::make_unique<SettingsMenu>(rtData);
                         updateCursorState(false, gameScreen);
                     }
                     
@@ -469,7 +469,7 @@ void EventThread::process(RGSSThreadData &rtData)
                         {
                             {
                                 const SDL_Rect rect = {0, 0, 1, 1};
-                                SDL_SetTextInputRect(&rect);
+                                SDL_SetTextInputArea(win, &rect, 0);
                             }
                             SDL_StartTextInput(win);
                             { auto guard = lockText(); textInputBuffer.clear(); }
@@ -508,7 +508,7 @@ void EventThread::process(RGSSThreadData &rtData)
 #ifndef SDL_PLATFORM_APPLE
                         if (!sMenu)
                         {
-                            sMenu = new SettingsMenu(rtData);
+                            sMenu = std::make_unique<SettingsMenu>(rtData);
                             updateCursorState(false, gameScreen);
                         }
                         
@@ -563,7 +563,7 @@ void EventThread::process(RGSSThreadData &rtData)
         SDL_CloseGamepad(ctrl);
     
 #ifndef SDL_PLATFORM_APPLE
-    delete sMenu;
+    sMenu.reset();
 #endif
 }
 

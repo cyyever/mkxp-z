@@ -42,19 +42,5 @@ inline bool validUtf8(std::string_view text) {
     return true;
 }
 
-// Supported game/config text is UTF-8 or legacy Simplified Chinese. A Unicode
-// BOM takes precedence and commits the input to that encoding, so malformed
-// Unicode cannot be silently retried as Chinese text.
-inline const char *textCharset(std::string_view text) {
-    using namespace std::literals;
-    if (text.starts_with("\xff\xfe\0\0"sv) || text.starts_with("\0\0\xfe\xff"sv))
-        return "UTF-32";
-    if (text.starts_with("\xff\xfe"sv) || text.starts_with("\xfe\xff"sv))
-        return "UTF-16";
-    if (text.starts_with("\xef\xbb\xbf"sv) || validUtf8(text))
-        return "UTF-8";
-    return "GB18030";
-}
-
 }
 #endif

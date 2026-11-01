@@ -26,9 +26,6 @@
 #include <sstream>
 #include <vector>
 
-#ifdef __ANDROID__
-#include <android/log.h>
-#endif
 
 
 /* A cheap replacement for qDebug() */
@@ -53,23 +50,19 @@ public:
 	template<typename T>
 	Debug &operator<<(const std::vector<T> &v)
 	{
-		for (size_t i = 0; i < v.size(); ++i)
-			buf << v[i] << " ";
+		for (const auto &value : v)
+			buf << value << " ";
 
 		return *this;
 	}
 
 	~Debug()
 	{
-#ifdef __ANDROID__
-		__android_log_write(ANDROID_LOG_DEBUG, "mkxp", buf.str().c_str());
-#else
 		std::cerr << buf.str() << std::endl;
-#endif
 	}
 
 private:
-	std::stringstream buf;
+	std::ostringstream buf;
 };
 
 #endif // DEBUGWRITER_H

@@ -26,6 +26,7 @@
 #include "util/paths.h"
 #include <SDL3/SDL_main.h>
 #include <cstdlib>
+#include <format>
 #include <thread>
 
 #include "icon.png.xxd"
@@ -40,14 +41,12 @@
 #include <cassert>
 #include <cstring>
 #include <string>
-#include <unistd.h>
 
 #include "binding.h"
 #include "sharedstate.h"
 #include "eventthread.h"
 #include "util/debugwriter.h"
 #include "util/exception.h"
-#include "display/gl/gl-debug.h"
 #include "display/gl/gl-fun.h"
 
 #include "filesystem/filesystem.h"
@@ -56,8 +55,6 @@
 
 #if defined(SDL_PLATFORM_WIN32)
 #include "resource.h"
-#include <processenv.h>
-#include <winsock2.h>
 #include "util/win-consoleutils.h"
 
 // Try to work around buggy GL drivers that tend to be in Optimus laptops
@@ -74,39 +71,9 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #include "TouchBar.h"
 #endif
 
-#if !defined(__ANDROID__) && !defined(SDL_PLATFORM_APPLE) && !defined(_WIN32)
-#  define MKXPZ_CHECK_FOR_WAYLAND_SUPPORT
-#endif
-
 
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg);
 static void showInitError(const std::string &msg);
-
-static void mkxp_setenv(const char *key, const char *value) {
-#ifdef _WIN32
-  SetEnvironmentVariableA(key, value);
-#else
-  if (value != nullptr) {
-    setenv(key, value, true);
-  } else {
-    unsetenv(key);
-  }
-#endif
-}
-
-static inline const char *glGetStringInt(GLenum name) {
-  return (const char *)gl.GetString(name);
-}
-
-static void printGLInfo() {
-  const std::string renderer(glGetStringInt(GL_RENDERER));
-  const std::string version(glGetStringInt(GL_VERSION));
-
-  Debug() << "GL Vendor    :" << glGetStringInt(GL_VENDOR);
-  Debug() << "GL Renderer  :" << renderer;
-  Debug() << "GL Version   :" << version;
-  Debug() << "GLSL Version :" << glGetStringInt(GL_SHADING_LANGUAGE_VERSION);
-}
 
 static SDL_GLContext initGL(SDL_Window *win, Config &conf,
                             RGSSThreadData *threadData);
@@ -151,7 +118,7 @@ static void showInitError(const std::string &msg) {
   SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "mkxp-z", msg.c_str(), 0);
 }
 
-static void setupWindowIcon(const Config &conf, SDL_Window *win) {
+[[maybe_unused]] static void setupWindowIcon(const Config &conf, SDL_Window *win) {
   SDL_IOStream *iconSrc;
 
   if (conf.iconPath.empty())
@@ -190,9 +157,9 @@ static SDL_Window *initVideo(const Config &conf) {
 
 int main(int argc, char *argv[]) {
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
-    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 
-    SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
+
+
 
     SDL_SetHint(
       SDL_HINT_OPENGL_ES_DRIVER,
@@ -234,23 +201,20 @@ int main(int argc, char *argv[]) {
       if (setupWindowsConsole()) {
         reopenWindowsStreams();
       } else {
-        char buf[200];
-        snprintf(buf, sizeof(buf), "Error allocating console: %lu",
-                GetLastError());
-        showInitError(std::string(buf));
+        showInitError(std::format("Console initialization failed: {}", GetLastError()));
       }
     }
 #endif
 
     /* initialize SDL first */
     if (!SDL_Init(SDL_INIT_GAMEPAD)) {
-      showInitError(std::string("Error initializing SDL: ") + SDL_GetError());
+      showInitError(std::format("SDL initialization failed: {}", SDL_GetError()));
       return 0;
     }
 
     SDL_Window *win = initVideo(conf);
     if (win == nullptr) {
-      showInitError(std::string("Error creating window: ") + SDL_GetError());
+      showInitError(std::format("Window creation failed: {}", SDL_GetError()));
       return 0;
     }
 
@@ -265,53 +229,27 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
-    if (IMG_Init(imgFlags) != imgFlags) {
-      showInitError(std::string("Error initializing SDL_image: ") +
-                    SDL_GetError());
-      SDL_Quit();
-
-      return 0;
-    }
-
-    if (TTF_Init() < 0) {
-      showInitError(std::string("Error initializing SDL_ttf: ") +
-                    SDL_GetError());
-      IMG_Quit();
+    if (!TTF_Init()) {
+      showInitError(std::format("Font initialization failed: {}", SDL_GetError()));
       SDL_Quit();
 
       return 0;
     }
 
     if (Sound_Init() == 0) {
-      showInitError(std::string("Error initializing SDL_sound: ") +
-                    Sound_GetError());
+      showInitError(std::format("Audio decoder initialization failed: {}", Sound_GetError()));
       TTF_Quit();
-      IMG_Quit();
       SDL_Quit();
 
       return 0;
     }
-#if defined(SDL_PLATFORM_WIN32)
-    WSAData wsadata = {0};
-    if (WSAStartup(0x101, &wsadata) || wsadata.wVersion != 0x101) {
-      char buf[200];
-      snprintf(buf, sizeof(buf), "Error initializing winsock: %08X",
-               WSAGetLastError());
-      showInitError(
-          std::string(buf)); // Not an error worth ending the program over
-    }
-#endif
     
 #ifdef SDL_PLATFORM_APPLE
     {
-        std::string downloadsPath = "/Users/" + mkxp_sys::getUserName() + "/Downloads";
+        const auto downloadsPath = std::format("/Users/{}/Downloads", mkxp_sys::getUserName());
         
         if (paths::toUtf8(std::filesystem::current_path().u8string()).find(downloadsPath) == 0) {
-            showInitError(conf.game.title +
-                          " cannot run from the Downloads directory.\n\n" +
-                          "Please move the application to the Applications folder (or anywhere else) " +
-                          "and try again.");
+            showInitError("Move the game out of Downloads, then launch it again.");
             return 0;
         }
     }
@@ -330,7 +268,6 @@ int main(int argc, char *argv[]) {
                 showInitError("Unable to switch into game folder: " + dataDirStr);
                 return 1;
             }
-            Debug() << "Current directory set to" << dataDirStr;
             conf.read(argc, argv);
             conf.readGameINI();
         }
@@ -341,8 +278,6 @@ int main(int argc, char *argv[]) {
      * dealing with icons; don't interfere with them */
 #ifdef SDL_PLATFORM_LINUX
     setupWindowIcon(conf, win);
-#else
-    (void)setupWindowIcon;
 #endif
 
     if (SDL_InitSubSystem(SDL_INIT_AUDIO))
@@ -352,7 +287,6 @@ int main(int argc, char *argv[]) {
       showInitError("Could not detect an available audio device.");
       SDL_DestroyWindow(win);
       TTF_Quit();
-      IMG_Quit();
       SDL_Quit();
 
       return 0;
@@ -408,10 +342,8 @@ int main(int argc, char *argv[]) {
     /* Wait for RGSS thread response */
     for (int i = 0; i < 1000; ++i) {
       /* We can stop waiting when the request was ack'd */
-      if (rtData.rqTermAck) {
-        Debug() << "RGSS thread ack'd request after" << i * 10 << "ms";
+      if (rtData.rqTermAck)
         break;
-      }
 
       /* Give RGSS thread some time to respond */
       SDL_Delay(10);
@@ -426,7 +358,7 @@ int main(int argc, char *argv[]) {
       rgssThread.detach();
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
-          std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str(),
+          "Game script stopped responding. Closing game.",
           win);
     }
 
@@ -442,19 +374,12 @@ int main(int argc, char *argv[]) {
     /* Clean up any remainin events */
     eventThread.cleanup();
 
-    Debug() << "Shutting down.";
-
     SDL_CloseAudioDevice(audioDevice);
     SDL_DestroyWindow(win);
 
-#if defined(SDL_PLATFORM_WIN32)
-    if (wsadata.wVersion)
-      WSACleanup();
-#endif
 
     Sound_Quit();
     TTF_Quit();
-    IMG_Quit();
     SDL_Quit();
 
     return 0;
@@ -473,7 +398,7 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
   glCtx = SDL_GL_CreateContext(win);
 
   if (!glCtx) {
-    showInitError(std::string("Could not create OpenGL context: ") + SDL_GetError());
+    showInitError(std::format("OpenGL context creation failed: {}", SDL_GetError()));
     return 0;
   }
 
@@ -493,11 +418,8 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
   gl.Clear(GL_COLOR_BUFFER_BIT);
   SDL_GL_SwapWindow(win);
 
-  printGLInfo();
-
   bool vsync = conf.vsync || conf.syncToRefreshrate;
   SDL_GL_SetSwapInterval(vsync ? 1 : 0);
 
-  // GLDebugLogger dLogger;
   return glCtx;
 }

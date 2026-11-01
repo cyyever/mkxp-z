@@ -21,6 +21,10 @@
 
 #include "graphics.h"
 
+#include <memory>
+#include <chrono>
+#include <thread>
+
 #include "audio.h"
 #include "binding.h"
 #include "bitmap.h"
@@ -52,12 +56,8 @@
 #include <mutex>
 
 #include <algorithm>
-#include <errno.h>
 #include <functional>
 #include <numeric>
-#include <sys/time.h>
-#include <unistd.h>
-#include <time.h>
 #include <cmath>
 #include <climits>
 
@@ -291,9 +291,6 @@ private:
     bool brightEffect;
 };
 
-/* Nanoseconds per second */
-#define NS_PER_S 1000000000
-
 struct FPSLimiter {
     uint64_t lastTickCount;
     
@@ -302,12 +299,6 @@ struct FPSLimiter {
     
     /* Ticks per second */
     const uint64_t tickFreq;
-    
-    /* Ticks per milisecond */
-    const uint64_t tickFreqMS;
-    
-    /* Ticks per nanosecond */
-    const double tickFreqNS;
     
     bool disabled;
     
@@ -324,8 +315,7 @@ struct FPSLimiter {
     
     FPSLimiter(uint16_t desiredFPS)
     : lastTickCount(SDL_GetPerformanceCounter()),
-    tickFreq(SDL_GetPerformanceFrequency()), tickFreqMS(tickFreq / 1000),
-    tickFreqNS((double)tickFreq / NS_PER_S), disabled(false) {
+    tickFreq(SDL_GetPerformanceFrequency()), disabled(false) {
         setDesiredFPS(desiredFPS);
         
         adj.last = SDL_GetPerformanceCounter();
@@ -380,27 +370,8 @@ struct FPSLimiter {
     
 private:
     void delayTicks(uint64_t ticks) {
-#if defined(HAVE_NANOSLEEP)
-        struct timespec req;
-        uint64_t nsec = ticks / tickFreqNS;
-        req.tv_sec = nsec / NS_PER_S;
-        req.tv_nsec = nsec % NS_PER_S;
-        errno = 0;
-        
-        while (nanosleep(&req, &req) == -1) {
-            int err = errno;
-            errno = 0;
-            
-            if (err == EINTR)
-                continue;
-            
-            Debug() << "nanosleep failed. errno:" << err;
-            SDL_Delay(ticks / tickFreqMS);
-            break;
-        }
-#else
-        SDL_Delay(ticks / tickFreqMS);
-#endif
+        std::this_thread::sleep_for(
+            std::chrono::duration<double>(static_cast<double>(ticks) / tickFreq));
     }
 };
 
@@ -460,7 +431,8 @@ struct GraphicsPrivate {
     double last_avg_update;
     std::mutex avgFPSLock;
     
-    std::mutex glResourceLock;
+    // Disposal can reenter the graphics lock while a rendering operation owns it.
+    std::recursive_mutex glResourceLock;
     bool multithreadedMode;
     
     /* Global list of all live Disposables
@@ -1135,10 +1107,9 @@ void Graphics::resizeWindow(int width, int height, bool center) {
 
 void Graphics::screenshot(const char *filename) {
     p->threadData->rqWindowAdjust.wait(true);
-    Bitmap *ss = snapToBitmap();
+    std::unique_ptr<Bitmap> ss(snapToBitmap());
     ss->saveToFile(filename);
     ss->dispose();
-    delete ss;
 }
 
 DEF_ATTR_RD_SIMPLE(Graphics, Brightness, int, p->brightness)

@@ -66,8 +66,9 @@ bool systemImpl::isWine() {
 #if MKXPZ_PLATFORM != MKXPZ_PLATFORM_WINDOWS
     return false;
 #else
-    void *ntdll = SDL_LoadObject("ntdll.dll");
-    return SDL_LoadFunction(ntdll, "wine_get_host_version") != 0;
+    std::unique_ptr<SDL_SharedObject, decltype(&SDL_UnloadObject)> ntdll(
+        SDL_LoadObject("ntdll.dll"), SDL_UnloadObject);
+    return ntdll && SDL_LoadFunction(ntdll.get(), "wine_get_host_version") != nullptr;
 #endif
 }
 
@@ -77,9 +78,12 @@ bool systemImpl::isRosetta() {
 
 systemImpl::WineHostType systemImpl::getRealHostType() {
 #if MKXPZ_PLATFORM == MKXPZ_PLATFORM_WINDOWS
-    void *ntdll = SDL_LoadObject("ntdll.dll");
+    std::unique_ptr<SDL_SharedObject, decltype(&SDL_UnloadObject)> ntdll(
+        SDL_LoadObject("ntdll.dll"), SDL_UnloadObject);
+    if (!ntdll)
+        return WineHostType::Windows;
     void (*wine_get_host_version)(const char **, const char **) =
-    (void (*)(const char **, const char **))SDL_LoadFunction(ntdll, "wine_get_host_version");
+    (void (*)(const char **, const char **))SDL_LoadFunction(ntdll.get(), "wine_get_host_version");
     
     if (wine_get_host_version == 0)
         return WineHostType::Windows;

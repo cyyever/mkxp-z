@@ -361,25 +361,22 @@
     //
     // "pathCache": true,
 
-    // Add 'rtp1', 'rtp2.zip' and 'game.rgssad' to the asset search path
-    // (multiple allowed). You can use folders, RGSS archives, and any archive
-    // formats supported by PhysicsFS; see the compatibility list at:
-    // https://www.icculus.org/physfs/docs/html/
+    // Add unpacked resource folders to the asset search path (multiple allowed).
+    // Folders are searched in the order listed, after the game folder.
+    // Extract archived resources before adding them here.
     // (default: none)
     //
     // "RTP": [
     //     "/path/to/rtp1",
-    //     "/path/to/rtp2.zip",
-    //     "/path/to/game.rgssad",
+    //     "/path/to/rtp2",
     // ],
 
-    // Similar to the RTP option, except items are loaded before
-    // the game archive and folder, for incremental game updates
-    // or modding.
+    // Patch folders are searched before the game folder, for incremental
+    // game updates or modding. Earlier entries take precedence.
     // (default: none)
     //
     // "patches": [
-    //     "/path/to/patch1.zip",
+    //     "/path/to/patch1",
     //     "/path/to/patch2",
     // ],
 
@@ -490,7 +487,7 @@
     //
     // "YJITEnable": false,
 
-    // Number of OpenAL sources to allocate for SE playback.
+    // Number of SDL audio streams to allocate for simultaneous SE playback.
     // If there are a lot of sounds playing at the same time
     // and audibly cutting each other off, try increasing
     // this number. Maximum: 64.
@@ -504,15 +501,9 @@
     // "BGMTrackCount": 1,
 
 
-    // The Windows game executable name minus ".exe". By default
-    // this is "Game", but some developers manually rename it.
-    // mkxp needs this name because both the .ini (game
-    // configuration) and .rgssad (encrypted data archive) must
-    // carry the same name minus their extension, and we cannot
-    // guess the executable's name.
-    // You could just as well rename them both to "Game.ini" and
-    // "Game.rgssad", but specifying the executable name here
-    // is a tiny bit less intrusive.
+    // The game INI filename without its extension. For example, "Game"
+    // loads Game.ini. Resource files must be unpacked into game folders.
+    // (default: "Game")
     //
     // "execName": "Game",
 
