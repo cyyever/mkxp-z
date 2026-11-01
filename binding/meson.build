@@ -1,7 +1,4 @@
-ver = get_option('mri_version')
-if ver.version_compare('<=1.8')
-    global_args += '-DMKXPZ_LEGACY_RUBY'
-elif ver.version_compare('>=3.0') and compilers['cpp'].get_id() == 'clang'
+if compilers['cpp'].get_id() == 'clang'
     global_args += '-fdeclspec'
 endif
 
@@ -10,6 +7,7 @@ global_include_dirs += include_directories('.')
 binding_source = [files(
     'binding-mri.cpp',
     'binding-util.cpp',
+    'json-binding.cpp',
     'table-binding.cpp',
     'etc-binding.cpp',
     'bitmap-binding.cpp',

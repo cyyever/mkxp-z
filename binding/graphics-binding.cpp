@@ -37,14 +37,10 @@ RB_METHOD(graphicsDelta) {
 RB_METHOD_GUARD(graphicsUpdate)
 {
     RB_UNUSED_PARAM;
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void*) -> void* {
         GFX_GUARD_EXC( shState->graphics().update(); );
         return 0;
     }, 0, 0, 0);
-#else
-    shState->graphics().update();
-#endif
     return Qnil;
 }
 RB_METHOD_GUARD_END
@@ -62,14 +58,10 @@ RB_METHOD_GUARD(graphicsFreeze)
 {
     RB_UNUSED_PARAM;
     
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void*) -> void* {
         GFX_GUARD_EXC( shState->graphics().freeze(); );
         return 0;
     }, 0, 0, 0);
-#else
-    shState->graphics().freeze();
-#endif
     
     return Qnil;
 }
@@ -93,7 +85,6 @@ RB_METHOD_GUARD(graphicsTransition)
     
     TransitionArgs args = {duration, filename, vague};
     
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void *args) -> void* {
         TransitionArgs &a = *((TransitionArgs*)args);
         GFX_GUARD_EXC( shState->graphics().transition(a.duration,
@@ -102,9 +93,6 @@ RB_METHOD_GUARD(graphicsTransition)
                                                      ); );
         return 0;
     }, &args, 0, 0);
-#else
-    GFX_GUARD_EXC( shState->graphics().transition(duration, filename, vague); )
-#endif
     
     return Qnil;
 }
@@ -206,14 +194,10 @@ RB_METHOD_GUARD(graphicsWait)
     
     int duration;
     rb_get_args(argc, argv, "i", &duration RB_ARG_END);
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().wait(*(int*)d); );
         return 0;
     }, (int*)&duration, 0, 0);
-#else
-    shState->graphics().wait(duration);
-#endif
     return Qnil;
 }
 RB_METHOD_GUARD_END
@@ -225,14 +209,10 @@ RB_METHOD_GUARD(graphicsFadeout)
     int duration;
     rb_get_args(argc, argv, "i", &duration RB_ARG_END);
     
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().fadeout(*(int*)d); );
         return 0;
     }, (int*)&duration, 0, 0);
-#else
-    shState->graphics().fadeout(duration);
-#endif
     
     return Qnil;
 }
@@ -245,14 +225,10 @@ RB_METHOD_GUARD(graphicsFadein)
     int duration;
     rb_get_args(argc, argv, "i", &duration RB_ARG_END);
     
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().fadein(*(int*)d); );
         return 0;
     }, (int*)&duration, 0, 0);
-#else
-    shState->graphics().fadein(duration);
-#endif
     
     return Qnil;
 }
@@ -336,14 +312,10 @@ RB_METHOD_GUARD(graphicsScreenshot)
     rb_scan_args(argc, argv, "1", &filename);
     SafeStringValue(filename);
     
-#if RAPI_MAJOR >= 2
     drop_gvl_guard([](void* fn) -> void* {
         graphicsScreenshotInternal((const char*)fn);
         return 0;
     }, (void*)RSTRING_PTR(filename), 0, 0);
-#else
-    graphicsScreenshotInternal(RSTRING_PTR(filename));
-#endif
     return Qnil;
 }
 RB_METHOD_GUARD_END

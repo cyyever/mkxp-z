@@ -22,6 +22,7 @@
 #include <iterator>
 
 #include <SDL3/SDL_joystick.h>
+#include <SDL3/SDL_gamepad.h>
 #include <string>
 
 
@@ -305,11 +306,6 @@ RB_METHOD(inputRawKeyStates) {
 }
 
 #define M_SYMBOL(x) ID2SYM(rb_intern(x))
-#define POWERCASE(v, c)                                                        \
-case SDL_JOYSTICK_POWER_##c:                                                 \
-v = M_SYMBOL(#c);                                                          \
-break;
-
 RB_METHOD(inputControllerConnected) {
     RB_UNUSED_PARAM;
     
@@ -327,26 +323,28 @@ RB_METHOD(inputControllerName) {
 
 RB_METHOD(inputControllerPowerLevel) {
     RB_UNUSED_PARAM;
-    
-    VALUE ret;
-    
+
     if (!shState->input().getControllerConnected())
-        ret = M_SYMBOL("UNKNOWN");
-    
-    switch (shState->input().getControllerPowerLevel()) {
-            POWERCASE(ret, MAX);
-            POWERCASE(ret, WIRED);
-            POWERCASE(ret, FULL);
-            POWERCASE(ret, MEDIUM);
-            POWERCASE(ret, LOW);
-            POWERCASE(ret, EMPTY);
-            
+        return M_SYMBOL("UNKNOWN");
+
+    int percent = -1;
+    SDL_Joystick *joystick = SDL_GetGamepadJoystick(shState->eThread().controller());
+    switch (SDL_GetJoystickPowerInfo(joystick, &percent)) {
+        case SDL_POWERSTATE_NO_BATTERY:
+            return M_SYMBOL("WIRED");
+        case SDL_POWERSTATE_CHARGED:
+            return M_SYMBOL("FULL");
+        case SDL_POWERSTATE_ON_BATTERY:
+        case SDL_POWERSTATE_CHARGING:
+            // Preserve the SDL2-era Ruby API's coarse battery categories.
+            if (percent < 0) return M_SYMBOL("UNKNOWN");
+            if (percent <= 5) return M_SYMBOL("EMPTY");
+            if (percent <= 20) return M_SYMBOL("LOW");
+            if (percent <= 70) return M_SYMBOL("MEDIUM");
+            return M_SYMBOL("FULL");
         default:
-            ret = M_SYMBOL("UNKNOWN");
-            break;
+            return M_SYMBOL("UNKNOWN");
     }
-    
-    return ret;
 }
 
 #define AXISFUNC(n, ax1, ax2) \
@@ -354,18 +352,17 @@ RB_METHOD(inputControllerGet##n##Axis) {\
 RB_UNUSED_PARAM;\
 VALUE ret = rb_ary_new(); \
 if (!shState->eThread().getControllerConnected()) {\
-rb_ary_push(ret, rb_float_new(0)); rb_ary_push(ret, rb_float_new(0)); \
+rb_ary_push(ret, rb_float_new(0)); rb_ary_push(ret, rb_float_new(0)); return ret; \
 }\
-rb_ary_push(ret, rb_float_new(shState->input().getControllerAxisValue(SDL_CONTROLLER_AXIS_##ax1) / 32767.0)); \
-rb_ary_push(ret, rb_float_new(shState->input().getControllerAxisValue(SDL_CONTROLLER_AXIS_##ax2) / 32767.0)); \
+rb_ary_push(ret, rb_float_new(shState->input().getControllerAxisValue(SDL_GAMEPAD_AXIS_##ax1) / 32767.0)); \
+rb_ary_push(ret, rb_float_new(shState->input().getControllerAxisValue(SDL_GAMEPAD_AXIS_##ax2) / 32767.0)); \
 return ret; \
 }
 
 AXISFUNC(Left, LEFTX, LEFTY);
 AXISFUNC(Right, RIGHTX, RIGHTY);
-AXISFUNC(Trigger, TRIGGERLEFT, TRIGGERRIGHT);
+AXISFUNC(Trigger, LEFT_TRIGGER, RIGHT_TRIGGER);
 
-#undef POWERCASE
 #undef M_SYMBOL
 
 RB_METHOD_GUARD(inputControllerPressEx) {

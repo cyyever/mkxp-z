@@ -28,11 +28,7 @@
 #include "sharedstate.h"
 #include "graphics.h"
 
-#if RAPI_FULL > 187
 DEF_TYPE(Bitmap);
-#else
-DEF_ALLOCFUNC(Bitmap);
-#endif
 
 void bitmapInitProps(Bitmap *b, VALUE self) {
     /* Wrap properties */
@@ -881,11 +877,7 @@ RB_METHOD_GUARD_END
 
 void bitmapBindingInit() {
     VALUE klass = rb_define_class("Bitmap", rb_cObject);
-#if RAPI_FULL > 187
     rb_define_alloc_func(klass, classAllocate<&BitmapType>);
-#else
-    rb_define_alloc_func(klass, BitmapAllocate);
-#endif
     
     disposableBindingInit<Bitmap>(klass);
     

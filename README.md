@@ -1,5 +1,12 @@
 # mkxp-z
 
+Supported desktop targets are Windows 11 releases from 2026 onward, macOS 27
+and newer on Apple silicon, Linux distributions released from 2026 onward,
+and the latest production FreeBSD RELEASE only. Mobile platforms are not
+supported. Shared filesystem/thread/timing code uses standard C++; native
+platform code remains where desktop APIs differ. CI build hosts may be older
+than deployment targets; a successful cross-build is not a runtime OS test.
+
 This personal fork builds the engine in **C++26** mode with current compilers
 and Meson 1.10 or newer. GCC and Clang use `c++26` (or the equivalent `c++2c`
 flag chosen by Meson); MSVC uses `/std:c++latest`. This selects the language
@@ -10,19 +17,18 @@ and [Clang implementation status](https://clang.llvm.org/cxx_status.html).
 Portable filesystem operations use `std::filesystem` with UTF-8 paths on all
 platforms. macOS retains its native app-bundle lookup and folder picker.
 Filesystem calls use the STL directly; `util/paths.h` only handles UTF-8
-boundaries, RGSS separator normalization and reading file contents. The RGSS
-archive/search-path layer remains because STL filesystem operations do not
-replace archive mounting or case-insensitive game asset lookup.
+boundaries, RGSS separator normalization and reading file contents. Assets are
+loaded from unpacked folders, searched in order: patches, the game folder, then
+RTP folders. The path cache provides case-insensitive game asset lookup.
+Extract RGSSAD and ZIP archives before configuring resource folders.
 RGSS serialization uses `std::endian`, `std::byteswap` and `std::bit_cast`,
 preserving the existing little-endian format. Third-party libraries retain
 their own language requirements.
 
-Text conversion targets the two Rainblood games: UTF-8 is preferred, Unicode
-BOMs select UTF-8/16/32, and unmarked non-UTF-8 text uses GB18030 (including
-GBK/GB2312). Statistical charset detection is no longer included. Other legacy
-encodings must be converted to UTF-8 before loading. A malformed BOM-marked
-Unicode string fails conversion rather than falling back to GB18030. Font name
-records retain their explicit UTF-16BE/UTF-32BE conversion through iconv.
+Game/configuration text and `String#to_utf8` accept UTF-8 only; other encodings
+must be converted before loading. A UTF-8 BOM is stripped and malformed UTF-8
+is rejected. Font metadata has a separate decoder for its required big-endian
+UTF-16/32 name records. No charset detection or iconv dependency is required.
 
 Render and disposal notifications use scoped connections: destroying or
 reassigning a connection disconnects its receiver. Callbacks can disconnect
