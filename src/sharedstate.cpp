@@ -38,7 +38,8 @@
 #include "exception.h"
 
 #include <string>
-#include <chrono>
+
+#include <SDL3/SDL_timer.h>
 
 SharedState *SharedState::instance = 0;
 static GlobalIBO *_globalIBO = 0;
@@ -81,7 +82,7 @@ struct SharedStatePrivate
 
 	unsigned int stampCounter;
     
-    std::chrono::time_point<std::chrono::steady_clock> startupTime;
+    Uint64 startupTicksNS;
 
 	SharedStatePrivate(RGSSThreadData *threadData)
 	    : bindingData(0),
@@ -101,7 +102,7 @@ struct SharedStatePrivate
 	void init(RGSSThreadData *threadData)
 	{
         
-        startupTime = std::chrono::steady_clock::now();
+        startupTicksNS = SDL_GetTicksNS();
         
 
 		for (size_t i = 0; i < config.patches.size(); ++i)
@@ -332,8 +333,7 @@ Font &SharedState::defaultFont() const
 
 double SharedState::runTime() {
     if (!p) return 0;
-    const auto now = std::chrono::steady_clock::now();
-    return std::chrono::duration_cast<std::chrono::microseconds>(now - p->startupTime).count() / 1000.0 / 1000.0;
+    return (SDL_GetTicksNS() - p->startupTicksNS) / (double)SDL_NS_PER_SECOND;
 }
 
 unsigned int SharedState::genTimeStamp()
