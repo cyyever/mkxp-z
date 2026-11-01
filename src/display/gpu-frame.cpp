@@ -5,6 +5,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace gpu {
 namespace {
@@ -22,6 +23,23 @@ FrameEncoder::~FrameEncoder() {
     if (vertexBuffer) SDL_ReleaseGPUBuffer(device.native(), vertexBuffer);
 }
 void FrameEncoder::reset() { vertices.clear(); batches.clear(); }
+bool FrameEncoder::Draw::canMerge(const Draw &other) const {
+    // Compare uniform bytes conservatively, preserving signed zeros and NaNs.
+    // Any padding differences merely prevent merging otherwise compatible draws.
+    const auto sameBytes = []<class T>(const T &a, const T &b) {
+        static_assert(std::is_trivially_copyable_v<T>);
+        return std::memcmp(&a, &b, sizeof(T)) == 0;
+    };
+    if (program != other.program || blend != other.blend || samplerCount != other.samplerCount ||
+        !sameBytes(vertex, other.vertex) || !sameBytes(fragment, other.fragment) ||
+        !sameBytes(effects, other.effects) || !sameBytes(tilemap, other.tilemap) ||
+        !sameBytes(viewport, other.viewport) || !sameBytes(scissor, other.scissor))
+        return false;
+    for (Uint32 i = 0; i < samplerCount; ++i)
+        if (samplers[i].texture != other.samplers[i].texture || samplers[i].sampler != other.samplers[i].sampler)
+            return false;
+    return true;
+}
 void FrameEncoder::beginTarget(TextureView target, SDL_GPULoadOp load, SDL_FColor clear) {
     if (!target.native() || !target.width() || !target.height()
         || target.width() > static_cast<Uint32>(std::numeric_limits<int>::max()) || target.height() > static_cast<Uint32>(std::numeric_limits<int>::max()))
@@ -64,6 +82,10 @@ void FrameEncoder::draw(Program program, std::span<const QuadVertex> geometry,
               static_cast<Uint32>(samplers.size()), {}, vertex, fragment, effects, tilemap, state.blend, viewport, scissor};
     std::copy(samplers.begin(), samplers.end(), draw.samplers.begin());
     vertices.insert(vertices.end(), geometry.begin(), geometry.end());
+    if (!batch.draws.empty() && batch.draws.back().canMerge(draw)) {
+        batch.draws.back().count += draw.count;
+        return;
+    }
     batch.draws.push_back(draw);
 }
 void FrameEncoder::ensureBuffer(Uint32 bytes) {

@@ -63,6 +63,7 @@ private:
         Blend blend;
         SDL_GPUViewport viewport;
         SDL_Rect scissor;
+        bool canMerge(const Draw &) const;
     };
     struct Batch {
         TextureView target;
