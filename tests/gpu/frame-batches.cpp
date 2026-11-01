@@ -154,6 +154,20 @@ int main(int argc,char **argv) {
             state.viewport.reset();
             encoder.submit().wait();
             check([](size_t,size_t y){return y<2?std::array{0,0,0,0}:std::array{0,0,255,255};});
+            // Restore the full target after a custom viewport in the same pass.
+            // A subsequent smaller pass must start from SDL's own defaults.
+            encoder.beginTarget(gpu::TextureView(target),SDL_GPU_LOADOP_CLEAR);
+            state.viewport=SDL_GPUViewport{0,0,4,2,0,1};
+            fp={};fp.color[1]=fp.color[3]=1;draw();
+            state.viewport.reset();state.scissor=SDL_Rect{0,2,4,2};
+            fp={};fp.color[2]=fp.color[3]=1;draw();
+            encoder.beginTarget(gpu::TextureView(clearOnly),SDL_GPU_LOADOP_CLEAR);
+            state.scissor.reset();fp={};fp.color[0]=fp.color[3]=1;draw();
+            encoder.submit().wait();
+            check([](size_t,size_t y){return y<2?std::array{0,255,0,255}:std::array{0,0,255,255};});
+            const auto defaultTargetPixels=device.downloadRGBA(clearOnly);
+            for(size_t i=0;i<defaultTargetPixels.size();++i)
+                require(defaultTargetPixels[i]==(i%4==0||i%4==3?255:0),"new target inherited the previous pass viewport/scissor");
             // An error from bind after render-pass creation must end the pass,
             // cancel the command, and allow the encoder to be reset/reused.
             encoder.beginTarget(gpu::TextureView(target),SDL_GPU_LOADOP_LOAD);
@@ -209,7 +223,7 @@ int main(int argc,char **argv) {
                 encoder.beginTarget(gpu::TextureView(discardedFenceTarget),SDL_GPU_LOADOP_CLEAR);
                 fp={};fp.color[i%3]=fp.color[3]=1;
                 encoder.draw(gpu::Program::FlatColor,geometry,{},vp,fp,state);
-                encoder.submit();
+                static_cast<void>(encoder.submit());
                 const auto pixels=device.downloadRGBA(discardedFenceTarget);
                 for(size_t j=0;j<pixels.size();++j)
                     require(pixels[j]==(j%4==size_t(i%3)||j%4==3?255:0),
