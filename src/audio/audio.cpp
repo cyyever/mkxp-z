@@ -42,7 +42,6 @@ struct AudioPrivate
 
 	SoundEmitter se;
 
-	SyncPoint &syncPoint;
     
     float volumeRatio;
 
@@ -69,7 +68,6 @@ struct AudioPrivate
 	    : bgs(ALStream::Looped),
 	      me(ALStream::NotLooped),
 	      se(rtData.config),
-	      syncPoint(rtData.syncPoint),
           volumeRatio(1)
 	{
         for (int i = 0; i < rtData.config.BGM.trackCount; i++) {
@@ -103,7 +101,6 @@ struct AudioPrivate
 
 		while (true)
 		{
-			syncPoint.passSecondarySync();
 
 			if (stop.stop_requested())
 				return;

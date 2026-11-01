@@ -26,12 +26,12 @@
 #include "graphics.h"
 #include "input.h"
 #include "audio.h"
-#include "glstate.h"
+#include "render-state.h"
 #include "shader.h"
 #include "texpool.h"
 #include "font.h"
 #include "eventthread.h"
-#include "gl-util.h"
+#include "render-resources.h"
 #include "global-ibo.h"
 #include "quad.h"
 #include "binding.h"
@@ -60,7 +60,7 @@ struct SharedStatePrivate
 	Input input;
 	Audio audio;
 
-	GLState _glState;
+	RenderState _renderState;
 
 	ShaderSet shaders;
 
@@ -93,7 +93,7 @@ struct SharedStatePrivate
 	      graphics(threadData),
 	      input(*threadData),
 	      audio(*threadData),
-	      _glState(threadData->config),
+	      _renderState(threadData->config),
 	      fontState(threadData->config),
 	      stampCounter(0)
 	{}
@@ -103,9 +103,6 @@ struct SharedStatePrivate
         
         startupTime = std::chrono::steady_clock::now();
         
-		/* Shaders have been compiled in ShaderSet's constructor */
-		if (gl.ReleaseShaderCompiler)
-			gl.ReleaseShaderCompiler();
 
 		for (size_t i = 0; i < config.patches.size(); ++i)
 			fileSystem.addPath(config.patches[i].c_str());
@@ -205,7 +202,7 @@ GSATT(Config&, config)
 GSATT(Graphics&, graphics)
 GSATT(Input&, input)
 GSATT(Audio&, audio)
-GSATT(GLState&, _glState)
+GSATT(RenderState&, _renderState)
 GSATT(ShaderSet&, shaders)
 GSATT(TexPool&, texPool)
 GSATT(Quad&, gpQuad)

@@ -27,7 +27,6 @@
 #include <SDL3/SDL_gamepad.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <mutex>
 #include <string>
 
@@ -38,6 +37,7 @@
 #include "sdl-util.h"
 #include "keybindings.h"
 
+namespace gpu { class Device; class FrameHandoff; }
 struct RGSSThreadData;
 struct SDL_Window;
 union SDL_Event;
@@ -100,6 +100,7 @@ public:
     void requestSettingsMenu();
 
 	void requestTerminate();
+    bool requestGpuPresent();
 
 	bool getFullscreen() const;
 	bool getShowCursor() const;
@@ -116,7 +117,6 @@ public:
 	void notifyGameScreenChange(const SDL_Rect &screen);
 
 private:
-	static bool eventFilter(void *, SDL_Event*);
 
 	void resetInputStates();
 	void setFullscreen(SDL_Window *, bool mode);
@@ -132,6 +132,7 @@ private:
 	std::atomic<bool> msgBoxDone{false};
     
     std::mutex textInputLock;
+    std::atomic<bool> gpuPresentQueued{false};
 
 	struct
 	{
@@ -184,36 +185,6 @@ private:
 	T current;
 };
 
-struct SyncPoint
-{
-	/* Used by eventFilter to control sleep/wakeup */
-	void haltThreads();
-	void resumeThreads();
-
-	/* Used by RGSS thread */
-	bool mainSyncLocked();
-	void waitMainSync();
-
-	/* Used by secondary (audio) threads */
-	void passSecondarySync();
-
-private:
-	struct Util
-	{
-		void lock();
-		void unlock(bool multi);
-		void waitForUnlock();
-
-		std::atomic<bool> locked{false};
-		std::mutex mut;
-		std::condition_variable cond;
-	};
-
-	Util mainSync;
-	Util reply;
-	Util secondSync;
-};
-
 struct RGSSThreadData
 {
 	/* Main thread sets this to request RGSS thread to terminate */
@@ -221,6 +192,9 @@ struct RGSSThreadData
 	/* In response, RGSS thread sets this to confirm
 	 * that it received the request and isn't stuck */
 	std::atomic<bool> rqTermAck{false};
+    /* Set only after the RGSS function has released all renderer resources.
+     * An acknowledgement alone does not permit destroying the GPU device. */
+    std::atomic<bool> rgssExited{false};
 
 	/* Set when F12 is pressed */
 	std::atomic<bool> rqReset{false};
@@ -235,13 +209,14 @@ struct RGSSThreadData
 	UnidirMessage<Vec2i> windowSizeMsg;
     UnidirMessage<Vec2i> drawableSizeMsg;
 	UnidirMessage<BDescVec> bindingUpdateMsg;
-	SyncPoint syncPoint;
 
 	const char *argv0;
 
 	SDL_Window *window;
     
-    SDL_GLContext glContext;
+    // Borrowed by RGSS; main keeps both alive until rgssExited and join().
+    gpu::Device *gpuDevice;
+    gpu::FrameHandoff *gpuPresentation;
 
 	Vec2 sizeResoRatio;
 	Vec2i screenOffset;
@@ -258,15 +233,13 @@ struct RGSSThreadData
 	               int refreshRate,
                    int scalingFactor,
 	               const Config& newconf,
-                   SDL_GLContext ctx)
+                   gpu::Device *device, gpu::FrameHandoff *presentation)
 	    : ethread(ethread),
 	      argv0(argv0),
-	      window(window),
-	      sizeResoRatio(1, 1),
-	      refreshRate(refreshRate),
-          scale(scalingFactor),
-	      config(newconf),
-          glContext(ctx)
+          window(window),
+          gpuDevice(device), gpuPresentation(presentation),
+          sizeResoRatio(1, 1), scale(scalingFactor), refreshRate(refreshRate),
+          config(newconf)
 	{
 		rqResetFinish = true;
 	}

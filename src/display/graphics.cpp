@@ -35,9 +35,11 @@
 #include "etc-internal.h"
 #include "eventthread.h"
 #include "filesystem.h"
-#include "gl-fun.h"
-#include "gl-util.h"
-#include "glstate.h"
+#include "display/gpu-render-context.h"
+#include "display/gpu-frame-handoff.h"
+#include "render-resources.h"
+#include "render-ops.h"
+#include "render-state.h"
 #include "intrulist.h"
 #include "quad.h"
 #include "scene.h"
@@ -78,7 +80,7 @@ struct PingPong {
             TEXFBO::init(rt[i]);
             TEXFBO::allocEmpty(rt[i], screenW, screenH);
             TEXFBO::linkFBO(rt[i]);
-            gl.ClearColor(0, 0, 0, 1);
+            gpu::RenderContext::current().setClearColor({0, 0, 0, 1});
             FBO::clear();
         }
     }
@@ -110,14 +112,14 @@ struct PingPong {
     }
     
     void clearBuffers() {
-        glState.clearColor.pushSet(Vec4(0, 0, 0, 1));
+        renderState.clearColor.pushSet(Vec4(0, 0, 0, 1));
         
         for (int i = 0; i < 2; ++i) {
             FBO::bind(rt[i].fbo);
             FBO::clear();
         }
         
-        glState.clearColor.pop();
+        renderState.clearColor.pop();
     }
     
 private:
@@ -141,7 +143,7 @@ public:
         
         pp.startRender();
         
-        glState.viewport.set(IntRect(0, 0, w, h));
+        renderState.viewport.set(IntRect(0, 0, w, h));
         
         FBO::clear();
         
@@ -158,7 +160,7 @@ public:
     }
     
     void requestViewportRender(const Vec4 &c, const Vec4 &f, const Vec4 &t) {
-        const IntRect &viewpRect = glState.scissorBox.get();
+        const IntRect &viewpRect = renderState.scissorBox.get();
         const IntRect &screenRect = geometry.rect;
         
         const bool toneRGBEffect = t.xyzNotNull();
@@ -173,16 +175,16 @@ public:
                 /* Scissor test _does_ affect FBO blit operations,
                  * and since we're inside the draw cycle, it will
                  * be turned on, so turn it off temporarily */
-                glState.scissorTest.pushSet(false);
+                renderState.scissorTest.pushSet(false);
                 
-                int scaleIsSpecial = GLMeta::blitScaleIsSpecial(pp.frontBuffer(), false, geometry.rect, pp.backBuffer(), geometry.rect);
+                int scaleIsSpecial = RenderOps::blitScaleIsSpecial(pp.frontBuffer(), false, geometry.rect, pp.backBuffer(), geometry.rect);
 
-                GLMeta::blitBegin(pp.frontBuffer(), false, scaleIsSpecial);
-                GLMeta::blitSource(pp.backBuffer(), scaleIsSpecial);
-                GLMeta::blitRectangle(geometry.rect, Vec2i());
-                GLMeta::blitEnd();
+                RenderOps::blitBegin(pp.frontBuffer(), false, scaleIsSpecial);
+                RenderOps::blitSource(pp.backBuffer(), scaleIsSpecial);
+                RenderOps::blitRectangle(geometry.rect, Vec2i());
+                RenderOps::blitEnd();
                 
-                glState.scissorTest.pop();
+                renderState.scissorTest.pop();
             }
             
             GrayShader &shader = shState->shaders().gray;
@@ -193,9 +195,9 @@ public:
             
             TEX::bind(pp.backBuffer().tex);
             
-            glState.blend.pushSet(false);
+            renderState.blend.pushSet(false);
             screenQuad.draw();
-            glState.blend.pop();
+            renderState.blend.pop();
         }
         
         if (!toneRGBEffect && !colorEffect && !flashEffect)
@@ -224,17 +226,17 @@ public:
                 sub.z = -t.z;
             
             /* Then apply them using hardware blending */
-            gl.BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+
             
             if (add.xyzNotNull()) {
-                gl.BlendEquation(GL_FUNC_ADD);
+                gpu::RenderContext::current().setBlend(gpu::Blend::ColorAdditionKeepDestinationAlpha);
                 shader.setColor(add);
                 
                 screenQuad.draw();
             }
             
             if (sub.xyzNotNull()) {
-                gl.BlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+                gpu::RenderContext::current().setBlend(gpu::Blend::ColorSubtractionKeepDestinationAlpha);
                 shader.setColor(sub);
                 
                 screenQuad.draw();
@@ -242,9 +244,7 @@ public:
         }
         
         if (colorEffect || flashEffect) {
-            gl.BlendEquation(GL_FUNC_ADD);
-            gl.BlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO,
-                                 GL_ONE);
+            gpu::RenderContext::current().setBlend(gpu::Blend::KeepDestinationAlpha);
         }
         
         if (colorEffect) {
@@ -257,7 +257,7 @@ public:
             screenQuad.draw();
         }
         
-        glState.blendMode.refresh();
+        renderState.blendMode.refresh();
     }
     
     void setBrightness(float norm) {
@@ -375,8 +375,6 @@ private:
     }
 };
 
-std::function<void ()> mkxp_angle_direct3d_resize_callback = nullptr;
-
 struct GraphicsPrivate {
     /* Screen resolution, ie. the resolution at which
      * RGSS renders at (settable with Graphics.resize_screen).
@@ -402,7 +400,8 @@ struct GraphicsPrivate {
     
     ScreenScene screen;
     RGSSThreadData *threadData;
-    SDL_GLContext glCtx;
+    TEXFBO windowCanvas;
+    Uint64 presentationSequence = 0;
     
     int frameRate;
     int frameCount;
@@ -432,7 +431,7 @@ struct GraphicsPrivate {
     std::mutex avgFPSLock;
     
     // Disposal can reenter the graphics lock while a rendering operation owns it.
-    std::recursive_mutex glResourceLock;
+    std::recursive_mutex renderResourceLock;
     bool multithreadedMode;
     
     /* Global list of all live Disposables
@@ -446,16 +445,26 @@ struct GraphicsPrivate {
     scSize(scRes),
     winSize(rtData->config.defScreenW, rtData->config.defScreenH),
     screen(scRes.x, scRes.y), threadData(rtData),
-    glCtx(SDL_GL_GetCurrentContext()), multithreadedMode(true),
+    multithreadedMode(true),
     frameRate(DEF_FRAMERATE), frameCount(0), brightness(255),
     fpsLimiter(frameRate), useFrameSkip(rtData->config.frameSkip), frozen(false),
     last_update(0), last_avg_update(0), backingScaleFactor(1), integerScaleFactor(0, 0),
     integerScaleActive(rtData->config.integerScaling.active),
     integerLastMileScaling(rtData->config.integerScaling.lastMileScaling) {
         avgFPSData = std::vector<double>();
-        
+        Vec2i windowUnits;
+        if (threadData->windowSizeMsg.poll(windowUnits) && windowUnits.x > 0 && windowUnits.y > 0) {
+            Vec2i drawableSize(windowUnits);
+            threadData->drawableSizeMsg.poll(drawableSize);
+            if (drawableSize.x > 0 && drawableSize.y > 0) {
+                backingScaleFactor = float(drawableSize.x) / windowUnits.x;
+                winSize = drawableSize;
+            }
+        }
+        ensureWindowCanvas();
+
         if (integerScaleActive) {
-            integerScaleFactor = Vec2i(0, 0);
+            findHighestIntegerScale();
             rebuildIntegerScaleBuffer();
         }
         
@@ -473,6 +482,7 @@ struct GraphicsPrivate {
     }
     
     ~GraphicsPrivate() {
+        TEXFBO::fini(windowCanvas);
         TEXFBO::fini(frozenScene);
         TEXFBO::fini(integerScaleBuffer);
     }
@@ -565,12 +575,13 @@ struct GraphicsPrivate {
     }
     
     void checkResize(bool skipIntScaleBuffer = false) {
-        if (threadData->windowSizeMsg.poll(winSize)) {
-            /* Query the actual size in pixels, not units */
-            Vec2i drawableSize(winSize);
+        Vec2i windowUnits;
+        if (threadData->windowSizeMsg.poll(windowUnits)) {
+            if (windowUnits.x <= 0 || windowUnits.y <= 0) return;
+            Vec2i drawableSize(windowUnits);
             threadData->drawableSizeMsg.poll(drawableSize);
-            
-            backingScaleFactor = drawableSize.x / winSize.x;
+            if (drawableSize.x <= 0 || drawableSize.y <= 0) return;
+            backingScaleFactor = float(drawableSize.x) / windowUnits.x;
             winSize = drawableSize;
             
             /* Make sure integer buffers are rebuilt before screen offsets are
@@ -578,8 +589,8 @@ struct GraphicsPrivate {
             if (integerScaleActive && findHighestIntegerScale() && !skipIntScaleBuffer)
                 rebuildIntegerScaleBuffer();
             
-            /* some GL drivers change the viewport on window resize */
-            glState.viewport.refresh();
+            /* Restore the offscreen render viewport after a window-size change. */
+            renderState.viewport.refresh();
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
             
@@ -601,40 +612,69 @@ struct GraphicsPrivate {
     }
     
 private:
-    template <typename... Args> void swapGLBufferImpl(const Vec2i &screenSize, TEXFBO &source, int scaleIsSpecial, Args... args) {
-        fpsLimiter.delay();
-
-        GLMeta::blitBeginScreen(screenSize, scaleIsSpecial);
-        GLMeta::blitSource(source, scaleIsSpecial);
-
-        for (size_t repaintCount = 1; repaintCount-- > 0;) {
-            mkxp_angle_direct3d_resize_callback = [&]() {
-                // We need to repaint the screen twice after the game window's size changes if we're using one of ANGLE's Direct3D backends (probably because of double buffering).
-                repaintCount = 2;
-            };
-            FBO::clear();
-            metaBlitBufferFlippedScaled(args...);
-            SDL_GL_SwapWindow(threadData->window);
-            mkxp_angle_direct3d_resize_callback = nullptr;
+    bool ensureWindowCanvas() {
+        if (winSize.x <= 0 || winSize.y <= 0) return false;
+        if (windowCanvas.tex.empty()) TEXFBO::init(windowCanvas);
+        if (windowCanvas.width != winSize.x || windowCanvas.height != winSize.y) {
+            gpu::RenderContext::current().flush();
+            TEXFBO::allocEmpty(windowCanvas, winSize.x, winSize.y);
+            TEXFBO::linkFBO(windowCanvas);
+            gpu::RenderContext::current().setDefaultTarget(gpu::TextureView(windowCanvas.tex.resource()));
         }
+        return true;
+    }
 
-        GLMeta::blitEnd();
+    void publishWindowCanvas() {
+        try {
+            auto &context = gpu::RenderContext::current();
+            context.flush();
+            auto &device = context.device();
+            // Keep the producer's canvas private: presentation owns this snapshot
+            // until its ready fence and window blit have completed.
+            auto snapshot = device.createTexture(windowCanvas.width, windowCanvas.height);
+            gpu::CommandBuffer command(device.native());
+            device.copy(command, windowCanvas.tex.resource(), snapshot);
+            auto ready = command.submitWithFence();
+            if (!threadData->gpuPresentation->publish({std::move(snapshot), std::move(ready), ++presentationSequence})) {
+                if (threadData->rqTerm) return;
+                throw Exception(Exception::SDLError, "GPU presentation queue is closed");
+            }
+            if (!threadData->ethread->requestGpuPresent()) {
+                threadData->gpuPresentation->close();
+                throw Exception(Exception::SDLError, "Could not queue GPU presentation event");
+            }
+        } catch (const std::exception &error) {
+            throw Exception(Exception::SDLError, "%s", error.what());
+        }
+    }
 
+    template <typename... Args> void swapScreenBufferImpl(const Vec2i &, TEXFBO &source, int scaleIsSpecial, Args... args) {
+        fpsLimiter.delay();
+        if (ensureWindowCanvas()) {
+            RenderOps::blitBeginScreen(winSize, scaleIsSpecial);
+            RenderOps::blitSource(source, scaleIsSpecial);
+            renderState.clearColor.pushSet(Vec4(0, 0, 0, 1));
+            FBO::clear();
+            renderState.clearColor.pop();
+            blitScreenScaled(args...);
+            RenderOps::blitEnd();
+            publishWindowCanvas();
+        }
         ++frameCount;
         threadData->ethread->notifyFrame();
     }
 
 public:
-    void swapGLBuffer(const Vec2i &screenSize, TEXFBO &source, int scaleIsSpecial) {
-        swapGLBufferImpl(screenSize, source, scaleIsSpecial, scaleIsSpecial);
+    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, int scaleIsSpecial) {
+        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, scaleIsSpecial);
     }
 
-    void swapGLBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial) {
-        swapGLBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial);
+    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial) {
+        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial);
     }
 
-    void swapGLBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor) {
-        swapGLBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial, forceNearestNeighbor);
+    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor) {
+        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial, forceNearestNeighbor);
     }
     
     void compositeToBuffer(TEXFBO &buffer) {
@@ -644,57 +684,50 @@ public:
     void compositeToBufferScaled(TEXFBO &buffer, int destWidth, int destHeight) {
         screen.composite();
         
-        int scaleIsSpecial = GLMeta::blitScaleIsSpecial(buffer, false, IntRect(0, 0, destWidth, destHeight), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
+        int scaleIsSpecial = RenderOps::blitScaleIsSpecial(buffer, false, IntRect(0, 0, destWidth, destHeight), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
-        GLMeta::blitBegin(buffer, false, scaleIsSpecial);
-        GLMeta::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
-        GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y), IntRect(0, 0, destWidth, destHeight));
-        GLMeta::blitEnd();
+        RenderOps::blitBegin(buffer, false, scaleIsSpecial);
+        RenderOps::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
+        RenderOps::blitRectangle(IntRect(0, 0, scRes.x, scRes.y), IntRect(0, 0, destWidth, destHeight));
+        RenderOps::blitEnd();
     }
     
-    void metaBlitBufferFlippedScaled(int scaleIsSpecial) {
-        metaBlitBufferFlippedScaled(scRes, scaleIsSpecial);
-        GLMeta::blitRectangle(
-                              IntRect(0, 0, scRes.x, scRes.y),
-                              IntRect(scOffset.x,
-                                      (scSize.y + scOffset.y),
-                                      scSize.x,
-                                      -scSize.y),
-                              GLMeta::smoothScalingMethod(scaleIsSpecial) == Bilinear);
+    void blitScreenScaled(int scaleIsSpecial) {
+        blitScreenScaled(scRes, scaleIsSpecial);
     }
-    
-    void metaBlitBufferFlippedScaled(const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor=false) {
-        GLMeta::blitRectangle(IntRect(0, 0, sourceSize.x, sourceSize.y),
-                              IntRect(scOffset.x, scSize.y+scOffset.y, scSize.x, -scSize.y),
-                              !forceNearestNeighbor && GLMeta::smoothScalingMethod(scaleIsSpecial) == Bilinear);
+
+    void blitScreenScaled(const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor=false) {
+        RenderOps::blitRectangle(IntRect(0, 0, sourceSize.x, sourceSize.y),
+                              IntRect(scOffset.x, scOffset.y, scSize.x, scSize.y),
+                              !forceNearestNeighbor && RenderOps::smoothScalingMethod(scaleIsSpecial) == Bilinear);
     }
-    
+
     void redrawScreen() {
         screen.composite();
         
         // maybe unspaghetti this later
         if (integerScaleStepApplicable() && !integerLastMileScaling)
         {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
+            int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
-            swapGLBuffer(winSize, screen.getPP().frontBuffer(), scRes, scaleIsSpecial, true);
+            swapScreenBuffer(winSize, screen.getPP().frontBuffer(), scRes, scaleIsSpecial, true);
             updateAvgFPS();
             return;
         }
         
         if (integerScaleStepApplicable())
         {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
+            int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
             assert(integerScaleBuffer.tex != TEX::ID(0));
-            GLMeta::blitBegin(integerScaleBuffer, false, scaleIsSpecial);
-            GLMeta::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
+            RenderOps::blitBegin(integerScaleBuffer, false, scaleIsSpecial);
+            RenderOps::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
             
-            GLMeta::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
+            RenderOps::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
                                   IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height),
                                   false);
             
-            GLMeta::blitEnd();
+            RenderOps::blitEnd();
         }
         
 
@@ -709,25 +742,11 @@ public:
             sourceSize = scRes;
         }
 
-        int scaleIsSpecial = GLMeta::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), IntRect(0, 0, sourceSize.x, sourceSize.y));
+        int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), IntRect(0, 0, sourceSize.x, sourceSize.y));
 
-        swapGLBuffer(winSize, integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), sourceSize, scaleIsSpecial);
+        swapScreenBuffer(winSize, integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), sourceSize, scaleIsSpecial);
         
         updateAvgFPS();
-    }
-    
-    void checkSyncLock() {
-        if (!threadData->syncPoint.mainSyncLocked())
-            return;
-        
-        /* Releasing the GL context before sleeping and making it
-         * current again on wakeup seems to avoid the context loss
-         * when the app moves into the background on Android */
-        SDL_GL_MakeCurrent(threadData->window, 0);
-        threadData->syncPoint.waitMainSync();
-        SDL_GL_MakeCurrent(threadData->window, glCtx);
-        
-        fpsLimiter.resetFrameAdjust();
     }
     
     double averageFPS() {
@@ -739,14 +758,13 @@ public:
     void setLock(bool force = false) {
         if (!(force || multithreadedMode)) return;
         
-        glResourceLock.lock();
-        SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
+        renderResourceLock.lock();
     }
     
     void releaseLock(bool force = false) {
         if (!(force || multithreadedMode)) return;
         
-        glResourceLock.unlock();
+        renderResourceLock.unlock();
     }
 
     void updateAvgFPS() {
@@ -798,7 +816,6 @@ void Graphics::update(bool checkForShutdown) {
     if (checkForShutdown)
         p->checkShutDownReset();
     
-    p->checkSyncLock();
     
     
     if (p->frozen)
@@ -833,7 +850,6 @@ void Graphics::freeze() {
 }
 
 void Graphics::transition(int duration, const char *filename, int vague) {
-    p->checkSyncLock();
     
     if (!p->frozen)
         return;
@@ -870,7 +886,7 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         if (transMap->hasHires()) {
             Debug() << "BUG: High-res Graphics transMap not implemented";
         }
-        shader.setTransMap(transMap->getGLTypes().tex);
+        shader.setTransMap(transMap->getRenderTarget().tex);
         shader.setVague(vague / 256.0f);
         shader.setTexSize(transSize);
     } else {
@@ -882,27 +898,25 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         shader.setTexSize(transSize);
     }
     
-    glState.blend.pushSet(false);
+    renderState.blend.pushSet(false);
     
     for (int i = 0; i < duration; ++i) {
         /* We need to clean up transMap properly before
          * a possible longjmp, so we manually test for
          * shutdown/reset here */
         if (p->threadData->rqTerm) {
-            glState.blend.pop();
+            renderState.blend.pop();
             delete transMap;
             p->shutdown();
             return;
         }
         
         if (p->threadData->rqReset) {
-            glState.blend.pop();
+            renderState.blend.pop();
             delete transMap;
             scriptBinding->reset();
             return;
         }
-        
-        p->checkSyncLock();
         
         const float prog = i * (1.0f / duration);
         
@@ -926,14 +940,14 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         FBO::unbind();
         FBO::clear();
         
-        int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), transBuffer, IntRect(0, 0, p->scRes.x, p->scRes.y));
+        int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), transBuffer, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-        p->swapGLBuffer(p->winSize, transBuffer, scaleIsSpecial);
+        p->swapScreenBuffer(p->winSize, transBuffer, scaleIsSpecial);
         /* Call this manually, as redrawScreen() is not called during this loop. */
         p->updateAvgFPS();
     }
     
-    glState.blend.pop();
+    renderState.blend.pop();
     
     delete transMap;
     
@@ -982,9 +996,9 @@ void Graphics::fadeout(int duration) {
         setBrightness(diff + (curr / duration) * i);
         
         if (p->frozen) {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
+            int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-            p->swapGLBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
+            p->swapScreenBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
         } else {
             update();
         }
@@ -1001,9 +1015,9 @@ void Graphics::fadein(int duration) {
         setBrightness(curr + (diff / duration) * i);
         
         if (p->frozen) {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
+            int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-            p->swapGLBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
+            p->swapScreenBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
         } else {
             update();
         }
@@ -1086,7 +1100,7 @@ void Graphics::resizeScreen(int width, int height) {
     FloatRect screenRect(0, 0, width, height);
     p->screenQuad.setTexPosRect(screenRect, screenRect);
     
-    glState.scissorBox.set(IntRect(0, 0, p->scRes.x, p->scRes.y));
+    renderState.scissorBox.set(IntRect(0, 0, p->scRes.x, p->scRes.y));
     
     shState->eThread().requestWindowResize(width, height);
 }
@@ -1268,29 +1282,15 @@ void Graphics::repaintWait(const std::atomic<bool> &exitCond, bool checkReset) {
     if (exitCond)
         return;
     
-    /* Repaint the screen with the last good frame we drew */
-    TEXFBO &lastFrame = p->screen.getPP().frontBuffer();
-
-    int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), lastFrame, IntRect(0, 0, p->scRes.x, p->scRes.y));
-
-    GLMeta::blitBeginScreen(p->winSize, scaleIsSpecial);
-    GLMeta::blitSource(lastFrame, scaleIsSpecial);
-    
+    // The SDL window thread owns the last presented texture. Repaint requests
+    // never access an RGSS-thread RenderContext from a window callback.
     while (!exitCond) {
         shState->checkShutdown();
-        
-        if (checkReset)
-            shState->checkReset();
-        
-        FBO::clear();
-        p->metaBlitBufferFlippedScaled(scaleIsSpecial);
-        SDL_GL_SwapWindow(p->threadData->window);
+        if (checkReset) shState->checkReset();
+        p->threadData->ethread->requestGpuPresent();
         p->fpsLimiter.delay();
-        
         p->threadData->ethread->notifyFrame();
     }
-    
-    GLMeta::blitEnd();
 }
 
 void Graphics::lock(bool force) {

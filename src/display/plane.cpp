@@ -26,13 +26,13 @@
 #include "etc.h"
 #include "util.h"
 
-#include "gl-util.h"
+#include "render-resources.h"
 #include "quad.h"
 #include "quadarray.h"
 #include "transform.h"
 #include "etc-internal.h"
 #include "shader.h"
-#include "glstate.h"
+#include "render-state.h"
 
 #include "util/engine-signal.h"
 
@@ -58,7 +58,7 @@ struct PlanePrivate
 	int realOX, realOY;
 	float zoomX, zoomY;
 	float realZoomX, realZoomY;
-	
+
 	bool isVisible;
 
 	Scene::Geometry sceneGeo;
@@ -94,7 +94,7 @@ struct PlanePrivate
 	~PlanePrivate()
 	{
 		prepareCon.disconnect();
-		
+
 		bitmapDisposal();
 	}
 
@@ -110,8 +110,7 @@ struct PlanePrivate
 
 	void updateQuadSource()
 	{
-		if (gl.npot_repeat)
-		{
+
 			FloatRect srcRect;
 			srcRect.x = (sceneGeo.orig.x + ox) / zoomX;
 			srcRect.y = (sceneGeo.orig.y + oy) / zoomY;
@@ -122,41 +121,7 @@ struct PlanePrivate
 			qArray.commit();
 
 			return;
-		}
 
-		if (nullOrDisposed(bitmap))
-			return;
-
-		/* Scaled (zoomed) bitmap dimensions */
-		float sw = bitmap->width()  * zoomX;
-		float sh = bitmap->height() * zoomY;
-
-		/* Plane offset wrapped by scaled bitmap dims */
-		float wox = fwrap(ox, sw);
-		float woy = fwrap(oy, sh);
-
-		/* Viewport dimensions */
-		int vpw = sceneGeo.rect.w;
-		int vph = sceneGeo.rect.h;
-
-		/* Amount the scaled bitmap is tiled (repeated) */
-		size_t tilesX = ceil((vpw - sw + wox) / sw) + 1;
-		size_t tilesY = ceil((vph - sh + woy) / sh) + 1;
-
-		FloatRect tex = bitmap->rect();
-
-		qArray.resize(tilesX * tilesY);
-
-		for (size_t y = 0; y < tilesY; ++y)
-			for (size_t x = 0; x < tilesX; ++x)
-			{
-				SVertex *vert = &qArray.vertices[(y*tilesX + x) * 4];
-				FloatRect pos(x*sw - wox, y*sh - woy, sw, sh);
-
-				Quad::setTexPosRect(vert, tex, pos);
-			}
-
-		qArray.commit();
 	}
 
 	void updateChild()
@@ -165,7 +130,7 @@ struct PlanePrivate
 		{
 			isVisible = false;
 		}
-		
+
 		if (bitmap == realBitmap)
 		{
 			ox = realOX;
@@ -175,52 +140,52 @@ struct PlanePrivate
 			isVisible = true;
 			return;
 		}
-		
+
 		ChildPublic &shared = *bitmap->getChildInfo();
-		
+
 		shared.sceneRect = &sceneGeo.rect;
 		shared.sceneOrig = &sceneGeo.orig;
-		
+
 		// Unlike Sprites, ox/oy in Planes is unaffected by zoom. So we treat it as x/y like Sprites instead.
 		shared.x = -realOX;
 		shared.y = -realOY;
 		shared.realZoom = Vec2(realZoomX, realZoomY);
-		
+
 		shared.width = sceneGeo.rect.w;
 		shared.height = sceneGeo.rect.h;
 		bitmap->childUpdate();
-		
+
 		isVisible = shared.isVisible;
-		
+
 		if (!isVisible)
 		{
 			return;
 		}
-		
+
 		if (ox != shared.offset.x || oy != shared.offset.y ||
 		    zoomX != shared.zoom.x || zoomY != shared.zoom.y)
 			quadSourceDirty = true;
-		
+
 		// Leaving these as floats increases precision when zoomed
 		ox = shared.offset.x;
 		oy = shared.offset.y;
-		
+
 		zoomX = shared.zoom.x;
 		zoomY = shared.zoom.y;
-		
-		
+
+
 	}
 
 	void prepare()
 	{
 		if (nullOrDisposed(bitmap))
 			return;
-		
+
 		updateChild();
-		
+
 		if (!isVisible)
 			return;
-		
+
 		if (quadSourceDirty)
 		{
 			updateQuadSource();
@@ -389,25 +354,22 @@ void Plane::draw()
 		base = &shader;
 	}
 
-	glState.blendMode.pushSet(p->blendType);
+	renderState.blendMode.pushSet(p->blendType);
 
 	p->bitmap->bindTex(*base);
 
-	if (gl.npot_repeat)
-		TEX::setRepeat(true);
+	TEX::setRepeat(true);
 
 	p->qArray.draw();
 
-	if (gl.npot_repeat)
-		TEX::setRepeat(false);
+	TEX::setRepeat(false);
 
-	glState.blendMode.pop();
+	renderState.blendMode.pop();
 }
 
 void Plane::onGeometryChange(const Scene::Geometry &geo)
 {
-	if (gl.npot_repeat)
-		Quad::setPosRect(&p->qArray.vertices[0], FloatRect(geo.rect));
+	Quad::setPosRect(&p->qArray.vertices[0], FloatRect(geo.rect));
 
 	p->sceneGeo = geo;
 	p->quadSourceDirty = true;

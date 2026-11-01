@@ -51,6 +51,15 @@ if host_machine.system() == 'windows'
         depends: shaders, timeout: 30)
 endif
 
+geometry_tests = executable('gpu-geometry-tests',
+    'geometry.cpp', '../../src/display/render/vertex.cpp', '../../src/display/render/tilequad.cpp',
+    include_directories: include_directories('../../src', '../../src/etc', '../../src/util'),
+    dependencies: sdl,
+)
+test('gpu-cpu-geometry', geometry_tests)
+
+subdir('shader-state')
+
 if host_machine.system() == 'windows'
     primitive_benchmark = executable('gpu-primitives-bench',
         '../../tools/bench/gpu-primitives.cpp', '../../src/display/gpu-device.cpp',

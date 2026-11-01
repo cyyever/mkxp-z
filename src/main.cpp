@@ -19,10 +19,6 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef VK_NO_PROTOTYPES
-#  define VK_NO_PROTOTYPES
-#endif
-
 #include "util/paths.h"
 #include <SDL3/SDL_main.h>
 #include <cstdlib>
@@ -47,7 +43,13 @@
 #include "eventthread.h"
 #include "util/debugwriter.h"
 #include "util/exception.h"
-#include "display/gl/gl-fun.h"
+#include "display/gpu-device.h"
+#include "display/gpu-frame-handoff.h"
+#include "display/gpu-render-context.h"
+#include "display/gpu-embedded.h"
+#include "graphics.h"
+#include <memory>
+#include <cstdlib>
 
 #include "filesystem/filesystem.h"
 
@@ -57,13 +59,6 @@
 #include "resource.h"
 #include "util/win-consoleutils.h"
 
-// Try to work around buggy GL drivers that tend to be in Optimus laptops
-// by forcing MKXP to use the dedicated card instead of the integrated one
-#include <windows.h>
-extern "C" {
-__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-}
 #endif
 
 #ifdef SDL_PLATFORM_APPLE
@@ -75,36 +70,47 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg);
 static void showInitError(const std::string &msg);
 
-static SDL_GLContext initGL(SDL_Window *win, Config &conf,
-                            RGSSThreadData *threadData);
-
 SDL_AudioDeviceID audioDevice = 0;
 
 int rgssThreadFun(void *userdata) {
-  RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
-
-  if (!SDL_GL_MakeCurrent(threadData->window, threadData->glContext)) {
-    rgssThreadError(threadData, SDL_GetError());
+    auto *threadData = static_cast<RGSSThreadData *>(userdata);
+    struct Completion {
+        std::atomic<bool> &exited;
+        ~Completion() { exited.store(true, std::memory_order_release); }
+    } completion{threadData->rgssExited};
+    try {
+        auto pipelines = gpu::createEnginePipelines(threadData->gpuDevice->native());
+        gpu::RenderContext renderer(*threadData->gpuDevice, *pipelines,
+                                   threadData->config.defScreenW, threadData->config.defScreenH);
+        gpu::RenderContext::install(&renderer);
+        renderer.setMipmapsEnabled(threadData->config.smoothScalingMipmaps);
+        bool initialized = false;
+        try {
+            SharedState::initInstance(threadData);
+            initialized = true;
+            renderer.setProjectionResolver([&renderer](bool scalingAllowed) {
+                if (scalingAllowed && shState->config().enableHires && shState->graphics().isPingPongFramebufferActive())
+                    return std::array<int,2>{shState->graphics().width(), shState->graphics().height()};
+                const auto viewport = renderer.viewport();
+                return std::array<int,2>{viewport.w, viewport.h};
+            });
+            scriptBinding->execute();
+            renderer.flush();
+        } catch (...) {
+            if (initialized) SharedState::finiInstance();
+            throw;
+        }
+        SharedState::finiInstance();
+    } catch (const Exception &error) {
+        rgssThreadError(threadData, error.msg);
+        return 1;
+    } catch (const std::exception &error) {
+        rgssThreadError(threadData, error.what());
+        return 1;
+    }
+    threadData->rqTermAck = true;
+    threadData->ethread->requestTerminate();
     return 0;
-  }
-
-  try {
-    SharedState::initInstance(threadData);
-  } catch (const Exception &exc) {
-    showInitError(exc.msg);
-
-    return 0;
-  }
-
-  /* Start script execution */
-  scriptBinding->execute();
-
-  threadData->rqTermAck = true;
-  threadData->ethread->requestTerminate();
-
-  SharedState::finiInstance();
-
-  return 0;
 }
 
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg) {
@@ -135,7 +141,7 @@ static void showInitError(const std::string &msg) {
 }
 
 static SDL_Window *initVideo(const Config &conf) {
-  SDL_WindowFlags winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+  SDL_WindowFlags winFlags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
   if (conf.winResizable)
     winFlags |= SDL_WINDOW_RESIZABLE;
@@ -146,7 +152,6 @@ static SDL_Window *initVideo(const Config &conf) {
     return nullptr;
   }
 
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GetHintBoolean(SDL_HINT_OPENGL_ES_DRIVER, false) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
 
   SDL_Window *window = SDL_CreateWindow(conf.windowTitle.c_str(), conf.defScreenW, conf.defScreenH, winFlags);
   if (window == nullptr) {
@@ -160,18 +165,6 @@ int main(int argc, char *argv[]) {
 
 
 
-
-    SDL_SetHint(
-      SDL_HINT_OPENGL_ES_DRIVER,
-      SDL_GetHintBoolean(
-        SDL_HINT_OPENGL_ES_DRIVER,
-#ifdef MKXPZ_USE_GLES_BY_DEFAULT
-        true
-#else
-        false
-#endif // MKXPZ_USE_GLES_BY_DEFAULT
-      ) != false ? "1" : "0"
-    );
 
 #ifndef WORKDIR_CURRENT
     std::string dataDir;
@@ -301,19 +294,24 @@ int main(int argc, char *argv[]) {
 
     EventThread eventThread;
 
-    // SDL3 creates window contexts on the main thread. Hand the context over
-    // before starting the RGSS renderer thread.
-    SDL_GLContext glCtx = initGL(win, conf, nullptr);
-    if (!glCtx)
-        return 1;
-    if (!SDL_GL_MakeCurrent(win, nullptr)) {
-        showInitError(SDL_GetError());
-        SDL_GL_DestroyContext(glCtx);
+    std::unique_ptr<gpu::Device> gpuDevice;
+    try {
+        gpuDevice = std::make_unique<gpu::Device>(win, SDL_GPU_SHADERFORMAT_DXBC, conf.debugMode);
+        const auto mode = conf.vsync || conf.syncToRefreshrate ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE;
+        if (SDL_WindowSupportsGPUPresentMode(gpuDevice->native(), win, mode) &&
+            !SDL_SetGPUSwapchainParameters(gpuDevice->native(), win, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, mode))
+            throw std::runtime_error(SDL_GetError());
+    } catch (const std::exception &error) {
+        showInitError(error.what());
+        gpuDevice.reset();
+        SDL_CloseAudioDevice(audioDevice);
+        SDL_DestroyWindow(win);
+        Sound_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
-
+    gpu::FrameHandoff gpuPresentation;
     RGSSThreadData rtData(&eventThread, argv[0], win, mode.refresh_rate,
-                          mkxp_sys::getScalingFactor(), conf, glCtx);
+                          mkxp_sys::getScalingFactor(), conf, gpuDevice.get(), &gpuPresentation);
 
     int winW, winH, drwW, drwH;
     SDL_GetWindowSize(win, &winW, &winH);
@@ -333,33 +331,45 @@ int main(int argc, char *argv[]) {
     /* Start RGSS thread */
     std::jthread rgssThread(rgssThreadFun, &rtData);
 
-    /* Start event processing */
-    eventThread.process(rtData);
+    /* Always request/join worker shutdown even if main-thread event handling
+     * throws. Keep this error separate from the worker-owned error string. */
+    std::string eventThreadError;
+    try {
+        eventThread.process(rtData);
+    } catch (const Exception &error) {
+        eventThreadError = error.msg;
+    } catch (const std::exception &error) {
+        eventThreadError = error.what();
+    }
 
     /* Request RGSS thread to stop */
     rtData.rqTerm = true;
+    gpuPresentation.close();
 
-    /* Wait for RGSS thread response */
+    /* Wait for actual worker completion, not its earlier termination ack. */
     for (int i = 0; i < 1000; ++i) {
-      /* We can stop waiting when the request was ack'd */
-      if (rtData.rqTermAck)
+      if (rtData.rgssExited.load(std::memory_order_acquire))
         break;
 
       /* Give RGSS thread some time to respond */
       SDL_Delay(10);
     }
 
-    /* If RGSS thread ack'd request, wait for it to shutdown,
-     * otherwise abandon hope and just end the process as is. */
-    if (rtData.rqTermAck) {
+    if (rtData.rgssExited.load(std::memory_order_acquire)) {
       rgssThread.join();
     } else {
-      /* Don't block on a stuck thread; the process exits without it */
-      rgssThread.detach();
+      // A detached worker would keep references to rtData, the window and GPU
+      // resources. End the process without running destructors under that worker.
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
-          "Game script stopped responding. Closing game.",
-          win);
+          "Game script stopped responding. Closing game.", win);
+      std::_Exit(EXIT_FAILURE);
+    }
+
+    if (!eventThreadError.empty()) {
+      Debug() << eventThreadError;
+      SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
+                               eventThreadError.c_str(), win);
     }
 
     if (!rtData.rgssErrorMsg.empty()) {
@@ -368,8 +378,7 @@ int main(int argc, char *argv[]) {
                                rtData.rgssErrorMsg.c_str(), win);
     }
 
-    if (rtData.glContext)
-      SDL_GL_DestroyContext(rtData.glContext);
+    gpuDevice.reset();
 
     /* Clean up any remainin events */
     eventThread.cleanup();
@@ -383,43 +392,4 @@ int main(int argc, char *argv[]) {
     SDL_Quit();
 
     return 0;
-}
-
-static SDL_GLContext initGL(SDL_Window *win, Config &conf,
-                            RGSSThreadData *threadData) {
-  SDL_GLContext glCtx{};
-
-  /* Setup GL context. Must be done in main thread since macOS 10.15 */
-  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    
-  if (conf.debugMode)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-
-  glCtx = SDL_GL_CreateContext(win);
-
-  if (!glCtx) {
-    showInitError(std::format("OpenGL context creation failed: {}", SDL_GetError()));
-    return 0;
-  }
-
-  try {
-    initGLFunctions();
-  } catch (const Exception &exc) {
-    showInitError(exc.msg);
-    SDL_GL_DestroyContext(glCtx);
-
-    return 0;
-  }
-
-  if (!conf.enableBlitting)
-    gl.BlitFramebuffer = 0;
-
-  gl.ClearColor(0, 0, 0, 1);
-  gl.Clear(GL_COLOR_BUFFER_BIT);
-  SDL_GL_SwapWindow(win);
-
-  bool vsync = conf.vsync || conf.syncToRefreshrate;
-  SDL_GL_SetSwapInterval(vsync ? 1 : 0);
-
-  return glCtx;
 }
