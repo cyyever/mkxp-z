@@ -37,3 +37,6 @@ mutations, exact raw replacement bytes, and replacement/disposal lifetime.
 
 Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/mega-surface-flip.rb --no-hires`
 to verify SDL mega-surface crop/flips, clipping, nearest scaling and RGBA opacity.
+
+Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/bitmap-copy.rb --no-hires`
+to verify exact RGBA clones, pending writes, copy chains and immediate disposal/reuse.

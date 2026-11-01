@@ -48,6 +48,7 @@ void RenderContext::setTarget(TextureView value) {
     }
     encoder.beginTarget(value, SDL_GPU_LOADOP_LOAD);
     recording = true;
+    targetNeedsBegin = false;
 }
 void RenderContext::setDefaultTarget(TextureView value) {
     if (!value.native()) throw std::invalid_argument("Default GPU target is empty");
@@ -64,14 +65,25 @@ void RenderContext::ensureTarget() {
     if (!FBO::boundFramebufferID.empty() && !FBO::boundFramebufferID.valid())
         throw std::logic_error("Bound GPU framebuffer has no live attachment");
     if (!target) throw std::logic_error("No offscreen GPU target is bound");
-    if (!recording) {
+    if (!recording || targetNeedsBegin) {
         if (!FBO::boundFramebufferID.empty()) {
             const auto attachment = FBO::boundFramebufferID.texture();
             pendingResources.try_emplace(attachment.native(), attachment);
         }
         encoder.beginTarget(*target, SDL_GPU_LOADOP_LOAD);
         recording = true;
+        targetNeedsBegin = false;
     }
+}
+void RenderContext::copyTexture(const TEX::ID &source, const TEX::ID &destination) {
+    const auto &src = source.resource();
+    const auto &dst = destination.resource();
+    pendingResources.try_emplace(source.native(), source);
+    pendingResources.try_emplace(destination.native(), destination);
+    encoder.copy(src, dst);
+    TEX::markModified(destination);
+    recording = true;
+    targetNeedsBegin = true;
 }
 SDL_GPUSampler *RenderContext::sampler(const TEX::ID &texture) {
     const auto index = size_t(texture.repeat()) | (size_t(texture.smooth()) << 1) |

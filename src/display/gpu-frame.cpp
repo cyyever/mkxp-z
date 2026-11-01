@@ -45,11 +45,18 @@ void FrameEncoder::beginTarget(TextureView target, SDL_GPULoadOp load, SDL_FColo
         throw std::invalid_argument("Invalid GPU target load operation");
     batches.push_back({target, load, clear, {}});
 }
+void FrameEncoder::copy(const Texture &source, const Texture &destination) {
+    if (!source.native() || !destination.native() || source.native() == destination.native() ||
+        source.width() != destination.width() || source.height() != destination.height())
+        throw std::invalid_argument("GPU frame copy requires distinct equal-size textures");
+    batches.push_back({TextureView(destination), SDL_GPU_LOADOP_DONT_CARE, {}, {}, &source, &destination});
+}
 void FrameEncoder::draw(Program program, std::span<const QuadVertex> geometry,
     std::span<const SDL_GPUTextureSamplerBinding> samplers,
     const VertexParameters &vertex, const FragmentParameters &fragment,
     const DrawState &state, const EffectParameters &effects, const TilemapParameters &tilemap) {
-    if (batches.empty()) throw std::logic_error("beginTarget must precede GPU draws");
+    if (batches.empty() || batches.back().copySource)
+        throw std::logic_error("beginTarget must precede GPU draws");
     if (geometry.empty() || geometry.size() % 3 || samplers.size() > 3)
         throw std::invalid_argument("GPU draw requires triangles and at most three samplers");
     constexpr auto maxVertices = std::numeric_limits<Uint32>::max() / sizeof(QuadVertex);
@@ -134,6 +141,10 @@ Fence FrameEncoder::submitCommands(bool acquireFence) {
         SDL_EndGPUCopyPass(copy);
     }
     for (const auto &batch : batches) {
+        if (batch.copySource) {
+            device.copy(command, *batch.copySource, *batch.copyDestination);
+            continue;
+        }
         SDL_GPUColorTargetInfo target{};
         target.texture = batch.target.native(); target.load_op = batch.load;
         target.store_op = SDL_GPU_STOREOP_STORE; target.clear_color = batch.clear;

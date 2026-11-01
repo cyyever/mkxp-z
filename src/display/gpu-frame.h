@@ -48,6 +48,8 @@ public:
               const VertexParameters &, const FragmentParameters &,
               const DrawState & = {}, const EffectParameters & = {},
               const TilemapParameters & = {});
+    // Borrows both Texture objects until submit/reset; preserves command order.
+    void copy(const Texture &source, const Texture &destination);
     [[nodiscard]] Fence submit();
     // Asynchronous submission whose completion fence remains owned by SDL.
     void submitWithoutFence();
@@ -73,6 +75,8 @@ private:
         SDL_GPULoadOp load;
         SDL_FColor clear;
         std::vector<Draw> draws;
+        const Texture *copySource = nullptr;
+        const Texture *copyDestination = nullptr;
     };
     void ensureBuffer(Uint32 bytes);
     Device &device;
