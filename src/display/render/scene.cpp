@@ -23,7 +23,7 @@
 #include "sharedstate.h"
 
 Scene::Scene()
-{}
+= default;
 
 Scene::~Scene()
 {
@@ -32,7 +32,7 @@ Scene::~Scene()
 
 	for (iter = elements.begin(); iter != elements.end(); iter = iter->next)
 	{
-		iter->data->scene = 0;
+		iter->data->scene = nullptr;
 	}
 }
 

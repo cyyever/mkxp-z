@@ -507,14 +507,14 @@ struct Binding
 /* Keyboard binding */
 struct KbBinding : public Binding
 {
-    KbBinding() {}
+    KbBinding() = default;
     
     KbBinding(const KbBindingData &data)
     : Binding(data.target),
     source(data.source)
     {}
     
-    bool sourceActive() const
+    bool sourceActive() const override
     {
         /* Special case aliases */
         if (source == SDL_SCANCODE_LSHIFT)
@@ -528,7 +528,7 @@ struct KbBinding : public Binding
         return EventThread::keyStates[source];
     }
     
-    bool sourceRepeatable() const
+    bool sourceRepeatable() const override
     {
         return true;
         /*
@@ -543,14 +543,14 @@ struct KbBinding : public Binding
 
 struct CtrlButtonBinding : public Binding
 {
-    CtrlButtonBinding() {}
+    CtrlButtonBinding() = default;
     
-    bool sourceActive() const
+    bool sourceActive() const override
     {
         return EventThread::controllerState.buttons[source];
     }
     
-    bool sourceRepeatable() const
+    bool sourceRepeatable() const override
     {
         return true;
     }
@@ -560,12 +560,12 @@ struct CtrlButtonBinding : public Binding
 
 struct CtrlAxisBinding : public Binding
 {
-    CtrlAxisBinding() {}
+    CtrlAxisBinding() = default;
     
     CtrlAxisBinding(uint8_t source, AxisDir dir, Input::ButtonCode target)
     : Binding(target), source(source), dir(dir) {}
     
-    bool sourceActive() const
+    bool sourceActive() const override
     {
         float val = EventThread::controllerState.axes[source];
         
@@ -575,7 +575,7 @@ struct CtrlAxisBinding : public Binding
             return val > JAXIS_THRESHOLD;
     }
     
-    bool sourceRepeatable() const {
+    bool sourceRepeatable() const override {
         return true;
     }
     
@@ -586,7 +586,7 @@ struct CtrlAxisBinding : public Binding
 /* Mouse button binding */
 struct MsBinding : public Binding
 {
-    MsBinding() {}
+    MsBinding() = default;
     
     MsBinding(int buttonIndex,
               Input::ButtonCode target)
@@ -594,12 +594,12 @@ struct MsBinding : public Binding
     index(buttonIndex)
     {}
     
-    bool sourceActive() const
+    bool sourceActive() const override
     {
         return EventThread::mouseState.buttons[index];
     }
     
-    bool sourceRepeatable() const
+    bool sourceRepeatable() const override
     {
         return true;
     }
@@ -1476,12 +1476,12 @@ const char *Input::getControllerName()
 {
     return (getControllerConnected()) ?
     SDL_GetGamepadName(shState->eThread().controller()) :
-    0;
+    nullptr;
 }
 
 bool Input::getTextInputMode()
 {
-    return (SDL_TextInputActive(shState->sdlWindow()) == true);
+    return (SDL_TextInputActive(shState->sdlWindow()));
 }
 
 void Input::setTextInputMode(bool mode)
