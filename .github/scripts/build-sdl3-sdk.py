@@ -29,11 +29,29 @@ def source(repository: Path, build: Path, name: str) -> Path:
     sources = build / "sources"
     sources.mkdir(parents=True, exist_ok=True)
     folder = sources / spec["directory"]
+    # The focused SDK uses upstream CMake, so image/font Meson overlays must
+    # not be applied here. SDL GPU correctness patches are shared with runtime.
+    patches = []
+    if name == "sdl3":
+        for entry in spec.get("diff_files", "").split(","):
+            if entry.strip():
+                patches.append(repository / "subprojects" / "packagefiles" / entry.strip())
+    source_state = spec["source_hash"]
+    if patches:
+        digest = hashlib.sha256(source_state.encode("ascii"))
+        for patch in patches:
+            digest.update(patch.name.encode("utf-8") + b"\0" + patch.read_bytes())
+        source_state = digest.hexdigest()
     stamp = folder / ".source-sha256"
-    if not stamp.is_file() or stamp.read_text() != spec["source_hash"]:
+    if not stamp.is_file() or stamp.read_text() != source_state:
         with tarfile.open(archive) as package:
             package.extractall(sources, filter="data")
-        stamp.write_text(spec["source_hash"])
+        for patch in patches:
+            # Override the work tree: the extracted directory can be nested
+            # inside a checkout and git must not patch the repository root.
+            subprocess.run(["git", "--work-tree=.", "apply", "--ignore-whitespace", "-p1", str(patch)],
+                           cwd=folder, check=True)
+        stamp.write_text(source_state)
     return folder
 
 
