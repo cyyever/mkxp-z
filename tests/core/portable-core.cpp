@@ -1,4 +1,5 @@
 #include "util/paths.h"
+#include "filesystem/directory-search.h"
 #include "util/exception.h"
 #include "util/serial-util.h"
 
@@ -38,6 +39,60 @@ struct TempDirectory {
         fs::remove_all(root, error);
     }
 };
+
+void testDirectorySearch() {
+    TempDirectory temp;
+    const auto patch = temp.root / "patch";
+    const auto game = temp.root / "game";
+    fs::create_directories(patch / "Graphics");
+    fs::create_directories(game / "Graphics");
+    std::ofstream(patch / "Graphics" / "Hero.png") << "patch";
+    std::ofstream(game / "Graphics" / "Hero.png") << "game";
+    std::ofstream(game / "Graphics" / "Map.jpg") << "map";
+    DirectorySearch search(false);
+    search.add(patch);
+    search.add(game);
+    check(paths::readFile(search.resolve("Graphics/Hero.png")) == "patch", "first mount wins");
+    check(paths::readFile(search.resolve("Graphics/Map.jpg")) == "map", "later mount supplements");
+    auto entries = search.list("Graphics");
+    check(entries.size() == 2, "merge duplicate names across mounts");
+    check(paths::readFile(entries.at("Hero.png")) == "patch", "enumeration keeps mount priority");
+    check(search.resolve("../patch/Graphics/Hero.png").empty(), "reject parent traversal");
+    check(search.resolve(fs::absolute(game / "Graphics/Hero.png")).empty(), "reject absolute resource name");
+    check(search.list("graphics", true).contains("Hero.png"), "cache enumerates mixed case directories");
+    const auto variant = temp.root / "case";
+    fs::create_directories(variant / "gRaPhIcS");
+    std::ofstream(variant / "gRaPhIcS" / "hero.png") << "lower priority";
+    std::ofstream(variant / "gRaPhIcS" / "extra.dat") << "extra";
+    search.add(variant);
+    entries = search.list("graphics", true);
+    check(entries.contains("Hero.png") && !entries.contains("hero.png"), "case-fold collisions preserve mount priority");
+    check(entries.contains("extra.dat"), "merge differently cased directory names across mounts");
+    check(search.remove(patch), "unmount directory");
+    check(paths::readFile(search.resolve("Graphics/Hero.png")) == "game", "unmount reveals next mount");
+    search.add(patch, "DLC/Textures");
+    check(search.list({}).contains("DLC"), "mount point exposes virtual parent");
+    check(search.list("DLC").contains("Textures"), "nested mount point enumeration");
+    check(paths::readFile(search.resolve("DLC/Textures/Graphics/Hero.png")) == "patch", "nested mount resolution");
+    check(search.list("DLC/Textures/Graphics").contains("Hero.png"), "nested mount content enumeration");
+    const auto unicodeName = paths::fromUtf8(utf8(u8"\u96e8\u8840.dat"));
+    std::ofstream(game / unicodeName) << "unicode";
+    check(paths::readFile(search.resolve(unicodeName)) == "unicode", "resolve Unicode resource name");
+    check(search.list({}).contains(paths::toUtf8(unicodeName.u8string())), "enumerate Unicode resource name");
+    bool rejected = false;
+    try { search.add(game / "Graphics/Hero.png"); }
+    catch (const Exception &error) { rejected = error.type == Exception::IOError; }
+    check(rejected, "reject archive and file mounts");
+    std::error_code ec;
+    fs::create_directory_symlink(patch, game / "linked", ec);
+    if (!ec) {
+        check(!search.list({}).contains("linked"), "exclude symlink enumeration when disabled");
+        check(search.resolve("linked/Graphics/Hero.png").empty(), "exclude traversal through symlink when disabled");
+        DirectorySearch symlinks(true);
+        symlinks.add(game);
+        check(!symlinks.resolve("linked/Graphics/Hero.png").empty(), "allow configured symlinks");
+    }
+}
 
 void testFilesystem() {
     TempDirectory temp;
@@ -137,6 +192,7 @@ int main() {
     try {
         testSerialization();
         testFilesystem();
+        testDirectorySearch();
         std::cout << "Portable core tests passed\n";
         return 0;
     } catch (const Exception &error) {
