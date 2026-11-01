@@ -75,17 +75,32 @@ an available variant accepted by `SDL_GetGPUShaderFormats`. Existing DXBC-span
 callers remain source compatible. SPIR-V input is copied to Uint32-aligned
 storage during shader creation.
 
-This change still produces **DXBC only**, using the Windows SDK FXC compiler.
-It does not complete Vulkan or Metal artifact production or establish runtime
-parity on another platform. Non-Windows configuration now reports the missing
-offline producer directly rather than failing later on missing DXBC headers.
+The build now also produces real **Vulkan SPIR-V** for every entry point with
+an offline SPIR-V-enabled DXC. Put the official portable DXC `bin/x64` (Windows)
+or `bin` (Linux) on PATH, or select it reproducibly in a Meson native file:
 
-Queued work: add an offline SPIR-V producer with SDL's combined sampled-image
-bindings and verified uniform layout; add a Metal producer and actual exported
-entrypoint metadata; then compile/link those artifacts on Linux/FreeBSD and
-macOS. Metal registry generation requires an explicit exported-entrypoint map,
-so a cross compiler's function rename cannot silently become an assumed name.
-No runtime shader translator or new engine library is introduced.
+```ini
+[binaries]
+dxc = '/absolute/path/to/dxc'
+```
+
+Windows retains FXC/DXBC and adds SPIR-V when DXC passes an actual compilation
+probe. SDK DXC without SPIR-V emits a warning and keeps the DXBC build usable. Linux/FreeBSD require
+DXC. No compiler or translation library is linked into the engine. Some Windows
+SDK DXC builds advertise `-spirv` but were built without its code generator;
+use the official portable DirectXShaderCompiler release in that case.
+
+The producer uses Vulkan 1.0 / shader model 6.0, strict diagnostics and warnings
+as errors. DXC's SPIRV-Tools validation remains enabled. HLSL sampled textures
+and samplers explicitly share `vk::combinedImageSampler`; an offline structural
+check rejects descriptor sets or resource kinds outside SDL's contract. Vertex
+uniforms use set 1, fragment sampled images set 2 and fragment uniforms set 3.
+All existing uniform blocks retain their float4/matrix layout and slot numbers.
+
+Metal remains unavailable: there is no MSL/metallib producer or Apple compiler
+validation. macOS configuration reports that gap explicitly. Metal registry
+generation still requires an explicit exported-entrypoint map. Compiling SPIR-V
+on Windows does not establish Linux/FreeBSD runtime support or pixel parity.
 
 Official contracts:
 - [SDL supported device formats](https://wiki.libsdl.org/SDL3/SDL_GetGPUShaderFormats)
@@ -93,5 +108,8 @@ Official contracts:
 - [SDL offline shader translation](https://github.com/libsdl-org/SDL_shadercross)
 - [DXC SPIR-V mappings](https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst)
 
-Validation for this descriptor change is native Windows MSVC compile/link with
-extra shaders both enabled and disabled. No runtime tests were run.
+Validation: official portable DXC v1.9.2609 compiled all 25 SPIR-V entry points
+(including xBRZ), with DXC validation and descriptor/uniform-ABI checks enabled.
+Production Meson shader/embed rules and native MSVC compiled and linked the
+combined DXBC/SPIR-V registry with extra shaders enabled and disabled. No runtime
+tests were run; no Linux, FreeBSD or Metal compiler/runtime validation is claimed.
