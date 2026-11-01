@@ -452,10 +452,10 @@ struct GraphicsPrivate {
     integerScaleActive(rtData->config.integerScaling.active),
     integerLastMileScaling(rtData->config.integerScaling.lastMileScaling) {
         avgFPSData = std::vector<double>();
-        Vec2i windowUnits;
-        if (threadData->windowSizeMsg.poll(windowUnits) && windowUnits.x > 0 && windowUnits.y > 0) {
-            Vec2i drawableSize(windowUnits);
-            threadData->drawableSizeMsg.poll(drawableSize);
+        WindowGeometry geometry;
+        if (threadData->windowGeometryMsg.poll(geometry) && geometry.logical.x > 0 && geometry.logical.y > 0) {
+            const auto &windowUnits = geometry.logical;
+            const auto &drawableSize = geometry.pixels;
             if (drawableSize.x > 0 && drawableSize.y > 0) {
                 backingScaleFactor = float(drawableSize.x) / windowUnits.x;
                 winSize = drawableSize;
@@ -575,11 +575,11 @@ struct GraphicsPrivate {
     }
     
     void checkResize(bool skipIntScaleBuffer = false) {
-        Vec2i windowUnits;
-        if (threadData->windowSizeMsg.poll(windowUnits)) {
+        WindowGeometry geometry;
+        if (threadData->windowGeometryMsg.poll(geometry)) {
+            const auto &windowUnits = geometry.logical;
+            const auto &drawableSize = geometry.pixels;
             if (windowUnits.x <= 0 || windowUnits.y <= 0) return;
-            Vec2i drawableSize(windowUnits);
-            threadData->drawableSizeMsg.poll(drawableSize);
             if (drawableSize.x <= 0 || drawableSize.y <= 0) return;
             backingScaleFactor = float(drawableSize.x) / windowUnits.x;
             winSize = drawableSize;

@@ -185,6 +185,13 @@ private:
 	T current;
 };
 
+// Publish logical units and physical pixels as one snapshot across threads.
+struct WindowGeometry
+{
+    Vec2i logical;
+    Vec2i pixels;
+};
+
 struct RGSSThreadData
 {
 	/* Main thread sets this to request RGSS thread to terminate */
@@ -206,8 +213,7 @@ struct RGSSThreadData
     std::atomic<bool> rqWindowAdjust{false};
 
 	EventThread *ethread;
-	UnidirMessage<Vec2i> windowSizeMsg;
-    UnidirMessage<Vec2i> drawableSizeMsg;
+    UnidirMessage<WindowGeometry> windowGeometryMsg;
 	UnidirMessage<BDescVec> bindingUpdateMsg;
 
 	const char *argv0;
