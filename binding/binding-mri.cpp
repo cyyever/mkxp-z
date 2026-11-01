@@ -142,8 +142,6 @@ RB_METHOD(mkxpGetAllJSONSettings);
 
 RB_METHOD(mkxpSetDefaultFontFamily);
 
-RB_METHOD(mriRgssMain);
-RB_METHOD(mriRgssStop);
 RB_METHOD(_kernelCaller);
 
 RB_METHOD(mkxpStringToUTF8);
@@ -175,22 +173,12 @@ static void mriBindingInit() {
     MiniFFIBindingInit();
 #endif
     
-    if (rgssVer >= 3) {
-        _rb_define_module_function(rb_mKernel, "rgss_main", mriRgssMain);
-        _rb_define_module_function(rb_mKernel, "rgss_stop", mriRgssStop);
-        
-        _rb_define_module_function(rb_mKernel, "msgbox", mriPrint);
-        _rb_define_module_function(rb_mKernel, "msgbox_p", mriP);
-        
-        rb_define_global_const("RGSS_VERSION", rb_utf8_str_new_cstr("3.0.1"));
-    } else {
-        _rb_define_module_function(rb_mKernel, "print", mriPrint);
-        _rb_define_module_function(rb_mKernel, "p", mriP);
-        
-        rb_define_alias(rb_singleton_class(rb_mKernel), "_mkxp_kernel_caller_alias",
-                        "caller");
-        _rb_define_module_function(rb_mKernel, "caller", _kernelCaller);
-    }
+    _rb_define_module_function(rb_mKernel, "print", mriPrint);
+    _rb_define_module_function(rb_mKernel, "p", mriP);
+    
+    rb_define_alias(rb_singleton_class(rb_mKernel), "_mkxp_kernel_caller_alias",
+                    "caller");
+    _rb_define_module_function(rb_mKernel, "caller", _kernelCaller);
     
     rb_eval_string(module_rpg1);
     
@@ -245,10 +233,7 @@ static void mriBindingInit() {
     rb_gv_set("MKXP", Qtrue);
     
     VALUE debug = rb_bool_new(shState->config().editor.debug);
-    if (rgssVer == 1)
-        rb_gv_set("DEBUG", debug);
-    else if (rgssVer >= 2)
-        rb_gv_set("TEST", debug);
+    rb_gv_set("DEBUG", debug);
     
     rb_gv_set("BTEST", rb_bool_new(shState->config().editor.battleTest));
     
@@ -741,31 +726,10 @@ RB_METHOD(mkxpGetAllJSONSettings) {
     return json2rb(shState->config().raw);
 }
 
-static VALUE rgssMainCb(VALUE block) {
-    rb_funcall2(block, rb_intern("call"), 0, 0);
-    return Qnil;
-}
-
-static VALUE rgssMainRescue(VALUE arg, VALUE exc) {
-    VALUE *excRet = (VALUE *)arg;
-    
-    *excRet = exc;
-    
-    return Qnil;
-}
-
-static bool processReset(bool rubyExc) {
-	const char *str = "Audio.__reset__; Graphics.__reset__;";
-	
-	if (rubyExc) {
-		rb_eval_string(str);
-	} else {
-		int state;
-		rb_eval_string_protect(str, &state);
-		return state;
-	}
-	
-	return 0;
+static bool processReset() {
+	int state;
+	rb_eval_string_protect("Audio.__reset__; Graphics.__reset__;", &state);
+	return state;
 }
 
 #if RAPI_FULL > 187
@@ -802,53 +766,6 @@ static void runCustomScript(const std::string &filename) {
     evalString(newStringUTF8(scriptData.c_str(), scriptData.size()),
                newStringUTF8(filename.c_str(), filename.size()), nullptr);
 }
-
-RB_METHOD_GUARD(mriRgssMain) {
-    RB_UNUSED_PARAM;
-
-    /* Execute postload scripts */
-    const Config &conf = shState->rtData().config;
-    for (std::vector<std::string>::const_iterator i = conf.postloadScripts.begin();
-        i != conf.postloadScripts.end(); ++i)
-    {
-        if (shState->rtData().rqTerm)
-            break;
-        runCustomScript(*i);
-    }
-
-    while (true) {
-        VALUE exc = Qnil;
-#if RAPI_FULL < 270
-        rb_rescue2((VALUE(*)(ANYARGS))rgssMainCb, rb_block_proc(),
-                   (VALUE(*)(ANYARGS))rgssMainRescue, (VALUE)&exc, rb_eException,
-                   (VALUE)0);
-#else
-        rb_rescue2(rgssMainCb, rb_block_proc(), rgssMainRescue, (VALUE)&exc,
-                   rb_eException, (VALUE)0);
-#endif
-        
-        if (NIL_P(exc))
-            break;
-        
-        if (rb_obj_class(exc) == getRbData()->exc[Reset])
-            processReset(true);
-        else
-            rb_exc_raise(exc);
-    }
-    
-    return Qnil;
-}
-RB_METHOD_GUARD_END
-
-RB_METHOD_GUARD(mriRgssStop) {
-    RB_UNUSED_PARAM;
-    
-    while (true)
-        shState->graphics().update();
-    
-    return Qnil;
-}
-RB_METHOD_GUARD_END
 
 RB_METHOD(_kernelCaller) {
     RB_UNUSED_PARAM;
@@ -897,8 +814,6 @@ bool evalScript(VALUE string, const char *filename)
     return true;
 }
 
-
-#define SCRIPT_SECTION_FMT (rgssVer >= 3 ? "{%04ld}" : "Section%03ld")
 
 static void runRMXPScripts(BacktraceData &btData) {
     const Config &conf = shState->rtData().config;
@@ -1012,7 +927,7 @@ static void runRMXPScripts(BacktraceData &btData) {
             if (conf.useScriptNames)
                 len = snprintf(buf, sizeof(buf), "%03ld:%s", i, scriptName);
             else
-                len = snprintf(buf, sizeof(buf), SCRIPT_SECTION_FMT, i);
+                len = snprintf(buf, sizeof(buf), "Section%03ld", i);
             
             fname = newStringUTF8(buf, len);
             btData.scriptNames.insert_or_assign(buf, scriptName);
@@ -1053,7 +968,7 @@ static void runRMXPScripts(BacktraceData &btData) {
         if (rb_obj_class(exc) != getRbData()->exc[Reset])
             break;
         
-        if (processReset(false))
+        if (processReset())
             break;
     }
 }
@@ -1216,7 +1131,7 @@ static void mriBindingExecute() {
 #endif
 #endif
     
-    topSelf = rgssVer == 1 ? Qnil : rb_eval_string("self");
+    topSelf = Qnil;
     
     VALUE rbArgv = rb_get_argv();
     for (const auto &str : conf.launchArgs)

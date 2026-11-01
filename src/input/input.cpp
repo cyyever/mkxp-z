@@ -745,7 +745,7 @@ struct InputPrivate
         double framems = 1.f / fps;
         
         // Approximate time in milliseconds
-        double start = (rgssVer >= 2) ? 0.375 : 0.400;
+        double start = 0.400;
         double delay = 0.100;
         
         repeatStart = ceil(start / framems);
@@ -763,7 +763,7 @@ struct InputPrivate
         checkBindingChange(rtData);
         
         int fps = rtData.config.fixedFramerate;
-        if (!fps) fps = (rgssVer >= 2) ? 60 : 40;
+        if (!fps) fps = 40;
         recalcRepeatTime(fps);
         
         states    = stateArray;
@@ -1247,13 +1247,6 @@ void Input::update()
     {
         p->repeatCount++;
         
-        /*
-         bool repeated;
-         if (rgssVer >= 2)
-         repeated = p->repeatCount >= 23 && ((p->repeatCount+1) % 6) == 0;
-         else
-         repeated = p->repeatCount >= 15 && ((p->repeatCount+1) % 4) == 0;
-         */
         bool repeated = p->repeatCount >= p->repeatStart && ((p->repeatCount+1) % p->repeatDelay) == 0;
         p->getState(p->repeating).repeated |= repeated;
         

@@ -233,7 +233,7 @@ ViewportElement::ViewportElement(Viewport *viewport, int z, int spriteY)
     : SceneElement(viewport ? *viewport : *shState->screen(), z, spriteY),
       m_viewport(viewport)
 {
-	if (rgssVer == 1 && viewport)
+	if (viewport)
 		viewportDispCon = viewport->wasDisposed.connect(&ViewportElement::viewportElementDisposal, this);
 }
 
@@ -247,7 +247,7 @@ void ViewportElement::setViewport(Viewport *viewport)
 	m_viewport = viewport;
 	
 	viewportDispCon.disconnect();
-	if (rgssVer == 1 && viewport)
+	if (viewport)
 		viewportDispCon = viewport->wasDisposed.connect(&ViewportElement::viewportElementDisposal, this);
 	
 	setScene(viewport ? *viewport : *shState->screen());

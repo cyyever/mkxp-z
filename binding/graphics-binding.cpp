@@ -401,10 +401,6 @@ void graphicsBindingInit()
 
     // end
     
-    //if (rgssVer >= 3)
-    //{
-    //}
-    
     INIT_GRA_PROP_BIND( Fullscreen,       "fullscreen"         );
     INIT_GRA_PROP_BIND( ShowCursor,       "show_cursor"        );
     INIT_GRA_PROP_BIND( Scale,            "scale"              );

@@ -53,17 +53,6 @@ static int getButtonArg(VALUE *argv) {
     
     if (FIXNUM_P(*argv)) {
         num = FIX2INT(*argv);
-    } else if (SYMBOL_P(*argv) && rgssVer >= 3) {
-        VALUE symHash = getRbData()->buttoncodeHash;
-#if RAPI_FULL > 187
-        num = FIX2INT(rb_hash_lookup2(symHash, *argv, INT2FIX(Input::None)));
-#else
-        VALUE res = rb_hash_aref(symHash, *argv);
-        if (!NIL_P(res))
-            num = FIX2INT(res);
-        else
-            num = Input::None;
-#endif
     } else {
         // FIXME: RMXP allows only few more types that
         // don't make sense (symbols in pre 3, floats)
@@ -626,27 +615,10 @@ void inputBindingInit() {
     _rb_define_module_function(module, "clipboard", inputGetClipboard);
     _rb_define_module_function(module, "clipboard=", inputSetClipboard);
     
-    if (rgssVer >= 3) {
-        VALUE symHash = rb_hash_new();
+    for (size_t i = 0; i < buttonCodesN; ++i) {
+        ID sym = rb_intern(buttonCodes[i].str);
+        VALUE val = INT2FIX(buttonCodes[i].val);
         
-        for (size_t i = 0; i < buttonCodesN; ++i) {
-            ID sym = rb_intern(buttonCodes[i].str);
-            VALUE val = INT2FIX(buttonCodes[i].val);
-            
-            /* In RGSS3 all Input::XYZ constants are equal to :XYZ symbols,
-             * to be compatible with the previous convention */
-            rb_const_set(module, sym, ID2SYM(sym));
-            rb_hash_aset(symHash, ID2SYM(sym), val);
-        }
-        
-        rb_iv_set(module, "buttoncodes", symHash);
-        getRbData()->buttoncodeHash = symHash;
-    } else {
-        for (size_t i = 0; i < buttonCodesN; ++i) {
-            ID sym = rb_intern(buttonCodes[i].str);
-            VALUE val = INT2FIX(buttonCodes[i].val);
-            
-            rb_const_set(module, sym, val);
-        }
+        rb_const_set(module, sym, val);
     }
 }
