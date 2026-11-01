@@ -28,7 +28,7 @@
 #include "graphics.h"
 
 #include <assert.h>
-#include "sigslot/signal.hpp"
+#include "util/signal.h"
 
 class Disposable
 {
@@ -67,7 +67,7 @@ public:
 		return disposed;
 	}
 
-    sigslot::signal<> wasDisposed;
+    Signal wasDisposed;
 
 protected:
 	void guardDisposed() const

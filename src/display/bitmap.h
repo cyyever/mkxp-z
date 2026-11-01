@@ -26,7 +26,7 @@
 #include "etc-internal.h"
 #include "etc.h"
 
-#include "sigslot/signal.hpp"
+#include "util/signal.h"
 
 class Font;
 class ShaderBase;
@@ -244,7 +244,7 @@ public:
 	/* Adds 'rect' to tainted area */
 	void taintArea(const IntRect &rect);
 
-	sigslot::signal<> modified;
+	Signal modified;
 
 	static int maxSize();
 
@@ -252,7 +252,7 @@ public:
 
 private:
 	void releaseResources();
-	sigslot::connection loresDispCon;
+	SignalConnection loresDispCon;
 	const char *klassName() const { return "bitmap"; }
 
 	BitmapPrivate *p;

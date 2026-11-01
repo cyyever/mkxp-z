@@ -642,21 +642,6 @@ if not pixman.found()
 endif
 global_dependencies += pixman
 
-uchardet = dependency('uchardet', allow_fallback: false, required: get_option('uchardet_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-if not uchardet.found()
-    uchardet_options = cmake.subproject_options()
-    uchardet_options.add_cmake_defines(cmake_base_options + {
-        'BUILD_BINARY': false,
-        'BUILD_SHARED_LIBS': false,
-    })
-    foreach opt, val : cmake_override_options
-        uchardet_options.set_override_option(opt, val)
-    endforeach
-    uchardet = cmake.subproject('uchardet', options: uchardet_options).dependency('libuchardet')
-    meson.override_dependency('uchardet', uchardet, static: true)
-endif
-global_dependencies += uchardet
-
 sdl3_image = dependency('sdl3_image', allow_fallback: false,
     required: get_option('sdl_image_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_image.found()
@@ -707,7 +692,7 @@ global_include_dirs += include_directories('.',
     'input',
     'net',
     'system',
-    'util', 'util/sigslot', 'util/sigslot/adapter'
+    'util'
 )
 
 

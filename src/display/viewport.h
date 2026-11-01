@@ -80,8 +80,8 @@ protected:
 
 private:
 	Viewport *m_viewport;
-	sigslot::connection viewportDispCon;
-	sigslot::connection viewportElementDispCon;
+	SignalConnection viewportDispCon;
+	SignalConnection viewportElementDispCon;
 	void viewportElementDisposal();
 };
 

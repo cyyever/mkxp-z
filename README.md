@@ -17,6 +17,18 @@ RGSS serialization uses `std::endian`, `std::byteswap` and `std::bit_cast`,
 preserving the existing little-endian format. Third-party libraries retain
 their own language requirements.
 
+Text conversion targets the two Rainblood games: UTF-8 is preferred, Unicode
+BOMs select UTF-8/16/32, and unmarked non-UTF-8 text uses GB18030 (including
+GBK/GB2312). Statistical charset detection is no longer included. Other legacy
+encodings must be converted to UTF-8 before loading. A malformed BOM-marked
+Unicode string fails conversion rather than falling back to GB18030. Font name
+records retain their explicit UTF-16BE/UTF-32BE conversion through iconv.
+
+Render and disposal notifications use scoped connections: destroying or
+reassigning a connection disconnects its receiver. Callbacks can disconnect
+receivers or add subscriptions during emission; new subscriptions run from the
+next emission. Receiver destruction and callbacks run on the RGSS thread.
+
 The portable core can be built and tested without SDL, Ruby or game assets:
 
 ```sh
@@ -26,8 +38,9 @@ meson test -C build/core --print-errorlogs
 
 Run these commands from a Visual Studio developer shell when using MSVC.
 The core test workflow covers Linux GCC/Clang, macOS C++/Objective-C++, and
-Windows MSVC. These tests cover the production filesystem and serialization
-code; they do not establish full MSVC engine support or test game rendering.
+Windows MSVC. These tests cover the production filesystem, serialization,
+notification lifetimes and text encoding selection; they do not establish full
+MSVC engine support or test game rendering.
 Full engine CI builds Windows with current MinGW/LLVM, macOS on Intel and Apple
 Silicon, and Linux on Debian Trixie. Historical Linux and FreeBSD sysroot
 recipes are retained for manual toolchain-porting runs; they need updated

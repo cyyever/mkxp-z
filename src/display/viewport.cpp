@@ -30,7 +30,7 @@
 
 #include <SDL3/SDL_rect.h>
 
-#include "sigslot/signal.hpp"
+#include "util/signal.h"
 
 struct ViewportPrivate
 {
@@ -38,7 +38,7 @@ struct ViewportPrivate
 	Viewport *self;
 
 	Rect *rect;
-	sigslot::connection rectCon;
+	SignalConnection rectCon;
 
 	Color *color;
 	Tone *tone;

@@ -41,7 +41,7 @@
 
 #include <SDL3/SDL_rect.h>
 
-#include "sigslot/signal.hpp"
+#include "util/signal.h"
 
 static float fwrap(float value, float range)
 {
@@ -54,7 +54,7 @@ struct SpritePrivate
     Bitmap *bitmap;
     Bitmap *realBitmap;
     
-    sigslot::connection bitmapDispCon;
+    SignalConnection bitmapDispCon;
     
     int realOX;
     int realOY;
@@ -68,7 +68,7 @@ struct SpritePrivate
     
     FloatRect srcRect;
     FloatRect adjustedSrcRect;
-    sigslot::connection srcRectCon;
+    SignalConnection srcRectCon;
     
     bool mirrored;
     int bushDepth;
@@ -118,7 +118,7 @@ struct SpritePrivate
     
     EtcTemps tmp;
     
-    sigslot::connection prepareCon;
+    SignalConnection prepareCon;
     
     SpritePrivate()
     : bitmap(0),

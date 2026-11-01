@@ -37,7 +37,7 @@
 #include <assert.h>
 #include <vector>
 
-#include "sigslot/signal.hpp"
+#include "util/signal.h"
 
 static inline int
 wrap(int value, int range)
@@ -267,7 +267,7 @@ private:
 	bool dirty;
 
 	Table *data;
-	sigslot::connection dataCon;
+	SignalConnection dataCon;
 
 	IntRect viewp;
 
