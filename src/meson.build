@@ -396,8 +396,6 @@ global_dependencies += ruby
 
 if compilers['cpp'].get_argument_syntax() == 'msvc'
     global_link_args += '/STACK:2097152'
-elif host_system in ['windows', 'cygwin']
-    global_link_args += ['-static-libgcc', '-static-libstdc++', '-Wl,-Bstatic', '-lpthread', '-Wl,-Bdynamic', '-Wl,--stack=0x200000']
 else
     global_link_args += ['-static-libstdc++']
 endif
