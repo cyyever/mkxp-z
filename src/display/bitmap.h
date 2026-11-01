@@ -199,7 +199,7 @@ public:
 	void setInitFont(Font *value);
 
 	/* <internal> */
-	TEXFBO &getGLTypes() const;
+	TEXFBO &getRenderTarget() const;
     SDL_Surface *surface() const;
 	SDL_Surface *megaSurface() const;
 	void ensureNonMega() const;
