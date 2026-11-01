@@ -35,6 +35,7 @@ def run_case(binary, path_cache):
                 output.setframerate(rate)
                 silence = b'\x80' if sample_width == 1 else b'\x00\x00'
                 output.writeframes(silence * channels * rate * 2)
+        (fixture / 'invalid.wav').write_bytes(b'not a WAV file')
         (fixture / 'mkxp.json').write_text(json.dumps(configuration), encoding='utf-8')
         # Config reads the INI before applying customScript; avoid unrelated diagnostics.
         (fixture / 'Game.ini').write_text('[Game]\nTitle=SDL3 smoke\n', encoding='utf-8')

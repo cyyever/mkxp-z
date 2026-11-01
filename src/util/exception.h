@@ -23,6 +23,7 @@
 #define EXCEPTION_H
 
 #include <string>
+#include <utility>
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -49,6 +50,9 @@ struct Exception
 
 	Type type;
 	std::string msg;
+
+	Exception(Type type, std::string message)
+	    : type(type), msg(std::move(message)) {}
 
 	Exception(Type type, const char *format, ...)
 	    : type(type)

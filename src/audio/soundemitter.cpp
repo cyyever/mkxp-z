@@ -30,6 +30,7 @@
 #include "debugwriter.h"
 
 #include <SDL3_sound/SDL_sound.h>
+#include <format>
 
 #define SE_CACHE_MEM (10*1024*1024) // 10 MB
 
@@ -95,9 +96,6 @@ void SoundEmitter::play(const std::string &filename,
 
 	SoundBuffer *buffer = allocateBuffer(filename);
 
-	if (!buffer)
-		return;
-
 	/* Try to find first free source */
 	size_t i;
 	for (i = 0; i < srcCount; ++i)
@@ -151,17 +149,17 @@ void SoundEmitter::stop()
 struct SoundOpenHandler : FileSystem::OpenHandler
 {
 	std::unique_ptr<SoundBuffer> buffer;
-	const char *error = nullptr;
+	std::string error;
 
 	bool tryRead(SDL_IOStream *ops, const char *ext)
 	{
 		std::unique_ptr<Sound_Sample, decltype(&Sound_FreeSample)> sample(
 			Sound_NewSample(ops, ext, nullptr, STREAM_BUF_SIZE), Sound_FreeSample);
 
-		if (!sample)
-		{
-			return false;
-		}
+        if (!sample) {
+            error = Sound_GetError();
+            return false;
+        }
 
         if (!isRuntimeAudio(sample.get())) {
             error = "Audio assets must use WAV or FLAC decoding";
@@ -173,8 +171,10 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 		uint32_t decBytes = Sound_DecodeAll(sample.get());
 		const auto *data = static_cast<const uint8_t *>(sample->buffer);
 
-		if (sample->flags & SOUND_SAMPLEFLAG_ERROR)
-			return false;
+        if (sample->flags & SOUND_SAMPLEFLAG_ERROR) {
+            error = Sound_GetError();
+            return false;
+        }
 
 		buffer = std::make_unique<SoundBuffer>();
 		buffer->spec = sample->actual;
@@ -208,12 +208,8 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 
 		if (!buffer)
 		{
-			char buf[512];
-			snprintf(buf, sizeof(buf), "Unable to decode sound: %s: %s",
-			         filename.c_str(), handler.error ? handler.error : Sound_GetError());
-			Debug() << buf;
-
-			return 0;
+            throw Exception(Exception::SDLError,
+                            std::format("Unable to decode sound: {}: {}", filename, handler.error));
 		}
 
 		buffer->key = filename;

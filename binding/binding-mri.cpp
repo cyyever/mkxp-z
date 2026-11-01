@@ -19,6 +19,7 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <format>
 #include <iterator>
 
 #include "util/paths.h"
@@ -901,20 +902,13 @@ static void runRMXPScripts(BacktraceData &btData) {
             VALUE string =
             newStringUTF8(RSTRING_PTR(scriptDecoded), RSTRING_LEN(scriptDecoded));
             
-            VALUE fname;
             const char *scriptName = RSTRING_PTR(rb_ary_entry(script, 1));
-            char buf[512];
-            int len;
-            
-            if (conf.useScriptNames)
-                len = snprintf(buf, sizeof(buf), "%03ld:%s", i, scriptName);
-            else
-                len = snprintf(buf, sizeof(buf), "Section%03ld", i);
-            
-            fname = newStringUTF8(buf, len);
-            btData.scriptNames.insert_or_assign(buf, scriptName);
-            
-            
+            const std::string filename = conf.useScriptNames
+                ? std::format("{:03}:{}", i, scriptName)
+                : std::format("Section{:03}", i);
+            VALUE fname = newStringUTF8(filename.c_str(), filename.size());
+            btData.scriptNames.insert_or_assign(filename, scriptName);
+
             // if the script name starts with |s|, only execute
             // it if "s" is the same first letter as the platform
             // we're running on

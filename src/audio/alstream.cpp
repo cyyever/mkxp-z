@@ -29,6 +29,7 @@
 #include "debugwriter.h"
 
 #include <algorithm>
+#include <format>
 #include <thread>
 #include <vector>
 
@@ -221,18 +222,14 @@ void ALStream::openSource(const std::string &filename)
 		if (e.type != Exception::NoFileError)
 			close();
 		
-		throw e;
+		throw;
 	}
 
 	close();
 
 	if (!handler.source)
 	{
-		char buf[512];
-		snprintf(buf, sizeof(buf), "Unable to decode audio stream: %s: %s",
-		         filename.c_str(), handler.errorMsg.c_str());
-
-		Debug() << buf;
+        throw Exception(Exception::SDLError, std::format("Unable to decode audio stream: {}: {}", filename, handler.errorMsg));
 	}
 	
 	source.reset(handler.source);
