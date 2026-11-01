@@ -5,6 +5,7 @@
 
 #include <SDL3/SDL_init.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -18,6 +19,8 @@ SDL_AudioDeviceID audioDevice;
 AudioTestState testState;
 AudioTestState *shState = &testState;
 static std::string requestedSource;
+static std::atomic<uint32_t> lastSeekFrame;
+static std::atomic<unsigned> liveSources;
 
 // The generated PCM source isolates queueing, looping and playback from codecs
 // and asset lookup. SDL's real dummy device consumes the resulting stream.
@@ -28,10 +31,12 @@ struct GeneratedSource : ALDataSource {
     SDL_AudioSpec format;
     GeneratedSource(bool looped, bool empty, bool mono)
         : looped(looped), length(empty ? 0 : (mono ? 2205 : 4800)),
-          format{mono ? SDL_AUDIO_U8 : SDL_AUDIO_S16, mono ? 1 : 2, mono ? 22050 : 48000} {}
+          format{mono ? SDL_AUDIO_U8 : SDL_AUDIO_S16, mono ? 1 : 2, mono ? 22050 : 48000} { ++liveSources; }
+    ~GeneratedSource() override { --liveSources; }
     SDL_AudioSpec spec() override { return format; }
     void seekToOffset(double seconds) override {
         frame = std::min(static_cast<uint32_t>(seconds * format.freq), length);
+        lastSeekFrame = frame;
     }
     uint32_t loopStartFrames() override { return 0; }
     Status fillBuffer(std::vector<uint8_t> &out) override {
@@ -105,6 +110,55 @@ int main() {
             stream.play();
             std::this_thread::sleep_for(30ms);
             // Destruction must join an active worker before freeing SDL resources.
+        }
+        {
+            ALStream stream(ALStream::NotLooped);
+            // Closed operations must be harmless and must not create a worker.
+            stream.play();
+            stream.pause();
+            stream.stop();
+            stream.close();
+            require(stream.queryState() == ALStream::Closed && stream.queryOffset() == 0,
+                    "closed controls changed stream state");
+            stream.open("finite");
+            stream.play(.04);
+            require(lastSeekFrame == 1920, "play offset was not passed to decoder in seconds");
+            stream.pause();
+            const double paused = stream.queryOffset();
+            stream.pause();
+            std::this_thread::sleep_for(150ms);
+            require(stream.queryState() == ALStream::Paused, "finite paused queue drained");
+            require(std::abs(stream.queryOffset() - paused) < .001, "finite pause lost queued position");
+            stream.play(.09);
+            require(lastSeekFrame == 1920, "resume unexpectedly sought instead of retaining queued audio");
+            waitStopped(stream);
+            stream.play(.2); // Decoder clamps an offset beyond EOF to an empty stream.
+            require(lastSeekFrame == 4800, "seek beyond EOF was not clamped by decoder");
+            waitStopped(stream);
+            stream.play(0);
+            require(lastSeekFrame == 0, "replay after EOF did not rewind source");
+            waitStopped(stream);
+        }
+        {
+            ALStream stream(ALStream::Looped);
+            stream.open("loop");
+            stream.play();
+            stream.pause();
+            stream.stop();
+            stream.stop();
+            require(stream.queryState() == ALStream::Stopped, "stop while paused failed");
+            stream.play(.03);
+            require(lastSeekFrame == 1440, "restart after paused stop did not seek");
+            // Replacing an active source must join its worker and release its data.
+            stream.open("mono");
+            require(stream.queryState() == ALStream::Stopped && liveSources == 1,
+                    "active source replacement leaked or kept playing");
+            stream.play(.02);
+            require(lastSeekFrame == 441, "replacement retained old sample rate");
+            stream.close();
+            stream.close();
+            require(liveSources == 0 && stream.queryOffset() == 0,
+                    "close did not discard replacement source and position");
         }
         {
             ALStream stream(ALStream::Looped);

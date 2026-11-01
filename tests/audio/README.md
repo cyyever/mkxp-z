@@ -14,6 +14,9 @@ meson test -C build/audio-tests --print-errorlogs
 
 Coverage includes finite EOF, replay and seeking, mono unsigned 8-bit conversion,
 loop offsets, gain/pitch setup, pause/resume, stop/restart, destruction with an
-active worker, empty loop sources, and device binding failure. Codec decoding,
+active worker, empty loop sources, and device binding failure. Additional checks
+cover closed control calls, finite EOF while paused, resume preserving queued
+audio despite an offset argument, seeks beyond EOF, stop while paused, active
+source replacement across sample formats, and idempotent close without leaks. Codec decoding,
 application suspend events and audible game playback require engine integration
 checks in addition to these isolated tests.
