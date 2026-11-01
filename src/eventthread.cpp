@@ -28,6 +28,7 @@
 #include <SDL3/SDL_rect.h>
 
 #include <cmath>
+#include <format>
 #include <memory>
 
 #include "sharedstate.h"
@@ -152,9 +153,9 @@ void EventThread::process(RGSSThreadData &rtData)
         ctrl = SDL_OpenGamepad(gamepads[0]);
     SDL_free(gamepads);
 
-    char buffer[128];
+    std::string title;
     
-    char pendingTitle[128];
+    std::string pendingTitle;
     bool havePendingTitle = false;
     
     bool resetting = false;
@@ -288,8 +289,8 @@ void EventThread::process(RGSSThreadData &rtData)
                     setFullscreen(win, !fullscreen);
                     if (!fullscreen && havePendingTitle)
                     {
-                        SDL_SetWindowTitle(win, pendingTitle);
-                        pendingTitle[0] = '\0';
+                        SDL_SetWindowTitle(win, pendingTitle.c_str());
+                        pendingTitle.clear();
                         havePendingTitle = false;
                     }
                     
@@ -336,8 +337,7 @@ void EventThread::process(RGSSThreadData &rtData)
                         if (fullscreen)
                         {
                             /* Prevent fullscreen flicker */
-                            strncpy(pendingTitle, rtData.config.windowTitle.c_str(),
-                                    sizeof(pendingTitle));
+                            pendingTitle = rtData.config.windowTitle;
                             havePendingTitle = true;
                             
                             break;
@@ -525,20 +525,19 @@ void EventThread::process(RGSSThreadData &rtData)
                         if (!fps.sendUpdates)
                             break;
                         
-                        snprintf(buffer, sizeof(buffer), "%s - %d FPS",
-                                 rtData.config.windowTitle.c_str(), event.user.code);
+                        title = std::format("{} - {} FPS", rtData.config.windowTitle, event.user.code);
                         
                         /* Updating the window title in fullscreen
                          * mode seems to cause flickering */
                         if (fullscreen)
                         {
-                            strncpy(pendingTitle, buffer, sizeof(pendingTitle));
+                            pendingTitle = title;
                             havePendingTitle = true;
                             
                             break;
                         }
                         
-                        SDL_SetWindowTitle(win, buffer);
+                        SDL_SetWindowTitle(win, title.c_str());
                         break;
                         
                     case UPDATE_SCREEN_RECT :

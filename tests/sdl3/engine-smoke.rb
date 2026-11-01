@@ -39,6 +39,15 @@ begin
     pid = MiniFFI.new('kernel32.dll', 'GetCurrentProcessId', [], 'L').call
     raise 'native function pointer was truncated' unless pid > 0
   end
+  [:bgm_play, :bgs_play, :se_play].each do |operation|
+    failed = false
+    begin
+      Audio.send(operation, 'invalid')
+    rescue SDLError
+      failed = true
+    end
+    raise "#{operation} silently accepted malformed audio" unless failed
+  end
   Audio.bgm_play('tone', 75, 100, 0.25)
   5.times { Graphics.update }
   raise 'BGM seek position was lost' unless Audio.bgm_pos >= 0.25
