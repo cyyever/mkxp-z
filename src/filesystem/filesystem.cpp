@@ -26,7 +26,7 @@
 
 #include <memory>
 #include <algorithm>
-#include <vector>
+#include <set>
 
 namespace fs = std::filesystem;
 
@@ -98,10 +98,10 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
   const auto file = p->havePathCache ? DirectorySearch::key(paths::toUtf8(requested.filename().u8string()))
                                    : paths::toUtf8(requested.filename().u8string());
   bool matched = false, missing = false;
-  std::vector<fs::path> failedDecodes;
+  std::set<fs::path> failedDecodes;
   const auto tryFile = [&](const std::string &name, const fs::path &actual) {
     if (!name.starts_with(file) || (name.size() != file.size() && name[file.size()] != '.')) return false;
-    if (actual.empty() || std::ranges::find(failedDecodes, actual) != failedDecodes.end()) return false;
+    if (actual.empty() || failedDecodes.contains(actual)) return false;
     const auto status = fs::status(actual); // Same single stat as is_regular_file(path).
     if (!fs::is_regular_file(status)) {
       missing |= !fs::exists(status);
@@ -112,16 +112,23 @@ void FileSystem::openRead(OpenHandler &handler, const char *filename) {
     const char *ext = dot == std::string::npos ? nullptr : name.c_str() + dot + 1;
     // OpenHandler takes ownership, including on a failed decode.
     if (handler.tryRead(openStream(actual), ext)) return true;
-    failedDecodes.push_back(actual); // Only failed decodes allocate; successful hits do not.
+    failedDecodes.insert(actual); // Only failed decodes allocate; successful hits do not.
     return false;
   };
   try {
     if (p->havePathCache) {
       for (int attempt = 0; attempt < 2; ++attempt) {
         missing = false;
-        for (const auto &[name, entry] : p->search.cachedList(requested.parent_path())) {
-          if (tryFile(name, entry.actual)) return;
-          if (missing) break;
+        const auto &entries = p->search.cachedList(requested.parent_path());
+        if (const auto exact = entries.find(file); exact != entries.end())
+          if (tryFile(exact->first, exact->second.actual)) return;
+        if (!missing) {
+          const auto prefix = file + '.';
+          for (auto entry = entries.lower_bound(prefix);
+               entry != entries.end() && entry->first.starts_with(prefix); ++entry) {
+            if (tryFile(entry->first, entry->second.actual)) return;
+            if (missing) break;
+          }
         }
         // A deleted winning mount can hide the same name in a later mount.
         // Refresh outside iteration, once, on a stale match or a complete miss.
