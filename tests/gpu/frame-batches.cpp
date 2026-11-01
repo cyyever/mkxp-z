@@ -3,6 +3,10 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <future>
+#include <thread>
+#include <chrono>
+#include <limits>
 #include <iostream>
 #include <stdexcept>
 
@@ -16,11 +20,12 @@ int main(int argc,char **argv) {
     SDL_Window *window=nullptr;
     try {
         require(argc==2,"usage: gpu-frame-tests DXBC_DIRECTORY");
+        SDL_SetHint(SDL_HINT_ASSERT, "abort");
         require(SDL_Init(SDL_INIT_VIDEO),SDL_GetError());
         window=SDL_CreateWindow("GPU batched frame tests",32,32,SDL_WINDOW_HIDDEN);
         require(window!=nullptr,SDL_GetError());
         {
-            gpu::Device device(window,SDL_GPU_SHADERFORMAT_DXBC,false,"direct3d12");
+            gpu::Device device(window,SDL_GPU_SHADERFORMAT_DXBC,true,"direct3d12");
             const std::filesystem::path directory(argv[1]);
             auto vertex=read(directory/"vertexMain.dxbc");
             auto flat=read(directory/"flatColorMain.dxbc");
@@ -50,6 +55,83 @@ int main(int argc,char **argv) {
                         require(std::abs(int(pixels[(y*4+x)*4+c])-color[c])<=2,"batched frame pixel mismatch");
                 }
             };
+            // Reject invalid caller state against the actual target before any
+            // backend command or vertex append. A later valid draw still works.
+            encoder.beginTarget(gpu::TextureView(target),SDL_GPU_LOADOP_CLEAR);
+            const float nan = std::numeric_limits<float>::quiet_NaN();
+            const SDL_GPUViewport invalidViewports[] = {
+                {0,0,8,4,0,1}, {1,0,4,4,0,1}, {0,1,4,4,0,1},
+                {0,0,4,0,0,1}, {nan,0,4,4,0,1}, {0,0,nan,4,0,1},
+                {0,0,4,4,0,2}, {0,0,4,4,1,0},
+            };
+            for (auto viewport : invalidViewports) {
+                state.viewport = viewport;
+                bool rejected = false;
+                try { draw(); } catch (const std::invalid_argument &) { rejected = true; }
+                require(rejected, "invalid or oversized viewport was accepted");
+            }
+            state.viewport = SDL_GPUViewport{0,0,4,4,0,1};
+            draw();
+            encoder.beginTarget(gpu::TextureView(clearOnly),SDL_GPU_LOADOP_CLEAR);
+            bool wrongTargetRejected = false;
+            try { draw(); } catch (const std::invalid_argument &) { wrongTargetRejected = true; }
+            require(wrongTargetRejected, "viewport was validated against the previous target");
+            state.viewport = SDL_GPUViewport{0,0,2,2,0,1};
+            draw();
+            encoder.submit().wait();
+            state.viewport.reset();
+
+            // Force an attempted overlap of two differently sized passes on one
+            // device. SDL 3.4 debug validation stores viewport limits on Device;
+            // the second pass must not change them while the first records.
+            auto large = device.createTexture(64,64);
+            auto small = device.createTexture(2,2);
+            gpu::CommandBuffer largeCommand(device.native());
+            SDL_GPUColorTargetInfo largeTarget{};
+            largeTarget.texture=large.native();largeTarget.load_op=SDL_GPU_LOADOP_CLEAR;
+            largeTarget.store_op=SDL_GPU_STOREOP_STORE;largeTarget.clear_color={0,0,1,1};
+            std::promise<void> attemptedPromise, enteredPromise;
+            auto attempted=attemptedPromise.get_future();auto entered=enteredPromise.get_future();
+            std::exception_ptr workerError;
+            std::jthread worker;
+            bool overlapped=false;
+            {
+                gpu::RenderPass largePass(device,largeCommand,largeTarget);
+                worker=std::jthread([&] {
+                    attemptedPromise.set_value();
+                    try {
+                        gpu::CommandBuffer command(device.native());
+                        SDL_GPUColorTargetInfo smallTarget{};
+                        smallTarget.texture=small.native();smallTarget.load_op=SDL_GPU_LOADOP_CLEAR;
+                        smallTarget.store_op=SDL_GPU_STOREOP_STORE;smallTarget.clear_color={1,0,0,1};
+                        {
+                            gpu::RenderPass smallPass(device,command,smallTarget);
+                            enteredPromise.set_value();
+                            const SDL_GPUViewport viewport{0,0,2,2,0,1};
+                            SDL_SetGPUViewport(smallPass.native(),&viewport);
+                        }
+                        command.submitWithFence().wait();
+                    } catch (...) { workerError=std::current_exception(); }
+                });
+                require(attempted.wait_for(std::chrono::seconds(5))==std::future_status::ready,
+                        "second render-pass worker did not start");
+                overlapped=entered.wait_for(std::chrono::milliseconds(100))==std::future_status::ready;
+                if (!overlapped) {
+                    const SDL_GPUViewport viewport{0,0,64,64,0,1};
+                    SDL_SetGPUViewport(largePass.native(),&viewport);
+                }
+            }
+            largeCommand.submitWithFence().wait();
+            worker.join();
+            if (workerError) std::rethrow_exception(workerError);
+            require(!overlapped,"render-pass recording overlapped on one SDL device");
+            for (const auto &[texture,channel] : std::array{
+                    std::pair{&large,size_t(2)},std::pair{&small,size_t(0)}}) {
+                const auto pixels=device.downloadRGBA(*texture);
+                for(size_t i=0;i<pixels.size();++i)
+                    require(pixels[i]==(i%4==channel||i%4==3?255:0),"concurrent-pass clear pixels changed");
+            }
+
             encoder.beginTarget(gpu::TextureView(target),SDL_GPU_LOADOP_CLEAR);
             state.scissor=SDL_Rect{0,0,2,4};fp.color[0]=fp.color[3]=1;draw();
             state.scissor=SDL_Rect{2,0,2,4};fp.color[0]=0;fp.color[1]=1;draw();
@@ -103,6 +185,37 @@ int main(int argc,char **argv) {
                         require(pixels[(y*4+x)*4+c]==(drawn&&(c==frame%2||c==3)?255:0),"in-flight frame vertices were overwritten");
                 }
             }
+            // Normal engine flushes leave completion ownership entirely to SDL.
+            // Cycle the same upload buffers through multiple queued submissions,
+            // then read back every target after the queued work has completed.
+            std::vector<gpu::Texture> asyncTargets;
+            for(int i=0;i<20;++i){
+                asyncTargets.push_back(device.createTexture(4,4));
+                encoder.beginTarget(gpu::TextureView(asyncTargets.back()),SDL_GPU_LOADOP_CLEAR);
+                fp={};fp.color[i%3]=fp.color[3]=1;
+                encoder.draw(gpu::Program::FlatColor,geometry,{},vp,fp,state);
+                encoder.submitWithoutFence();
+            }
+            for(size_t frame=0;frame<asyncTargets.size();++frame){
+                const auto pixels=device.downloadRGBA(asyncTargets[frame]);
+                for(size_t i=0;i<pixels.size();++i)
+                    require(pixels[i]==(i%4==frame%3||i%4==3?255:0),
+                            "SDL-owned asynchronous submission pixels changed");
+            }
+            // Explicitly acquired fences may be discarded by exception/shutdown
+            // cleanup. Their RAII release must not recycle in-flight state early.
+            auto discardedFenceTarget=device.createTexture(4,4);
+            for(int i=0;i<8;++i){
+                encoder.beginTarget(gpu::TextureView(discardedFenceTarget),SDL_GPU_LOADOP_CLEAR);
+                fp={};fp.color[i%3]=fp.color[3]=1;
+                encoder.draw(gpu::Program::FlatColor,geometry,{},vp,fp,state);
+                encoder.submit();
+                const auto pixels=device.downloadRGBA(discardedFenceTarget);
+                for(size_t j=0;j<pixels.size();++j)
+                    require(pixels[j]==(j%4==size_t(i%3)||j%4==3?255:0),
+                            "discarded acquired fence corrupted submitted pixels");
+            }
+
             encoder.beginTarget(gpu::TextureView(target),SDL_GPU_LOADOP_CLEAR);
             state.scissor=SDL_Rect{-100,-100,1,1};draw();
             encoder.submit().wait();
