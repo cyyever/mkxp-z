@@ -1,0 +1,92 @@
+Checks: >-
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-lambda-function-name,
+  -bugprone-throwing-static-initialization,
+  cert-*,
+  -cert-err58-cpp,
+  clang-diagnostic-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-use-enum-class,
+  performance-*,
+  -performance-enum-size,
+  google-build-explicit-make-pair,
+  google-build-namespaces,
+  google-build-using-namespace,
+  google-default-arguments,
+  google-global-names-in-headers,
+  google-explicit-constructor,
+  google-readability-avoid-underscore-in-googletest-name,
+  google-readability-casting,
+  google-readability-namespace-comments,
+  google-runtime-float,
+  google-runtime-int,
+  google-runtime-operator,
+  google-upgrade-googletest-case,
+  misc-*,
+  -misc-const-correctness,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-anonymous-namespace,
+  modernize-*,
+  -modernize-avoid-c-arrays,
+  -modernize-return-braced-init-list,
+  -modernize-use-auto,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  portability-*,
+  -portability-avoid-pragma-once,
+  -portability-template-virtual-member-function,
+  readability-*,
+  -readability-trailing-comma,
+  -readability-braces-around-statements,
+  -readability-container-contains,
+  -readability-convert-member-functions-to-static,
+  -readability-else-after-return,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-uppercase-literal-suffix,
+  -readability-use-anyofallof,
+  -readability-use-concise-preprocessor-directives,
+
+# The engine's C++ language version is selected by Meson.
+
+# Lint engine and Ruby binding headers, excluding dependencies and build output.
+HeaderFilterRegex: '(^|[/\\])(src|binding)[/\\]'
+ExcludeHeaderFilterRegex: '(\.pb\.h$|[/\\](third_party|_deps|subprojects|build[^/\\]*|\.venv)[/\\])'
+
+# SDL's analyzer aliases use POSIX names unavailable under native MSVC.
+ExtraArgs:
+  - '-DSDL_DISABLE_ANALYZE_MACROS'
+
+CheckOptions:
+  # `cppcoreguidelines-special-member-functions` is enabled, refer to https://en.cppreference.com/w/cpp/language/rule_of_three
+  - key:             cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor
+    value:           True
+  - key:             performance-move-const-arg.CheckTriviallyCopyableMove
+    value:           False
+  - key:             cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted
+    value:           True
+  - key:             modernize-use-scoped-lock.WarnOnSingleLocks
+    value:           False
