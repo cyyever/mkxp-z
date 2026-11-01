@@ -13,6 +13,10 @@ namespace {
 [[noreturn]] void fail(const char *operation) {
     throw std::runtime_error(std::string(operation) + ": " + SDL_GetError());
 }
+template<class T> bool sameBytes(const T &a, const T &b) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    return std::memcmp(&a, &b, sizeof(T)) == 0;
+}
 }
 FrameEncoder::FrameEncoder(Device &d, QuadPipeline &p) : device(d), pipelines(p) {}
 FrameEncoder::~FrameEncoder() {
@@ -23,10 +27,6 @@ void FrameEncoder::reset() { vertices.clear(); batches.clear(); }
 bool FrameEncoder::Draw::canMerge(const Draw &other) const {
     // Compare uniform bytes conservatively, preserving signed zeros and NaNs.
     // Any padding differences merely prevent merging otherwise compatible draws.
-    const auto sameBytes = []<class T>(const T &a, const T &b) {
-        static_assert(std::is_trivially_copyable_v<T>);
-        return std::memcmp(&a, &b, sizeof(T)) == 0;
-    };
     if (program != other.program || blend != other.blend || samplerCount != other.samplerCount ||
         !sameBytes(vertex, other.vertex) || !sameBytes(fragment, other.fragment) ||
         !sameBytes(effects, other.effects) || !sameBytes(tilemap, other.tilemap) ||
@@ -138,9 +138,20 @@ Fence FrameEncoder::submitCommands(bool acquireFence) {
         target.texture = batch.target.native(); target.load_op = batch.load;
         target.store_op = SDL_GPU_STOREOP_STORE; target.clear_color = batch.clear;
         RenderPass pass(device, command, target);
+        // SDL begins each pass with the full target viewport and scissor.
+        // Track changes only within this pass so a previous target cannot leak
+        // its dimensions into this one, and avoid resetting SDL's defaults.
+        SDL_GPUViewport viewport{0,0,float(batch.target.width()),float(batch.target.height()),0,1};
+        SDL_Rect scissor{0,0,int(batch.target.width()),int(batch.target.height())};
         for (const auto &draw : batch.draws) {
-            SDL_SetGPUViewport(pass.native(), &draw.viewport);
-            SDL_SetGPUScissor(pass.native(), &draw.scissor);
+            if (!sameBytes(viewport, draw.viewport)) {
+                SDL_SetGPUViewport(pass.native(), &draw.viewport);
+                viewport = draw.viewport;
+            }
+            if (!sameBytes(scissor, draw.scissor)) {
+                SDL_SetGPUScissor(pass.native(), &draw.scissor);
+                scissor = draw.scissor;
+            }
             const SDL_GPUBufferBinding binding{vertexBuffer,draw.first*static_cast<Uint32>(sizeof(QuadVertex))};
             pipelines.bind(command.native(), pass.native(), draw.program, draw.blend, batch.target.pixelFormat(),
                 binding, std::span(draw.samplers).first(draw.samplerCount), draw.vertex, draw.fragment, draw.effects, draw.tilemap);
