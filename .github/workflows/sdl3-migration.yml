@@ -57,11 +57,11 @@ jobs:
           arch: x64
       - name: Install build tools
         run: python -m pip install 'meson>=1.10' ninja cmake
-      - name: Install native Ruby IO test dependency
+      - name: Install Ruby 3.4 for IO ownership tests
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby-dev
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
       - name: Restore SDL3 SDK
         id: sdk
         uses: actions/cache@v6
@@ -80,13 +80,28 @@ jobs:
               output.write(str(Path('build/sdk/bin').resolve()) + '\n')
           PY
       - name: Configure focused regression tests
+        if: runner.os != 'Windows'
         run: |
           meson setup build/audio tests/audio --buildtype=release -Dcmake_prefix_path="$CMAKE_PREFIX_PATH"
           meson setup build/sdl3 tests/sdl3 --buildtype=release -Dcmake_prefix_path="$CMAKE_PREFIX_PATH"
       - name: Build and run SDL3 regressions
+        if: runner.os != 'Windows'
         run: |
           meson test -C build/audio --print-errorlogs
           meson test -C build/sdl3 --print-errorlogs
+      - name: Configure and test with the native Windows linker
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH = "$(Join-Path $env:VCToolsInstallDir 'bin/Hostx64/x64');$env:PATH"
+          meson setup build/audio tests/audio --buildtype=release "-Dcmake_prefix_path=$env:CMAKE_PREFIX_PATH"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          meson setup build/sdl3 tests/sdl3 --buildtype=release "-Dcmake_prefix_path=$env:CMAKE_PREFIX_PATH"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          meson test -C build/audio --print-errorlogs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          meson test -C build/sdl3 --print-errorlogs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Check Ruby and SDL3 IO ownership
         if: runner.os == 'Linux'
         run: |
@@ -117,16 +132,13 @@ jobs:
           arch: x86_64
           sync: rsync
           prepare: |
-            pkg install -y python313 py313-pip cmake ninja pkgconf
+            pkg install -y python3 meson cmake ninja pkgconf
           run: |
             set -eu
             export CC=clang CXX=clang++
-            python3.13 -m venv build/ci-venv
-            . build/ci-venv/bin/activate
-            python -m pip install 'meson>=1.10'
             meson setup build/core -Dcore_tests_only=true --buildtype=release
             meson test -C build/core --print-errorlogs
-            python .github/scripts/build-sdl3-sdk.py
+            python3 .github/scripts/build-sdl3-sdk.py
             export CMAKE_PREFIX_PATH="$PWD/build/sdk"
             export PKG_CONFIG_PATH="$CMAKE_PREFIX_PATH/lib/pkgconfig"
             export LD_LIBRARY_PATH="$CMAKE_PREFIX_PATH/lib"

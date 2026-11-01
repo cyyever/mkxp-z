@@ -98,7 +98,7 @@ jobs:
       - name: Configure, build and test native engine
         run: |
           # Ruby source preparation uses Git utilities; keep the native MSVC linker first.
-          $env:PATH += ';C:\Program Files\Git\usr\bin'
+          $env:PATH = "$(Join-Path $env:VCToolsInstallDir 'bin/Hostx64/x64');$env:PATH"
           meson setup build --buildtype=release --prefix "$pwd/build/artifact" -Ddefault_system=disabled
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           meson compile -C build

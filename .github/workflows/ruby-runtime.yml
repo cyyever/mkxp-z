@@ -93,7 +93,7 @@ jobs:
           "PKG_CONFIG_PATH=$env:RUNNER_TEMP/native-sdk/x64-windows-static-md/lib/pkgconfig" >> $env:GITHUB_ENV
       - name: Build and test native embedded Ruby
         run: |
-          $env:PATH += ';C:\Program Files\Git\usr\bin'
+          $env:PATH = "$(Join-Path $env:VCToolsInstallDir 'bin/Hostx64/x64');$env:PATH"
           meson setup build/ruby -Druby_tests_only=true --buildtype=release
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           meson test -C build/ruby --print-errorlogs
