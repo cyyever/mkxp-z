@@ -21,7 +21,7 @@ def main():
             'customScript': str(script),
             'RTP': [str(source.parents[2] / 'assets')],
             'enableSettings': False, 'winConsole': False,
-            'defScreenW': 640, 'defScreenH': 480, 'enableHires': True,
+            'defScreenW': 640, 'defScreenH': 480, 'enableHires': '--no-hires' not in sys.argv[3:],
             'framebufferScalingFactor': 3, 'textureScalingFactor': 3,
             'pathCache': False,
         }

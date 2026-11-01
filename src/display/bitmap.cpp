@@ -1597,27 +1597,18 @@ void Bitmap::stretchBlt(IntRect destRect,
 
         if (destRect.w < 0 || destRect.h < 0)
         {
-            // SDL can't handle negative dimensions when blitting, so we have to do it manually
+            // Crop without blending, then let SDL handle pitch and pixel-format-safe flipping.
             blitTemp = SDL_CreateSurface(sourceRect.w, sourceRect.h, p->format->format);
-
             ownedBlitTemp.reset(blitTemp);
             if (!blitTemp)
                 throw Exception(Exception::SDLError, "Error creating temporary surface for blitting: %s", SDL_GetError());
 
-            bool flipW = destRect.w < 0;
-            bool flipH = destRect.y < 0;
-
-            for(int dx = 0, sx = (flipW ? sourceRect.x + sourceRect.w - 1 : sourceRect.x);
-                dx < sourceRect.w; dx++, (flipW ? sx-- : sx++))
-            {
-                for(int dy = 0, sy = (flipH ? sourceRect.y + sourceRect.h - 1 : sourceRect.y);
-                    dy < sourceRect.h; dy++, (flipH ? sy-- : sy++))
-                {
-                    uint32_t &srcPixel = getPixelAt(srcSurf, p->format, sx, sy);
-                    uint32_t &destPixel = getPixelAt(blitTemp, p->format, dx, dy);
-                    destPixel = srcPixel;
-                }
-            }
+            const SDL_FlipMode flip = destRect.w < 0
+                ? (destRect.h < 0 ? SDL_FLIP_HORIZONTAL_AND_VERTICAL : SDL_FLIP_HORIZONTAL)
+                : SDL_FLIP_VERTICAL;
+            if (!SDL_StretchSurface(srcSurf, &sourceRect, blitTemp, nullptr, SDL_SCALEMODE_NEAREST) ||
+                !SDL_FlipSurface(blitTemp, flip))
+                throw Exception(Exception::SDLError, "Error flipping surface for blitting: %s", SDL_GetError());
             srcSurf = blitTemp;
             sourceRect.x = sourceRect.y = 0;
             destRect = normalizedRect(destRect);
