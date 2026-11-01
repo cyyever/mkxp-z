@@ -29,6 +29,22 @@ private:
     Uint32 w = 0, h = 0;
 };
 
+class Fence {
+public:
+    Fence() = default;
+    ~Fence();
+    Fence(Fence &&) noexcept;
+    Fence &operator=(Fence &&) noexcept;
+    Fence(const Fence &) = delete;
+    Fence &operator=(const Fence &) = delete;
+    void wait() const;
+private:
+    friend class CommandBuffer;
+    Fence(SDL_GPUDevice *, SDL_GPUFence *);
+    SDL_GPUDevice *device = nullptr;
+    SDL_GPUFence *fence = nullptr;
+};
+
 class CommandBuffer {
 public:
     explicit CommandBuffer(SDL_GPUDevice *);
@@ -38,6 +54,7 @@ public:
     SDL_GPUCommandBuffer *native() const { return command; }
     void submit();
     void submitAndWait();
+    [[nodiscard]] Fence submitWithFence();
 private:
     friend class Device;
     void checkThread() const;

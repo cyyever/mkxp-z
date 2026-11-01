@@ -1,9 +1,11 @@
 #include "display/gpu-device.h"
+#include "display/gpu-frame-handoff.h"
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <stdexcept>
 #include <exception>
 #include <thread>
+#include <future>
 
 static void require(bool condition, const char *message) {
     if (!condition) throw std::runtime_error(message);
@@ -15,7 +17,7 @@ int main() {
         window = SDL_CreateWindow("GPU resource verification", 64, 64, SDL_WINDOW_HIDDEN);
         require(window != nullptr, SDL_GetError());
         {
-            gpu::Device device(window, SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL);
+            gpu::Device device(window, SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL);
             std::cout << "GPU driver: " << SDL_GetGPUDeviceDriver(device.native()) << '\n';
             // Odd-sized rows expose alignment and stride mistakes; values cover
             // alpha, low bits, channel order and vertical orientation.
@@ -51,6 +53,38 @@ int main() {
             });
             worker.join();
             if (workerError) std::rethrow_exception(workerError);
+            gpu::FrameHandoff frames;
+            std::thread producer([&] {
+                try {
+                    auto rendered = device.createTexture(w, h);
+                    gpu::CommandBuffer command(device.native());
+                    device.copy(command, destination, rendered);
+                    auto ready = command.submitWithFence();
+                    require(frames.publish({std::move(rendered), std::move(ready), 42}), "frame publish rejected");
+                } catch (...) { workerError = std::current_exception(); }
+            });
+            producer.join();
+            if (workerError) std::rethrow_exception(workerError);
+            auto completed = frames.tryTake();
+            require(completed && completed->sequence == 42, "frame handoff lost ordering");
+            completed->ready.wait();
+            require(device.downloadRGBA(completed->texture) == expected, "handoff changed rendered pixels");
+            require(!frames.tryTake(), "frame was delivered twice");
+            // Occupy the bounded slot, then close while a second producer is
+            // publishing. close must wake it regardless of its scheduling.
+            require(frames.publish(std::move(*completed)), "frame slot was not reusable");
+            std::promise<void> entering;
+            auto entered = entering.get_future();
+            bool acceptedAfterClose = true;
+            std::thread blocked([&] {
+                entering.set_value();
+                acceptedAfterClose = frames.publish({});
+            });
+            entered.wait();
+            frames.close();
+            blocked.join();
+            require(!acceptedAfterClose && !frames.tryTake(), "closed handoff retained or accepted a frame");
+            frames.close();
             bool rejected = false;
             try { device.uploadRGBA(destination, std::span<const Uint8>(expected).first(1)); }
             catch (const std::invalid_argument &) { rejected = true; }
