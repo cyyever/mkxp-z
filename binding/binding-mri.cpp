@@ -951,62 +951,39 @@ static void runRMXPScripts(BacktraceData &btData) {
 
 static void showExc(VALUE exc, const BacktraceData &btData) {
     VALUE bt = rb_funcall2(exc, rb_intern("backtrace"), 0, nullptr);
-    VALUE msg = rb_funcall2(exc, rb_intern("message"), 0, nullptr);
-    VALUE bt0 = rb_ary_entry(bt, 0);
+    VALUE msg = rb_obj_as_string(rb_funcall2(exc, rb_intern("message"), 0, nullptr));
+    const long count = RB_TYPE_P(bt, RUBY_T_ARRAY) ? RARRAY_LEN(bt) : 0;
+    VALUE bt0 = count ? rb_ary_entry(bt, 0) : Qnil;
     VALUE name = rb_class_path(rb_obj_class(exc));
-    
-    VALUE ds = rb_sprintf("%" PRIsVALUE ": %" PRIsVALUE " (%" PRIsVALUE ")",
-                          bt0, exc, name);
-    /* omit "useless" last entry (from ruby:1:in `eval') */
-    for (long i = 1, btlen = RARRAY_LEN(bt) - 1; i < btlen; ++i)
-        rb_str_catf(ds, "\n\tfrom %" PRIsVALUE,
-                    rb_ary_entry(bt, i));
-    Debug() << StringValueCStr(ds);
-    
-    char *s = RSTRING_PTR(bt0);
-    
-    char line[16];
-    std::string file(512, '\0');
-    
-    char *p = s + strlen(s);
-    char *e;
-    
-    while (p != s)
-        if (*--p == ':')
-            break;
-    
-    e = p;
-    
-    while (p != s)
-        if (*--p == ':')
-            break;
-    
-    /* s         p  e
-     * SectionXXX:YY: in 'blabla' */
-    
-    *e = '\0';
-    strncpy(line, *p ? p + 1 : p, sizeof(line));
-    line[sizeof(line) - 1] = '\0';
-    *e = ':';
-    e = p;
-    
-    /* s         e
-     * SectionXXX:YY: in 'blabla' */
-    
-    *e = '\0';
-    strncpy(&file[0], s, file.size());
-    *e = ':';
-    
-    /* Shrink to fit */
-    file.resize(strlen(file.c_str()));
+
+    VALUE ds = rb_sprintf("%" PRIsVALUE ": %" PRIsVALUE " (%" PRIsVALUE ")", bt0, exc, name);
+    // Keep the existing omission of Ruby's final eval wrapper entry.
+    for (long i = 1; i + 1 < count; ++i)
+        rb_str_catf(ds, "\n\tfrom %" PRIsVALUE, rb_ary_entry(bt, i));
+    Debug() << std::string_view(RSTRING_PTR(ds), RSTRING_LEN(ds));
+
+    std::string file = "(unknown)";
+    std::string line = "?";
+    if (RB_TYPE_P(bt0, RUBY_T_STRING)) {
+        std::string_view location(RSTRING_PTR(bt0), RSTRING_LEN(bt0));
+        // Backtrace strings may be frozen/shared. Parse without modifying Ruby memory.
+        const auto method = location.rfind(":in ");
+        if (method != std::string_view::npos) location = location.substr(0, method);
+        const auto separator = location.rfind(':');
+        file = location;
+        if (separator != std::string_view::npos) {
+            const auto number = location.substr(separator + 1);
+            if (!number.empty() && number.find_first_not_of("0123456789") == std::string_view::npos) {
+                file = location.substr(0, separator);
+                line = number;
+            }
+        }
+    }
     if (const auto it = btData.scriptNames.find(file); it != btData.scriptNames.end())
         file = it->second;
-    
-    std::string ms(640, '\0');
-    snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s",
-             file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg));
-    
-    showMsg(ms);
+    showMsg(std::format("Script '{}' line {}: {} occurred.\n\n{}", file, line,
+                       std::string_view(RSTRING_PTR(name), RSTRING_LEN(name)),
+                       std::string_view(RSTRING_PTR(msg), RSTRING_LEN(msg))));
 }
 
 static void mriBindingExecute() {
