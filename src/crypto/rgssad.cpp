@@ -380,11 +380,11 @@ static void*
 RGSS_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 {
 	if (forWrite)
-		return NULL;
+		return nullptr;
 
 	/* Version 1 */
 	if (!verifyHeader(io, 1))
-		return NULL;
+		return nullptr;
 	else
 		*claimed = 1;
 
@@ -589,18 +589,18 @@ static void*
 RGSS3_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 {
 	if (forWrite)
-		return NULL;
+		return nullptr;
 
 	/* Version 3 */
 	if (!verifyHeader(io, 3))
-		return NULL;
+		return nullptr;
 	else
 		*claimed = 1;
 
 	uint32_t baseMagic;
 
 	if (!readUint32(io, baseMagic))
-		return NULL;
+		return nullptr;
 
 	baseMagic = (baseMagic * 9) + 3;
 
@@ -657,7 +657,7 @@ RGSS3_openArchive(PHYSFS_Io *io, const char *, int forWrite, int *claimed)
 
 	error:
 		delete data;
-		return NULL;
+		return nullptr;
 	}
 
 	return data;

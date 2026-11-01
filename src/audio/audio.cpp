@@ -28,11 +28,11 @@
 #include "sdl-util.h"
 #include "exception.h"
 
+#include <thread>
 #include <string>
 #include <vector>
 
 #include <SDL3/SDL_thread.h>
-#include <SDL3/SDL_timer.h>
 
 struct AudioPrivate
 {
@@ -102,8 +102,8 @@ struct AudioPrivate
 
 	void meWatchFun()
 	{
-		const float fadeOutStep = 1.f / (200  / AUDIO_SLEEP);
-		const float fadeInStep  = 1.f / (1000 / AUDIO_SLEEP);
+		const float fadeOutStep = 1.f / (std::chrono::milliseconds{200}  / AUDIO_SLEEP);
+		const float fadeInStep  = 1.f / (std::chrono::milliseconds{1000} / AUDIO_SLEEP);
 
 		while (true)
 		{
@@ -257,7 +257,7 @@ struct AudioPrivate
 			}
 			}
 
-			SDL_Delay(AUDIO_SLEEP);
+			std::this_thread::sleep_for(AUDIO_SLEEP);
 		}
 	}
 };

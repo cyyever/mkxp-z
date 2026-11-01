@@ -169,7 +169,7 @@ kernelLoadDataInt(const char *filename, bool rubyExc, bool raw) {
         result = fileIntRead(0, 0, port);
     }
     
-    rb_funcall2(port, rb_intern("close"), 0, NULL);
+    rb_funcall2(port, rb_intern("close"), 0, nullptr);
     
     return result;
 }
