@@ -42,15 +42,21 @@ static void testChanges() {
     search.add(game);
     check(read(search, "graphics/HERO.PNG") == "game", "initial case-insensitive cache lookup");
     check(search.cachedEntry("smoke.png") == nullptr, "screenshot absent before creation");
+    const auto beforeSave = fs::last_write_time(game);
     write(game / "smoke.png", "saved screenshot");
+    fs::last_write_time(game, beforeSave);
     check(read(search, "SMOKE.PNG") == "saved screenshot", "new screenshot visible after startup cache");
     write(patch / "Graphics/hero.PNG", "patch");
     check(read(search, "graphics/HERO.png") == "patch", "new patch shadows cached lower-priority file");
     const auto *spelling = search.cachedEntry("graphics/hero.png");
     check(spelling && spelling->mixed == "Graphics/hero.PNG", "keep actual virtual spelling");
+    const auto beforeDelete = fs::last_write_time(patch / "Graphics");
     fs::remove(patch / "Graphics/hero.PNG");
+    fs::last_write_time(patch / "Graphics", beforeDelete);
     check(read(search, "graphics/hero.png") == "game", "deleted patch reveals game file");
+    const auto beforeScreenshotDelete = fs::last_write_time(game);
     fs::remove(game / "smoke.png");
+    fs::last_write_time(game, beforeScreenshotDelete);
     check(search.cachedEntry("smoke.png") == nullptr, "deleted resource leaves cache");
     check(search.cachedList("screenshots/new").empty(), "new nested directory initially absent");
     write(game / "Screenshots/New/Frame.PNG", "nested");
@@ -64,6 +70,27 @@ static void testChanges() {
     check(search.cachedEntry(game / "Graphics/Hero.png") == nullptr, "cache rejects absolute paths");
     search.remove(patch);
     check(search.cachedEntry("dlc/textures/graphics/extra.png") == nullptr, "unmounted cache entries disappear");
+}
+
+static void testExplicitRetry() {
+    TempDirectory temp;
+    const auto patch = temp.root / "patch", game = temp.root / "game";
+    write(patch / "Graphics/Hero.PNG", "patch");
+    write(game / "Graphics/hero.png", "game");
+    DirectorySearch search(false);
+    search.add(patch);
+    search.add(game);
+    check(search.cachedList("graphics").at("hero.png").actual == patch / "Graphics/Hero.PNG",
+          "initial merged list selects patch");
+    const auto beforeDelete = fs::last_write_time(patch / "Graphics");
+    fs::remove(patch / "Graphics/Hero.PNG");
+    fs::last_write_time(patch / "Graphics", beforeDelete);
+    // FileSystem::openRead performs this retry only after its selected-path stat
+    // finds a missing entry; successful hits never stat every directory entry.
+    search.invalidateCache("graphics/");
+    const auto &entry = search.cachedList("GRAPHICS").at("hero.png");
+    check(entry.actual == game / "Graphics/hero.png" && paths::readFile(entry.actual) == "game",
+          "explicit merged-list retry reveals lower priority same-key file");
 }
 
 static void testUnicodeAndSymlinks() {
@@ -109,6 +136,7 @@ static void testUnicodeAndSymlinks() {
 int main() {
     try {
         testChanges();
+        testExplicitRetry();
         testUnicodeAndSymlinks();
         std::cout << "Directory cache tests passed\n";
         return 0;

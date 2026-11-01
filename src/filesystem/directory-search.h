@@ -50,6 +50,13 @@ private:
     bool allowSymlinks;
     mutable std::map<std::string, CachedDirectory> cache;
 
+    static std::filesystem::path cacheDirectory(std::filesystem::path directory) {
+        directory = directory.lexically_normal();
+        if (directory == ".") directory.clear();
+        while (!directory.empty() && directory.filename().empty()) directory = directory.parent_path();
+        return directory;
+    }
+
     static Stamp stamp(const std::filesystem::path &path) {
         std::error_code error;
         const auto time = std::filesystem::last_write_time(path, error);
@@ -144,6 +151,13 @@ public:
 
     void clearCache() const { cache.clear(); }
 
+    // Retry a known miss without relying on directory mtime granularity.
+    void invalidateCache(std::filesystem::path directory) const {
+        if (!valid(directory)) return;
+        directory = cacheDirectory(std::move(directory));
+        cache.erase(key(paths::toUtf8(directory.generic_u8string())));
+    }
+
     void add(const std::filesystem::path &root, std::filesystem::path point = {}) {
         if (point == "/" || point == ".") point.clear();
         point = point.lexically_normal();
@@ -182,9 +196,7 @@ public:
     const CachedEntries &cachedList(std::filesystem::path directory) const {
         static const CachedEntries empty;
         if (!valid(directory)) return empty;
-        directory = directory.lexically_normal();
-        if (directory == ".") directory.clear();
-        while (!directory.empty() && directory.filename().empty()) directory = directory.parent_path();
+        directory = cacheDirectory(std::move(directory));
         auto &cached = cache[key(paths::toUtf8(directory.generic_u8string()))];
         if (cached.ready && std::ranges::all_of(cached.stamps, [](const auto &observed) {
                 return stamp(observed.first) == observed.second;
@@ -210,9 +222,19 @@ public:
 
     const CachedEntry *cachedEntry(const std::filesystem::path &name) const {
         if (!valid(name)) return nullptr;
-        const auto &directory = cachedList(name.parent_path());
-        const auto entry = directory.find(key(paths::toUtf8(name.filename().u8string())));
-        return entry == directory.end() ? nullptr : &entry->second;
+        const auto find = [&]() -> const CachedEntry * {
+            const auto &directory = cachedList(name.parent_path());
+            const auto entry = directory.find(key(paths::toUtf8(name.filename().u8string())));
+            return entry == directory.end() ? nullptr : &entry->second;
+        };
+        const auto *entry = find();
+        // Stat just the selected entry, not every name in the directory. A
+        // cache miss also retries once so new screenshots survive coarse mtimes.
+        if (!entry || (!entry->actual.empty() && !std::filesystem::exists(entry->actual))) {
+            invalidateCache(name.parent_path());
+            entry = find();
+        }
+        return entry;
     }
 };
 
