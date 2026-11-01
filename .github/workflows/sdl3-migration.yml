@@ -105,6 +105,8 @@ jobs:
       - name: Check Ruby and SDL3 IO ownership
         if: runner.os == 'Linux'
         run: |
+          ruby_pkgconfig="$(ruby -rrbconfig -e 'puts RbConfig::CONFIG.fetch("libdir")')/pkgconfig"
+          export PKG_CONFIG_PATH="$ruby_pkgconfig:$PKG_CONFIG_PATH"
           meson setup build/io tests/io --buildtype=release -Dcmake_prefix_path="$CMAKE_PREFIX_PATH"
           meson test -C build/io --print-errorlogs
       - name: Upload build and test diagnostics
