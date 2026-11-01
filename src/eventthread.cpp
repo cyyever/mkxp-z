@@ -47,10 +47,6 @@
 
 #include "debugwriter.h"
 
-#ifndef SDL_PLATFORM_APPLE
-#include "util/string-util.h"
-#endif
-
 #include <string.h>
 
 
@@ -520,19 +516,10 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                     case REQUEST_MESSAGEBOX :
                     {
-#ifndef SDL_PLATFORM_APPLE
-                        // Try to format the message with additional newlines
-                        std::string message = copyWithNewlines((const char*) event.user.data1,
-                                                               70);
-                        SDL_ShowSimpleMessageBox(event.user.code,
-                                                 rtData.config.windowTitle.c_str(),
-                                                 message.c_str(), win);
-#else
                         SDL_ShowSimpleMessageBox(event.user.code,
                                                  rtData.config.windowTitle.c_str(),
                                                  (const char*)event.user.data1, win);
-#endif
-                        free(event.user.data1);
+                        SDL_free(event.user.data1);
                         msgBoxDone = true;
                         break;
                     }
@@ -606,7 +593,7 @@ void EventThread::cleanup()
     
     while (SDL_PollEvent(&event))
         if ((event.type - usrIdStart) == REQUEST_MESSAGEBOX)
-            free(event.user.data1);
+            SDL_free(event.user.data1);
 }
 
 void EventThread::resetInputStates()
@@ -724,7 +711,7 @@ void EventThread::showMessageBox(const char *body, int flags)
     
     SDL_Event event;
     event.user.code = flags;
-    event.user.data1 = strdup(body);
+    event.user.data1 = SDL_strdup(body);
     event.type = usrIdStart + REQUEST_MESSAGEBOX;
     SDL_PushEvent(&event);
     
