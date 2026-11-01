@@ -10,6 +10,7 @@
 #include <assert.h>
 
 #include <ranges>
+#include <memory>
 #include <format>
 #include <vector>
 
@@ -28,12 +29,8 @@
 namespace json = json5pp;
 
 std::string prefPath(const char *org, const char *app) {
-    char *path = SDL_GetPrefPath(org, app);
-    if (!path)
-        return std::string("");
-    std::string ret(path);
-    SDL_free(path);
-    return ret;
+    std::unique_ptr<char, decltype(&SDL_free)> path(SDL_GetPrefPath(org, app), SDL_free);
+    return path ? path.get() : "";
 }
 
 void fillStringVec(json::value &item, std::vector<std::string> &vector) {
