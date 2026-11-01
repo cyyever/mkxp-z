@@ -709,13 +709,13 @@ Bitmap::Bitmap(TEXFBO &other)
         p->gl.selfHires = &p->selfHires->getRenderTarget();
     }
 
-    // Skip blitting to lores texture, since only the hires one will be displayed.
-    if (p->selfHires == nullptr) {
-        RenderOps::blitBegin(p->gl, false, SameScale);
-        RenderOps::blitSource(other, SameScale);
-        RenderOps::blitRectangle(rect(), rect());
-        RenderOps::blitEnd();
-    }
+    // The logical bitmap is also read directly by get_pixel and saveToFile.
+    // A snapshot source may only have storage in its high-resolution child.
+    const int scale = RenderOps::blitScaleIsSpecial(p->gl, false, rect(), other, rect());
+    RenderOps::blitBegin(p->gl, false, scale);
+    RenderOps::blitSource(other, scale);
+    RenderOps::blitRectangle(rect(), rect());
+    RenderOps::blitEnd();
 
     if (width() > INT16_MAX || height() > INT16_MAX)
     {

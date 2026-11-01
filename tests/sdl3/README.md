@@ -26,3 +26,7 @@ The smoke uses isolated temporary files and bundled assets, and checks image
 loading/saving with the path cache enabled, font cloning/rendering and GC, JSON
 settings, Windows function pointers, an 800x600 resize and screenshot disposal.
 No game archives or speakers are required. It is not a gameplay test.
+
+Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE` for the isolated 3x
+HiRes snapshot regression. It checks logical and physical RGBA pixels, their
+640x480 / 1920x1440 PNG dimensions, and the logical Graphics.screenshot output.
