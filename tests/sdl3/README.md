@@ -35,6 +35,10 @@ Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/hires-readbac
 to check lazy logical readback after HiRes stretch, text, hue and direct-child
 mutations, exact raw replacement bytes, and replacement/disposal lifetime.
 
+Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/hires-tilemap.rb` to check
+that Tilemap autotiles and tilesets with HiRes children keep their physical-pixel
+detail, and that animated autotiles match between logical and physical snapshots.
+
 Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/mega-surface-flip.rb --no-hires`
 to verify SDL mega-surface crop/flips, clipping, nearest scaling and RGBA opacity.
 
