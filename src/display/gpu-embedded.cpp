@@ -18,6 +18,7 @@ std::unique_ptr<QuadPipeline> createEnginePipelines(SDL_GPUDevice *device) {
     QuadPipeline::FragmentShaders fragments{};
     for (size_t i=0;i<fragments.size();++i) {
         const auto program = static_cast<Program>(i);
+        if (program == Program::Weather) continue; // Optional game-owned offline artifact.
 #ifndef MKXPZ_HAVE_EXTRA_SHADERS
         if (program == Program::Xbrz) continue;
 #endif

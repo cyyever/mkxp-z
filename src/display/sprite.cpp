@@ -38,6 +38,9 @@
 
 #include <math.h>
 #include <numbers>
+#include <memory>
+#include <algorithm>
+#include "exception.h"
 
 #include <SDL3/SDL_rect.h>
 
@@ -49,10 +52,25 @@ static float fwrap(float value, float range)
     return res < 0 ? res + range : res;
 }
 
+class WeatherSpriteShader final : public ShaderBase {
+public:
+    WeatherSpriteShader() : ShaderBase(gpu::Program::Weather) {}
+    void configure(const float *transform, int type, int width, int height, float opacity) {
+        std::copy_n(transform,16,state.vertex.transform);
+        state.fragment.parameters[0]=float(type);
+        state.fragment.parameters[1]=float(width);
+        state.fragment.parameters[2]=float(height);
+        state.fragment.color[0]=state.fragment.color[1]=state.fragment.color[2]=1;
+        state.fragment.color[3]=opacity;
+    }
+};
+
 struct SpritePrivate
 {
     Bitmap *bitmap;
     Bitmap *realBitmap;
+    int weatherType = 0;
+    std::unique_ptr<WeatherSpriteShader> weatherShader;
     
     SignalConnection bitmapDispCon;
     
@@ -651,6 +669,7 @@ Sprite::~Sprite()
     dispose();
 }
 
+DEF_ATTR_RD_SIMPLE(Sprite, WeatherType, int, p->weatherType)
 DEF_ATTR_RD_SIMPLE(Sprite, Bitmap,     Bitmap*, p->realBitmap)
 DEF_ATTR_RD_SIMPLE(Sprite, X,          int,     p->trans.getPosition().x)
 DEF_ATTR_RD_SIMPLE(Sprite, Y,          int,     p->trans.getPosition().y)
@@ -683,6 +702,15 @@ DEF_ATTR_SIMPLE(Sprite, PatternScrollY, int, p->patternScroll.y)
 DEF_ATTR_SIMPLE(Sprite, PatternZoomX, float, p->patternZoom.x)
 DEF_ATTR_SIMPLE(Sprite, PatternZoomY, float, p->patternZoom.y)
 DEF_ATTR_SIMPLE(Sprite, Invert,      bool,    p->invert)
+
+void Sprite::setWeatherType(int value)
+{
+    guardDisposed();
+    if (value < 0 || value > 3)
+        throw Exception(Exception::ArgumentError,"weather_type must be between 0 and 3");
+    if (value && !p->weatherShader) p->weatherShader=std::make_unique<WeatherSpriteShader>();
+    p->weatherType=value;
+}
 
 void Sprite::setBitmap(Bitmap *bitmap)
 {
@@ -992,7 +1020,15 @@ void Sprite::draw()
         scalingMethod = shState->config().bitmapSmoothScaling;
     }
 
-    if (renderEffect)
+    if (p->weatherType)
+    {
+        auto &shader=*p->weatherShader;
+        shader.configure(p->trans.getMatrix(),p->weatherType,p->bitmap->width(),p->bitmap->height(),p->opacity.norm);
+        shader.bind();
+        shader.applyViewportProj();
+        base=&shader;
+    }
+    else if (renderEffect)
     {
         if (scalingMethod != NearestNeighbor)
         {

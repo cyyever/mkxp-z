@@ -7,7 +7,7 @@
 #include <tuple>
 
 namespace gpu {
-enum class Program { Simple, FlatColor, VertexColor, VertexAlpha, UniformAlpha, Plane, Transition, SimpleTransition, BitmapBlend, Hue, Sprite, Tilemap, FlashMap, Gray, Blur, Invert, CompressAlpha, Subtract, Bicubic, Lanczos, ShadowHorizontal, ShadowVertical, Xbrz, Count };
+enum class Program { Simple, FlatColor, VertexColor, VertexAlpha, UniformAlpha, Plane, Transition, SimpleTransition, BitmapBlend, Hue, Sprite, Tilemap, FlashMap, Gray, Blur, Invert, CompressAlpha, Subtract, Bicubic, Lanczos, ShadowHorizontal, ShadowVertical, Xbrz, Weather, Count };
 enum class Blend { Disabled, Normal, Addition, Subtraction, KeepDestinationAlpha, ColorAdditionKeepDestinationAlpha, ColorSubtractionKeepDestinationAlpha };
 struct QuadVertex { float position[2]; float texcoord[2]; float color[4]; };
 struct alignas(16) VertexParameters {
@@ -80,6 +80,7 @@ public:
     static const char *entryPoint(Program);
     static Uint32 samplerCount(Program);
 private:
+    void loadWeatherShader();
     SDL_GPUDevice *device;
     Shader vertex;
     std::unique_ptr<Shader> tilemapVertex;
