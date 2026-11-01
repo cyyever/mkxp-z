@@ -30,3 +30,7 @@ No game archives or speakers are required. It is not a gameplay test.
 Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE` for the isolated 3x
 HiRes snapshot regression. It checks logical and physical RGBA pixels, their
 640x480 / 1920x1440 PNG dimensions, and the logical Graphics.screenshot output.
+
+Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/hires-readback.rb`
+to check lazy logical readback after HiRes stretch, text, hue and direct-child
+mutations, exact raw replacement bytes, and replacement/disposal lifetime.

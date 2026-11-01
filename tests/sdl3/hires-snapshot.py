@@ -11,13 +11,14 @@ import tempfile
 def main():
     binary = Path(sys.argv[1]).resolve()
     source = Path(__file__).resolve()
+    script = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else source.with_suffix('.rb')
     with tempfile.TemporaryDirectory(prefix='mkxp-hires-snapshot-') as directory:
         fixture = Path(directory)
         executable = fixture / binary.name
         shutil.copy2(binary, executable)
         config = {
             'rgssVersion': 1, 'gameFolder': str(fixture),
-            'customScript': str(source.with_suffix('.rb')),
+            'customScript': str(script),
             'RTP': [str(source.parents[2] / 'assets')],
             'enableSettings': False, 'winConsole': False,
             'defScreenW': 640, 'defScreenH': 480, 'enableHires': True,
@@ -33,7 +34,7 @@ def main():
         status = report.read_text(encoding='utf-8') if report.exists() else 'MISSING RESULT'
         if result.returncode or status != 'PASS':
             raise RuntimeError(f'{status}\nexit={result.returncode}\n{result.stdout}\n{result.stderr}')
-        print('PASS: 3x logical/hires RGBA, PNG dimensions and screenshot reload')
+        print(f'PASS: {script.name}')
 
 
 if __name__ == '__main__':
