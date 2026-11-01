@@ -25,14 +25,12 @@
 #include "exception.h"
 
 #include <thread>
-#include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_timer.h>
 
-AudioStream::AudioStream(ALStream::LoopMode loopMode,
-                         const std::string &threadId)
+AudioStream::AudioStream(ALStream::LoopMode loopMode)
 	: extPaused(false),
 	  noResumeStop(false),
-	  stream(loopMode, threadId)
+	  stream(loopMode)
 {
 	current.volume = 1.0f;
 	current.pitch = 1.0f;
@@ -40,27 +38,14 @@ AudioStream::AudioStream(ALStream::LoopMode loopMode,
 	for (size_t i = 0; i < VolumeTypeCount; ++i)
 		volumes[i] = 1.0f;
 
-	fade.thread = 0;
-	fade.threadName = std::string("audio_fadeout (") + threadId + ")";
-
-	fadeIn.thread = 0;
-	fadeIn.threadName = std::string("audio_fadein (") + threadId + ")";
 
 }
 
 AudioStream::~AudioStream()
 {
-	if (fade.thread)
-	{
-		fade.reqTerm = true;
-		SDL_WaitThread(fade.thread, 0);
-	}
-
-	if (fadeIn.thread)
-	{
-		fadeIn.rqTerm = true;
-		SDL_WaitThread(fadeIn.thread, 0);
-	}
+	/* Assigning an empty jthread requests stop and joins */
+	fade.thread = {};
+	fadeIn.thread = {};
 
 	auto lock = lockStream();
 
@@ -175,21 +160,18 @@ void AudioStream::fadeOut(int duration)
 		return;
 	}
 
-	if (fade.thread)
+	if (fade.thread.joinable())
 	{
 		fade.reqFini = true;
-		SDL_WaitThread(fade.thread, 0);
-		fade.thread = 0;
+		fade.thread.join();
 	}
 
 	fade.active = true;
 	fade.msStep = 1.0f / duration;
 	fade.reqFini = false;
-	fade.reqTerm = false;
 	fade.startTicks = SDL_GetTicks();
 
-	fade.thread = createSDLThread
-		<AudioStream, &AudioStream::fadeOutThread>(this, fade.threadName);
+	fade.thread = std::jthread([this](std::stop_token stop) { fadeOutThread(stop); });
 }
 
 void AudioStream::seek(double offset)
@@ -226,40 +208,36 @@ void AudioStream::updateVolume()
 
 void AudioStream::finiFadeOutInt()
 {
-	if (fade.thread)
+	if (fade.thread.joinable())
 	{
 		fade.reqFini = true;
-		SDL_WaitThread(fade.thread, 0);
-		fade.thread = 0;
+		fade.thread.join();
 	}
 
-	if (fadeIn.thread)
+	if (fadeIn.thread.joinable())
 	{
 		fadeIn.rqFini = true;
-		SDL_WaitThread(fadeIn.thread, 0);
-		fadeIn.thread = 0;
+		fadeIn.thread.join();
 	}
 }
 
 void AudioStream::startFadeIn()
 {
 	/* Previous fadein should always be terminated in play() */
-	assert(!fadeIn.thread);
+	assert(!fadeIn.thread.joinable());
 
 	fadeIn.rqFini = false;
-	fadeIn.rqTerm = false;
 	fadeIn.startTicks = SDL_GetTicks();
 
-	fadeIn.thread = createSDLThread
-		<AudioStream, &AudioStream::fadeInThread>(this, fadeIn.threadName);
+	fadeIn.thread = std::jthread([this](std::stop_token stop) { fadeInThread(stop); });
 }
 
-void AudioStream::fadeOutThread()
+void AudioStream::fadeOutThread(std::stop_token stop)
 {
 	while (true)
 	{
 		/* Just immediately terminate on request */
-		if (fade.reqTerm)
+		if (stop.stop_requested())
 			break;
 
 		auto lock = lockStream();
@@ -289,11 +267,11 @@ void AudioStream::fadeOutThread()
 	fade.active = false;
 }
 
-void AudioStream::fadeInThread()
+void AudioStream::fadeInThread(std::stop_token stop)
 {
 	while (true)
 	{
-		if (fadeIn.rqTerm)
+		if (stop.stop_requested())
 			break;
 
 		auto lock = lockStream();

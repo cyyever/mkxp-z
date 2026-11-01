@@ -32,7 +32,6 @@
 #include <string>
 #include <vector>
 
-#include <SDL3/SDL_thread.h>
 
 struct AudioPrivate
 {
@@ -62,32 +61,29 @@ struct AudioPrivate
 
 	struct
 	{
-		SDL_Thread *thread;
-		std::atomic<bool> termReq{false};
+		std::jthread thread;
 		MeWatchState state;
 	} meWatch;
 
 	AudioPrivate(RGSSThreadData &rtData)
-	    : bgs(ALStream::Looped, "bgs"),
-	      me(ALStream::NotLooped, "me"),
+	    : bgs(ALStream::Looped),
+	      me(ALStream::NotLooped),
 	      se(rtData.config),
 	      syncPoint(rtData.syncPoint),
           volumeRatio(1)
 	{
         for (int i = 0; i < rtData.config.BGM.trackCount; i++) {
-            std::string id = std::string("bgm" + std::to_string(i));
-            bgmTracks.push_back(new AudioStream(ALStream::Looped, id.c_str()));
+            bgmTracks.push_back(new AudioStream(ALStream::Looped));
         }
         
 		meWatch.state = MeNotPlaying;
-		meWatch.thread = createSDLThread
-			<AudioPrivate, &AudioPrivate::meWatchFun>(this, "audio_mewatch");
+		meWatch.thread = std::jthread([this](std::stop_token stop) { meWatchFun(stop); });
 	}
 
 	~AudioPrivate()
 	{
-		meWatch.termReq = true;
-		SDL_WaitThread(meWatch.thread, 0);
+		/* Assigning an empty jthread requests stop and joins */
+		meWatch.thread = {};
         for (auto track : bgmTracks)
             delete track;
 	}
@@ -100,7 +96,7 @@ struct AudioPrivate
         return bgmTracks[index];
     }
 
-	void meWatchFun()
+	void meWatchFun(std::stop_token stop)
 	{
 		const float fadeOutStep = 1.f / (std::chrono::milliseconds{200}  / AUDIO_SLEEP);
 		const float fadeInStep  = 1.f / (std::chrono::milliseconds{1000} / AUDIO_SLEEP);
@@ -109,7 +105,7 @@ struct AudioPrivate
 		{
 			syncPoint.passSecondarySync();
 
-			if (meWatch.termReq)
+			if (stop.stop_requested())
 				return;
 
 			switch (meWatch.state)

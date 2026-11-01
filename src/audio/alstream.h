@@ -27,6 +27,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <string>
 #include <SDL3/SDL_iostream.h>
 
@@ -50,10 +51,6 @@ struct ALStream
 	State state;
 
 	ALDataSource *source;
-	SDL_Thread *thread;
-
-	std::string threadName;
-
 	std::mutex pauseMut;
 	bool preemptPause;
 
@@ -62,8 +59,6 @@ struct ALStream
 	 * (it just hasn't started yet) */
 	std::atomic<bool> streamInited{false};
 	std::atomic<bool> sourceExhausted{false};
-
-	std::atomic<bool> threadTermReq{false};
 
 	std::atomic<bool> needsRewind{false};
 	double startOffset;
@@ -88,8 +83,7 @@ struct ALStream
 		NotLooped
 	};
 
-	ALStream(LoopMode loopMode,
-	         const std::string &threadId);
+	ALStream(LoopMode loopMode);
 	~ALStream();
 
 	void close();
@@ -116,7 +110,10 @@ private:
 	void checkStopped();
 
 	/* thread func */
-	void streamData();
+	void streamData(std::stop_token stop);
+
+	/* Declared last so it is joined before the members it uses are destroyed */
+	std::jthread thread;
 };
 
 #endif // ALSTREAM_H

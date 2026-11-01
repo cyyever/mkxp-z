@@ -26,6 +26,7 @@
 #include "util/paths.h"
 #include <SDL3/SDL_main.h>
 #include <cstdlib>
+#include <thread>
 
 #include "icon.png.xxd"
 
@@ -420,7 +421,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* Start RGSS thread */
-    SDL_Thread *rgssThread = SDL_CreateThread(rgssThreadFun, "rgss", &rtData);
+    std::jthread rgssThread(rgssThreadFun, &rtData);
 
     /* Start event processing */
     eventThread.process(rtData);
@@ -442,13 +443,16 @@ int main(int argc, char *argv[]) {
 
     /* If RGSS thread ack'd request, wait for it to shutdown,
      * otherwise abandon hope and just end the process as is. */
-    if (rtData.rqTermAck)
-      SDL_WaitThread(rgssThread, 0);
-    else
+    if (rtData.rqTermAck) {
+      rgssThread.join();
+    } else {
+      /* Don't block on a stuck thread; the process exits without it */
+      rgssThread.detach();
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
           std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str(),
           win);
+    }
 
     if (!rtData.rgssErrorMsg.empty()) {
       Debug() << rtData.rgssErrorMsg;

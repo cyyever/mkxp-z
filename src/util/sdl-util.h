@@ -1,26 +1,12 @@
 #ifndef SDLUTIL_H
 #define SDLUTIL_H
 
-#include <SDL3/SDL_thread.h>
 #include <SDL3/SDL_iostream.h>
 
 #include <string>
 #include <iostream>
 #include <cstring>
 #include <memory>
-
-template<class C, void (C::*func)()>
-int __sdlThreadFun(void *obj)
-{
-	(static_cast<C*>(obj)->*func)();
-	return 0;
-}
-
-template<class C, void (C::*func)()>
-SDL_Thread *createSDLThread(C *obj, const std::string &name = std::string())
-{
-	return SDL_CreateThread((__sdlThreadFun<C, func>), name.c_str(), obj);
-}
 
 // A decoder may own its IO handle while the underlying stream must survive
 // a format retry. SDL3 streams are opaque and cannot be copied like RWops.
