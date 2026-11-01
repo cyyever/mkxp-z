@@ -45,12 +45,11 @@ meson test -C build/core --print-errorlogs
 Run these commands from a Visual Studio developer shell when using MSVC.
 The core test workflow covers Linux GCC/Clang, macOS C++/Objective-C++, and
 Windows MSVC. These tests cover the production filesystem, serialization,
-notification lifetimes and text encoding selection; they do not establish full
-MSVC engine support or test game rendering.
+notification lifetimes and text encoding selection; they do not test game rendering.
 Windows engine builds require a native MSVC-compatible toolchain. MinGW cross
 compilation is unsupported. Native MSVC engine builds and rendering smoke tests
-have passed locally; the hosted Windows workflow migration is pending publication.
-The obsolete `cxx11_experimental` build option has been removed.
+have passed locally. Hosted native API checks and full renderer validation are
+separate; see [SDL3 CI](.github/SDL3-CI.md).
 
 <p align="center"><b>
   <a href="https://github.com/mkxp-z/mkxp-z/actions/workflows/autobuild.yml?query=event%3Apush">Automatic Builds</a>
@@ -66,26 +65,23 @@ The obsolete `cxx11_experimental` build option has been removed.
     <img src="screenshot.png?raw=true" width=512 height=412>
 </p>
 
-This is a fork of mkxp intended to be a little more than just a barebones recreation of RPG Maker. The original goal was successfully running games based on Pokemon Essentials, which is notoriously dependent on Windows APIs. I'd consider that mission accomplished.
+This fork runs RPG Maker game scripts with embedded MRI Ruby and SDL3. The
+renderer uses SDL_GPU resources, offline shaders and native presentation;
+Windows builds use Direct3D 12. The previous OpenGL/ANGLE renderer is removed.
+The full native engine build has been validated with Windows MSVC/Direct3D 12;
+non-Windows shader embedding and full-engine integration remain unfinished.
+The desktop target policy above does not imply those renderer paths are ready.
+Existing RGSS logical coordinates, high-resolution bitmap APIs and scaling
+options remain available independently of the physical window size.
 
-Despite the fact that it was made with Essentials games in mind, there is nothing connected to it contained in this repository, and it should still be compatible with anything that runs in the upstream version of MKXP. You can think of it as MKXP but a bit supercharged --  it should be able to run all but the most demanding of RGSS projects, given a bit of porting work.
-
-It supports Windows, Linux (x86, ARM, and POWER), and both Intel and Apple Silicon versions of macOS.
+Runtime images use PNG and audio uses WAV/FLAC. The optional
+[asset converter](tools/asset-convert/README.md) can rebuild legacy assets before
+launch; it does not recover information lost by lossy source compression.
 
 mkxp-z is licensed under the GNU General Public License v2+.
 
 ## Bindings
 Bindings provide the glue code for an interpreted language environment to run game scripts in. mkxp-z focuses on MRI and as such the mruby and null bindings are not included.
-
-## macOS Controller Support
-
-Binding controller buttons on macOS is slightly different depending on which version you are running. Binding specific buttons requires different versions of the operating system:
-
-+ **Thumbstick Button (L3/R3, LS/RS, L↓/R↓)**: macOS Mojave 10.14.1+
-+ **Start/Select (Options/Share, Menu/Back, Plus/Minus)**: macOS Catalina 10.15+
-+ **Home (Guide, PS)**: macOS Big Sur 11.0+
-
-Technically, while SDL itself might support these buttons, the keybinding menu had to be rewritten in Cocoa in a hurry, as switching away from native OpenGL broke the original keybinding menu. (ANGLE is used instead, to prevent crashing on Apple Silicon releases of macOS, and to help mkxp switch to Metal)
 
 ## Fonts
 

@@ -2,14 +2,17 @@
 
 The SDL3 migration workflow builds the source versions and verifies the SHA-256
 hashes recorded in the SDL3, SDL3_image, SDL3_ttf and FreeType wraps. It installs
-a shared native SDK, with stb PNG/JPEG support and static FreeType. Optional
+a shared native SDK with SDL native PNG, optional stb JPEG and static FreeType.
+JPEG is enabled in this API-test SDK for converter coverage; production runtime
+images remain PNG-only. Other optional
 image codecs and font-shaping dependencies are disabled for this focused suite.
 
 The jobs compile and run the real SDL APIs used by `tests/sdl3` and the production
 audio state machine in `tests/audio`. Linux also tests the production Ruby IO
-bindings in `tests/io` with Ruby >= 3.4. The full Ubuntu engine build runs
-`tests/sdl3/engine-smoke.py` under Xvfb/Mesa to catch renderer-thread and graphics
-lock failures that dummy-driver tests cannot exercise.
+bindings in `tests/io` with Ruby >= 3.4. These focused tests use dummy drivers
+and do not validate SDL_GPU rendering. The full engine smoke and native GPU
+pixel checks require a working GPU backend, such as Windows Direct3D 12.
+An Xvfb/OpenGL-only setup does not validate the current renderer.
 
 Hosted build labels are `ubuntu-26.04`, `windows-2025-vs2026` and `xcode-27`, as
 listed in the [official runner images](https://github.com/actions/runner-images#available-images).
@@ -39,4 +42,6 @@ meson test -C build/sdl3 --print-errorlogs
 Add `build/sdk/bin` to `PATH` for Windows DLL loading. Unix installations may
 require `build/sdk/lib` in `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH`. The tests use
 generated fixtures and bundled fonts, so they do not require game archives,
-speakers or a GPU. Linux full-engine smoke requires an Xvfb/OpenGL display.
+speakers or a GPU. Full-engine smoke is separate: see
+[engine smoke instructions](../tests/sdl3/README.md) and
+[native GPU checks](../tests/gpu/README.md).

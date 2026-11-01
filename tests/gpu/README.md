@@ -1,7 +1,8 @@
-# SDL GPU device foundation
+# SDL_GPU renderer checks
 
-This is the first resource layer for the renderer migration. It is not yet an
-engine backend and does not replace or change the default OpenGL renderer.
+These checks exercise the native device, resources, shaders, geometry and frame
+encoder used by the production SDL_GPU renderer. They are separate from the
+complete Ruby/SharedState engine smoke.
 
 `gpu::Device` owns a device and its claimed window. Create and destroy it on the
 window creation thread, after SDL video initialization and before destroying the
@@ -13,7 +14,8 @@ between those threads. The producer submits through `submitWithFence()`, publish
 the result, and wakes the event loop; the consumer takes the frame without
 blocking, waits its fence, and presents. `close()` drops queued frames and wakes
 blocked producers before shutdown joins them. Callers must join producers before
-destroying the mailbox. Engine event-loop wiring remains pending. Swapchain textures are borrowed/write-only.
+destroying the mailbox. The production event loop uses this handoff. Swapchain
+textures are borrowed/write-only.
 
 Texture coordinates and tightly packed RGBA8 transfers use top-to-bottom rows.
 Upload/download helpers wait on a fence; these are initial correctness paths,
@@ -72,8 +74,7 @@ buffer before rendering, precreates pipeline cache entries before opening passes
 and reuses cycling transfer/vertex buffers. `TextureView` is borrowed until
 submission; offscreen target ownership stays with the caller. `submit()` returns
 a completion fence and resets the recorded CPU commands. A render-pass guard
-ends an active pass before exceptions cancel its command buffer. The encoder is
-not yet wired into production `SharedState` or drawable classes.
+ends an active pass before exceptions cancel its command buffer. The production RenderContext and drawable adapters use this encoder.
 
 ## Production ShaderSet state adapter
 
@@ -99,4 +100,4 @@ D3D12 checks cover top-down checkerboard UVs, preserving queued pixels before
 source-image replacement, disabling a disposed sprite pattern, and submitting
 pending geometry before deleting its sampled texture. It does not instantiate
 the complete engine SharedState/Ruby runtime; the engine smoke test covers that
-boundary after the renderer cutover build.
+boundary with the full engine build.

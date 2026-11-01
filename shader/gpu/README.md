@@ -19,9 +19,9 @@ Pass `--compiler PATH` to select an SDK compiler. The checker discovers FXC in
 PATH or the Windows SDK directory and refuses missing/stale entry-point coverage.
 No compiler DLL is added to the engine runtime.
 
-`shader/gpu/meson.build` exports `gpu_shader_binaries` for future embedding and
+`shader/gpu/meson.build` exports `gpu_shader_binaries` for engine embedding and
 provides an `hlsl-lint` run target depending on every strict custom compilation.
-When that subdirectory is included by the engine shader build:
+The engine shader build includes this subdirectory:
 
 ```sh
 meson compile -C build hlsl-lint
