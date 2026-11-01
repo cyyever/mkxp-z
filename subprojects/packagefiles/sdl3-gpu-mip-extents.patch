@@ -1,0 +1,31 @@
+--- a/src/gpu/d3d12/SDL_gpu_d3d12.c
++++ b/src/gpu/d3d12/SDL_gpu_d3d12.c
+@@ -4404,4 +4404,5 @@
+         D3D12TextureContainer *container = (D3D12TextureContainer *)colorTargetInfos[i].texture;
+-        Uint32 h = container->header.info.height >> colorTargetInfos[i].mip_level;
+-        Uint32 w = container->header.info.width >> colorTargetInfos[i].mip_level;
++        // mkxp-z: mip extents stop at 1 for single-row/column targets.
++        Uint32 h = SDL_max(container->header.info.height >> colorTargetInfos[i].mip_level, 1);
++        Uint32 w = SDL_max(container->header.info.width >> colorTargetInfos[i].mip_level, 1);
+ 
+@@ -4421,4 +4422,4 @@
+ 
+-        Uint32 h = container->header.info.height >> depthStencilTargetInfo->mip_level;
+-        Uint32 w = container->header.info.width >> depthStencilTargetInfo->mip_level;
++        Uint32 h = SDL_max(container->header.info.height >> depthStencilTargetInfo->mip_level, 1);
++        Uint32 w = SDL_max(container->header.info.width >> depthStencilTargetInfo->mip_level, 1);
+ 
+--- a/src/gpu/SDL_gpu.c
++++ b/src/gpu/SDL_gpu.c
+@@ -499,6 +499,7 @@
+ 
+-    blit_fragment_uniforms.left = (float)info->source.x / (src_header->info.width >> info->source.mip_level);
+-    blit_fragment_uniforms.top = (float)info->source.y / (src_header->info.height >> info->source.mip_level);
+-    blit_fragment_uniforms.width = (float)info->source.w / (src_header->info.width >> info->source.mip_level);
+-    blit_fragment_uniforms.height = (float)info->source.h / (src_header->info.height >> info->source.mip_level);
++    // mkxp-z: avoid zero divisors once one mip axis has reached 1.
++    blit_fragment_uniforms.left = (float)info->source.x / SDL_max(src_header->info.width >> info->source.mip_level, 1);
++    blit_fragment_uniforms.top = (float)info->source.y / SDL_max(src_header->info.height >> info->source.mip_level, 1);
++    blit_fragment_uniforms.width = (float)info->source.w / SDL_max(src_header->info.width >> info->source.mip_level, 1);
++    blit_fragment_uniforms.height = (float)info->source.h / SDL_max(src_header->info.height >> info->source.mip_level, 1);
+     blit_fragment_uniforms.mip_level = info->source.mip_level;

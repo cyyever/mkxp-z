@@ -2,6 +2,9 @@
 #include "display/gpu-frame-handoff.h"
 #include <SDL3/SDL.h>
 #include <iostream>
+#include <array>
+#include <bit>
+#include <algorithm>
 #include <stdexcept>
 #include <exception>
 #include <thread>
@@ -89,6 +92,45 @@ int main() {
             try { device.uploadRGBA(destination, std::span<const Uint8>(expected).first(1)); }
             catch (const std::invalid_argument &) { rejected = true; }
             require(rejected, "short upload was accepted");
+            auto mipmapped = device.createTexture(4,4,SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,3);
+            require(mipmapped.mipLevels()==3,"mip level count was discarded");
+            std::vector<Uint8> mipPixels(4*4*4);
+            const std::array<std::array<Uint8,4>,4> blocks={{{255,0,0,255},{0,255,0,255},{0,0,255,255},{255,255,255,255}}};
+            for(size_t y=0;y<4;++y)for(size_t x=0;x<4;++x)
+                std::copy(blocks[(y/2)*2+x/2].begin(),blocks[(y/2)*2+x/2].end(),mipPixels.begin()+(y*4+x)*4);
+            device.uploadRGBA(mipmapped,mipPixels);
+            device.generateMipmaps(mipmapped);
+            const auto level1=device.downloadRGBA(mipmapped,1);
+            for(size_t i=0;i<level1.size();++i)
+                require(level1[i]==blocks[i/4][i%4],"generated first mip changed block colors");
+            const auto level2=device.downloadRGBA(mipmapped,2);
+            require(level2.size()==4&&level2[3]==255,"generated terminal mip dimensions/alpha changed");
+            for(size_t i=0;i<3;++i)require(std::abs(int(level2[i])-128)<=1,"generated terminal mip average changed");
+            for(const auto dimensions : {std::array{2u,1u},std::array{1u,2u},std::array{4u,1u},std::array{1u,4u},std::array{3u,5u}}) {
+                const Uint32 levels=static_cast<Uint32>(std::bit_width(std::max(dimensions[0],dimensions[1])));
+                auto thin=device.createTexture(dimensions[0],dimensions[1],SDL_GPU_TEXTUREUSAGE_SAMPLER|SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,levels);
+                std::vector<Uint8> blue(dimensions[0]*dimensions[1]*4);
+                for(size_t i=0;i<blue.size();i+=4)blue[i+2]=blue[i+3]=255;
+                device.uploadRGBA(thin,blue);device.generateMipmaps(thin);
+                for(Uint32 level=1;level<levels;++level) {
+                    const auto decoded=device.downloadRGBA(thin,level);
+                    for(size_t i=0;i<decoded.size();++i)
+                        if(decoded[i]!=(i%4>=2?255:0)) {
+                            std::cerr<<"mip mismatch "<<dimensions[0]<<"x"<<dimensions[1]<<" level "<<level<<" byte "<<i<<" value "<<unsigned(decoded[i])<<'\n';
+                            throw std::runtime_error("thin mip lost solid color");
+                        }
+                }
+            }
+            bool mipRejected=false;
+            try{auto invalid=device.createTexture(4,4,SDL_GPU_TEXTUREUSAGE_SAMPLER,4);}
+            catch(const std::invalid_argument&){mipRejected=true;}
+            require(mipRejected,"excessive mip count accepted");
+            mipRejected=false;
+            try{device.generateMipmaps(destination);}catch(const std::invalid_argument&){mipRejected=true;}
+            require(mipRejected,"single-level mip generation accepted");
+            mipRejected=false;
+            try{device.downloadRGBA(mipmapped,3);}catch(const std::invalid_argument&){mipRejected=true;}
+            require(mipRejected,"out-of-range mip readback accepted");
             { gpu::CommandBuffer canceled(device.native()); }
             {
                 gpu::CommandBuffer frame(device.native());

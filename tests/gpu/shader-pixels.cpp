@@ -119,6 +119,8 @@ int main(int argc, char **argv) {
             draw(gpu::Program::Simple,gpu::Blend::Addition,1,{r*a+.2f,g*a+.3f,b*a+.4f,1});
             draw(gpu::Program::Simple,gpu::Blend::Subtraction,1,{0,.3f-g*a,.4f-b*a,.6f});
             draw(gpu::Program::Simple,gpu::Blend::KeepDestinationAlpha,1,{r*a+.2f*(1-a),g*a+.3f*(1-a),b*a+.4f*(1-a),.6f});
+            draw(gpu::Program::Simple,gpu::Blend::ColorAdditionKeepDestinationAlpha,1,{r+.2f,g+.3f,b+.4f,.6f});
+            draw(gpu::Program::Simple,gpu::Blend::ColorSubtractionKeepDestinationAlpha,1,{0,.3f-g,.4f-b,.6f});
             draw(gpu::Program::VertexColor,gpu::Blend::Disabled,0,{1,1,1,.5f});
             draw(gpu::Program::VertexAlpha,gpu::Blend::Disabled,1,{r,g,b,a*.5f});
             fp.color[0]=.1f; fp.color[1]=.2f; fp.color[2]=.3f; fp.color[3]=.4f;

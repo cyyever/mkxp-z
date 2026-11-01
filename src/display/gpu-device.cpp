@@ -1,6 +1,8 @@
 #include "gpu-device.h"
 
 #include <cstring>
+#include <bit>
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -29,16 +31,17 @@ Transfer transfer(SDL_GPUDevice *device, Uint32 size, SDL_GPUTransferBufferUsage
     if (!result) fail("SDL_CreateGPUTransferBuffer");
     return result;
 }
-SDL_GPUTextureRegion region(const Texture &texture) {
+SDL_GPUTextureRegion region(const Texture &texture, Uint32 level = 0) {
     SDL_GPUTextureRegion result{};
     result.texture = texture.native();
-    result.w = texture.width(); result.h = texture.height(); result.d = 1;
+    result.mip_level = level;
+    result.w = std::max(1u,texture.width() >> level); result.h = std::max(1u,texture.height() >> level); result.d = 1;
     return result;
 }
 }
 
-Texture::Texture(SDL_GPUDevice *d, SDL_GPUTexture *t, Uint32 width, Uint32 height)
-    : device(d), texture(t), w(width), h(height) {}
+Texture::Texture(SDL_GPUDevice *d, SDL_GPUTexture *t, Uint32 width, Uint32 height, Uint32 mipLevels, SDL_GPUTextureUsageFlags flags)
+    : device(d), texture(t), w(width), h(height), levels(mipLevels), usage(flags) {}
 Texture::~Texture() { if (texture) SDL_ReleaseGPUTexture(device, texture); }
 Texture::Texture(Texture &&other) noexcept { *this = std::move(other); }
 Texture &Texture::operator=(Texture &&other) noexcept {
@@ -46,7 +49,7 @@ Texture &Texture::operator=(Texture &&other) noexcept {
         if (texture) SDL_ReleaseGPUTexture(device, texture);
         device = other.device;
         texture = std::exchange(other.texture, nullptr);
-        w = other.w; h = other.h;
+        w = other.w; h = other.h; levels = other.levels; usage = other.usage;
     }
     return *this;
 }
@@ -122,18 +125,20 @@ void Device::checkTexture(const Texture &texture) const {
     if (texture.device != device || !texture.native())
         throw std::invalid_argument("GPU texture belongs to a different device or was moved");
 }
-Texture Device::createTexture(Uint32 w, Uint32 h, SDL_GPUTextureUsageFlags usage) {
+Texture Device::createTexture(Uint32 w, Uint32 h, SDL_GPUTextureUsageFlags usage, Uint32 mipLevels) {
     byteSize(w, h);
+    if (!mipLevels || mipLevels > static_cast<Uint32>(std::bit_width(std::max(w,h))))
+        throw std::invalid_argument("GPU mip level count exceeds texture dimensions");
     SDL_GPUTextureCreateInfo info{};
     info.type = SDL_GPU_TEXTURETYPE_2D;
     info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     info.usage = usage;
     info.width = w; info.height = h;
-    info.layer_count_or_depth = 1; info.num_levels = 1;
+    info.layer_count_or_depth = 1; info.num_levels = mipLevels;
     info.sample_count = SDL_GPU_SAMPLECOUNT_1;
     auto *texture = SDL_CreateGPUTexture(device, &info);
     if (!texture) fail("SDL_CreateGPUTexture");
-    return Texture(device, texture, w, h);
+    return Texture(device, texture, w, h, mipLevels, usage);
 }
 void Device::uploadRGBA(const Texture &texture, std::span<const Uint8> pixels) {
     checkTexture(texture);
@@ -153,14 +158,16 @@ void Device::uploadRGBA(const Texture &texture, std::span<const Uint8> pixels) {
     SDL_EndGPUCopyPass(pass);
     command.submitAndWait();
 }
-std::vector<Uint8> Device::downloadRGBA(const Texture &texture) {
+std::vector<Uint8> Device::downloadRGBA(const Texture &texture, Uint32 mipLevel) {
     checkTexture(texture);
-    const auto size = byteSize(texture.width(), texture.height());
+    if (mipLevel >= texture.mipLevels()) throw std::invalid_argument("GPU mip readback level is out of range");
+    const auto sourceRegion = region(texture,mipLevel);
+    const auto size = byteSize(sourceRegion.w, sourceRegion.h);
     auto buffer = transfer(device, size, SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD);
     CommandBuffer command(device);
     auto *pass = SDL_BeginGPUCopyPass(command.native());
     if (!pass) fail("SDL_BeginGPUCopyPass");
-    const auto src = region(texture);
+    const auto src = sourceRegion;
     SDL_GPUTextureTransferInfo dst{}; dst.transfer_buffer = buffer.get();
     SDL_DownloadFromGPUTexture(pass, &src, &dst);
     SDL_EndGPUCopyPass(pass);
@@ -171,6 +178,15 @@ std::vector<Uint8> Device::downloadRGBA(const Texture &texture) {
     std::memcpy(pixels.data(), mapped, size);
     SDL_UnmapGPUTransferBuffer(device, buffer.get());
     return pixels;
+}
+void Device::generateMipmaps(const Texture &texture) {
+    checkTexture(texture);
+    const auto required = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    if (texture.mipLevels() <= 1 || (texture.usage & required) != required)
+        throw std::invalid_argument("GPU mip generation requires multiple levels and sampler/color-target usage");
+    CommandBuffer command(device);
+    SDL_GenerateMipmapsForGPUTexture(command.native(), texture.native());
+    command.submitAndWait();
 }
 void Device::copy(CommandBuffer &command, const Texture &source, const Texture &destination) {
     command.checkThread();
