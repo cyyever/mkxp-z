@@ -313,12 +313,11 @@ int main(int argc, char *argv[]) {
     RGSSThreadData rtData(&eventThread, argv[0], win, mode.refresh_rate,
                           mkxp_sys::getScalingFactor(), conf, gpuDevice.get(), &gpuPresentation);
 
-    int winW, winH, drwW, drwH;
+    int winW{}, winH{}, drwW{}, drwH{};
     SDL_GetWindowSize(win, &winW, &winH);
-    rtData.windowSizeMsg.post(Vec2i(winW, winH));
     
     SDL_GetWindowSizeInPixels(win, &drwW, &drwH);
-    rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
+    rtData.windowGeometryMsg.post({Vec2i(winW, winH), Vec2i(drwW, drwH)});
 
     /* Load and post key bindings */
     rtData.bindingUpdateMsg.post(loadBindings(conf));

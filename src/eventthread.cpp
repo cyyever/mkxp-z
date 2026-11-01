@@ -118,8 +118,7 @@ void EventThread::process(RGSSThreadData &rtData)
 {
     SDL_Event event;
     SDL_Window *win = rtData.window;
-    UnidirMessage<Vec2i> &windowSizeMsg = rtData.windowSizeMsg;
-    UnidirMessage<Vec2i> &drawableSizeMsg = rtData.drawableSizeMsg;
+    auto &windowGeometryMsg = rtData.windowGeometryMsg;
     
     
     fullscreen = rtData.config.fullscreen;
@@ -269,8 +268,7 @@ void EventThread::process(RGSSThreadData &rtData)
                         int drwW, drwH;
                         SDL_GetWindowSizeInPixels(win, &drwW, &drwH);
                         
-                        windowSizeMsg.post(Vec2i(winW, winH));
-                        drawableSizeMsg.post(Vec2i(drwW, drwH));
+                        windowGeometryMsg.post({Vec2i(winW, winH), Vec2i(drwW, drwH)});
                         resetInputStates();
                         break;
                         
