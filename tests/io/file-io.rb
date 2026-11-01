@@ -11,47 +11,47 @@ def expect_error(klass)
   raise "expected #{klass}"
 end
 
-stream = fileint_test_open('@raw')
-check(stream.read(0) == ''.b, 'zero read should be empty binary string')
-check(stream.read(20).bytes == [97, 0, 255, 122], 'short read exposed extra/uninitialized bytes')
-check(stream.read(2).nil?, 'length-limited EOF should be nil')
-check(stream.read == ''.b, 'read-all EOF should be empty string')
-stream.close
-stream.close
-check(fileint_test_live == 0, 'close retained stream')
-closed_count = fileint_test_closed
-stream = nil
-GC.start
-check(fileint_test_closed == closed_count, 'GC closed an explicitly closed stream twice')
-stream = fileint_test_open('@raw')
-stream.close
-expect_error(IOError) { stream.read(1) }
-expect_error(IOError) { stream.getbyte }
-
-stream = fileint_test_open('@raw')
-expect_error(ArgumentError) { stream.read(-1) }
-check(stream.getbyte == 97, 'getbyte failed')
-check(stream.read.bytes == [0, 255, 122], 'read-all changed position or binary bytes')
-stream.close
-
-stream = fileint_test_open('@error')
-expect_error(IOError) { stream.read(1) }
-expect_error(IOError) { stream.getbyte }
-stream.close
-%w[@unknownsize @noseek].each do |kind|
-  stream = fileint_test_open(kind)
-  expect_error(IOError) { stream.read }
-  stream.close
+%w[@raw @short @unknownsize @noseek].each do |kind|
+  closed = fileint_test_closed
+  bytes = load_data(kind, true)
+  check(bytes.bytes == [97, 0, 255, 122], "#{kind}: whole-file binary data changed")
+  check(bytes.encoding == Encoding::BINARY, 'raw load must remain a binary String')
+  check(fileint_test_live == 0 && fileint_test_closed == closed + 1, "#{kind}: stream not closed exactly once")
 end
-stream = fileint_test_open('@closeerror')
-expect_error(IOError) { stream.close }
-stream.close
-check(fileint_test_live == 0, 'failed close kept a freed stream pointer')
+check(load_data('@empty', true) == ''.b, 'empty raw file should be an empty binary String')
 
-check(load_data('@raw', true).bytes == [97, 0, 255, 122], 'raw load changed binary data')
-expect_error(TypeError) { load_data('@badmarshal') }
-expect_error(IOError) { load_data('@error', true) }
-check(fileint_test_live == 0, 'load_data failure did not ensure close')
+[['@error', IOError], ['@partialerror', IOError], ['@closeerror', IOError],
+ ['@oversize', RangeError], ['@badmarshal', TypeError]].each do |kind, exception|
+  closed = fileint_test_closed
+  expect_error(exception) { load_data(kind, kind != '@badmarshal') }
+  GC.start
+  check(fileint_test_live == 0 && fileint_test_closed == closed + 1, "#{kind}: failure or GC closed stream incorrectly")
+end
+
+# Ruby compaction may run while native IO has released the GVL. Native reads
+# must not retain a pointer into an embedded/movable Ruby String.
+running = true
+collector = Thread.new do
+  while running
+    GC.start
+    GC.compact
+    Thread.pass
+  end
+end
+begin
+  20.times { check(load_data('@slow', true).bytes == [97, 0, 255, 122], 'GC/compaction corrupted native read') }
+ensure
+  running = false
+  collector.join
+end
+check(fileint_test_live == 0, 'GC stress retained a native stream')
+
+closed = fileint_test_closed
+reader = Thread.new { load_data('@slow', true) }
+Thread.pass while reader.alive? && fileint_test_live == 0
+reader.kill
+reader.join
+check(fileint_test_live == 0 && fileint_test_closed == closed + 1, 'interrupted IO did not ensure exactly-once cleanup')
 
 class BinaryPayload
   def _dump(_depth) = "\0\xff".b

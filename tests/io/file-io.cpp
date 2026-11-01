@@ -3,7 +3,10 @@
 #include "sdl-util.h"
 
 #include <SDL3/SDL_init.h>
+#include <SDL3/SDL_timer.h>
 #include <algorithm>
+#include <atomic>
+#include <limits>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -11,13 +14,15 @@
 
 IOTestState testState;
 IOTestState *shState = &testState;
-static int liveStreams = 0;
-static int closedStreams = 0;
+static std::atomic<int> liveStreams{0};
+static std::atomic<int> closedStreams{0};
 struct TestStream {
     std::string bytes;
     size_t offset = 0;
     size_t chunk = 1024;
     bool failRead = false;
+    bool slowRead = false;
+    bool oversized = false;
     bool failReadAfterChunk = false;
     bool failClose = false;
     bool failSize = false;
@@ -28,6 +33,8 @@ static SDL_IOStream *testStream(const char *kind) {
     auto *data = new TestStream;
     data->bytes = std::string("a\0\xffz", 4);
     if (!std::strcmp(kind, "@short")) data->chunk = 1;
+    if (!std::strcmp(kind, "@slow")) { data->chunk = 1; data->slowRead = true; }
+    if (!std::strcmp(kind, "@oversize")) data->oversized = true;
     if (!std::strcmp(kind, "@error")) data->failRead = true;
     if (!std::strcmp(kind, "@partialerror")) { data->failReadAfterChunk = true; data->chunk = 1; }
     if (!std::strcmp(kind, "@closeerror")) data->failClose = true;
@@ -39,6 +46,7 @@ static SDL_IOStream *testStream(const char *kind) {
     SDL_INIT_INTERFACE(&ioInterface);
     ioInterface.size = [](void *opaque) -> Sint64 {
         const auto &data = *static_cast<TestStream *>(opaque);
+        if (data.oversized) return static_cast<Sint64>((std::numeric_limits<long>::max)()) + 1;
         if (data.failSize) { SDL_SetError("injected size failure"); return -1; }
         return data.bytes.size();
     };
@@ -53,6 +61,7 @@ static SDL_IOStream *testStream(const char *kind) {
     };
     ioInterface.read = [](void *opaque, void *buffer, size_t requested, SDL_IOStatus *status) -> size_t {
         auto &data = *static_cast<TestStream *>(opaque);
+        if (data.slowRead) SDL_Delay(10);
         if (data.failRead || (data.failReadAfterChunk && data.offset > 0)) {
             SDL_SetError("injected read failure");
             *status = SDL_IO_STATUS_ERROR;
@@ -86,13 +95,6 @@ SDL_IOStream *FileSystem::openReadRaw(const char *filename) {
     return stream;
 }
 
-static VALUE openFileInt(VALUE, VALUE kind) {
-    StringValue(kind);
-    VALUE klass = rb_const_get(rb_cObject, rb_intern("FileInt"));
-    VALUE result = rb_obj_alloc(klass);
-    setPrivateData(result, testStream(StringValueCStr(kind)));
-    return result;
-}
 static VALUE live(VALUE) { return INT2NUM(liveStreams); }
 static VALUE closed(VALUE) { return INT2NUM(closedStreams); }
 static VALUE verifyLoad(VALUE) {
@@ -127,7 +129,6 @@ int main(int argc, char **argv) {
     SDL_Init(0);
     testState.data = new RbData;
     fileIntBindingInit();
-    rb_define_global_function("fileint_test_open", RUBY_METHOD_FUNC(openFileInt), 1);
     rb_define_global_function("fileint_test_live", RUBY_METHOD_FUNC(live), 0);
     rb_define_global_function("fileint_test_closed", RUBY_METHOD_FUNC(closed), 0);
     rb_define_global_function("fileint_test_load", RUBY_METHOD_FUNC(verifyLoad), 0);
