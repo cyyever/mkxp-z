@@ -38,6 +38,18 @@ int main(int argc,char **argv){
             Quad quad;quad.setTexPosRect(FloatRect(0,0,2,2),FloatRect(0,0,4,4));
             const std::array<Uint8,16> checker={255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255};
             const std::array<Uint8,16> blue={0,0,255,255, 0,0,255,255, 0,0,255,255, 0,0,255,255};
+            // Exact copies preserve the current target when a later draw resumes it.
+            auto copySource=TEX::gen();TEX::bind(copySource);TEX::uploadImage(2,2,checker.data());
+            auto copyDestination=TEX::gen();TEX::bind(copyDestination);TEX::allocEmpty(2,2);
+            context.setClearColor({1,0,0,1});context.clear();
+            context.copyTexture(copySource,copyDestination);
+            context.setClearColor({0,0,1,1});context.clear();context.flush();
+            require(device.downloadRGBA(copyDestination.resource())==std::vector<Uint8>(checker.begin(),checker.end()),
+                    "context copy changed RGBA");
+            const auto resumed=device.downloadRGBA(target);
+            for(size_t i=0;i<resumed.size();++i)
+                require(resumed[i]==blue[i%4],"copy changed the resumed render target");
+            TEX::del(copySource);TEX::del(copyDestination);
             auto texture=TEX::gen();TEX::bind(texture);TEX::uploadImage(2,2,checker.data());
             shaders.simple.bind();shaders.simple.applyViewportProj();shaders.simple.setTexSize(Vec2i(2,2));
             quad.draw();context.flush();

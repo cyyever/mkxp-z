@@ -199,6 +199,33 @@ int main(int argc,char **argv) {
                         require(pixels[(y*4+x)*4+c]==(drawn&&(c==frame%2||c==3)?255:0),"in-flight frame vertices were overwritten");
                 }
             }
+            // Copies share the submission and retain their exact position among draws/clears.
+            auto orderedSource=device.createTexture(4,4);
+            auto orderedCopy=device.createTexture(4,4);
+            auto orderedChain=device.createTexture(4,4);
+            encoder.beginTarget(gpu::TextureView(orderedSource),SDL_GPU_LOADOP_CLEAR,{1,0,0,1});
+            encoder.copy(orderedSource,orderedCopy);
+            encoder.beginTarget(gpu::TextureView(orderedSource),SDL_GPU_LOADOP_CLEAR,{0,0,1,1});
+            encoder.copy(orderedCopy,orderedChain);
+            encoder.submitWithoutFence();
+            for(auto *texture:{&orderedCopy,&orderedChain}){
+                const auto pixels=device.downloadRGBA(*texture);
+                for(size_t i=0;i<pixels.size();++i)
+                    require(pixels[i]==(i%4==0||i%4==3?255:0),"ordered copy lost earlier target contents");
+            }
+            const auto bluePixels=device.downloadRGBA(orderedSource);
+            for(size_t i=0;i<bluePixels.size();++i)
+                require(bluePixels[i]==(i%4==2||i%4==3?255:0),"clear after copy lost submission order");
+            const std::vector<Uint8> transparent={13,27,39,0, 1,2,3,64, 4,5,6,128, 7,8,9,255};
+            auto rawSource=device.createTexture(2,2),rawCopy=device.createTexture(2,2);
+            device.uploadRGBA(rawSource,transparent);
+            encoder.copy(rawSource,rawCopy);
+            bool copyDrawRejected=false;
+            try{draw();}catch(const std::logic_error &){copyDrawRejected=true;}
+            require(copyDrawRejected,"draw after copy requires an explicit target");
+            encoder.submitWithoutFence();
+            require(device.downloadRGBA(rawCopy)==transparent,"copy-only frame changed transparent RGB");
+
             // Normal engine flushes leave completion ownership entirely to SDL.
             // Cycle the same upload buffers through multiple queued submissions,
             // then read back every target after the queued work has completed.

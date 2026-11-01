@@ -33,6 +33,7 @@ public:
     void setClearColor(SDL_FColor value) { clearColor = value; }
     void setMipmapsEnabled(bool value) { mipmapsEnabled = value; }
     bool mipmapsAllowed() const { return mipmapsEnabled; }
+    void copyTexture(const TEX::ID &source, const TEX::ID &destination);
     void clear();
     void draw(std::span<const QuadVertex>);
     [[nodiscard]] Fence submit();
@@ -58,6 +59,7 @@ private:
     ProjectionResolver projectionResolver;
     std::unordered_map<SDL_GPUTexture *, TEX::ID> pendingResources;
     bool recording = false;
+    bool targetNeedsBegin = false;
     bool mipmapsEnabled = false;
 };
 

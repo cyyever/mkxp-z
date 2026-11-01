@@ -25,6 +25,7 @@
 #include "bitmap.h"
 
 #include <memory>
+#include <exception>
 #include <format>
 #include <string_view>
 #include <utility>
@@ -633,17 +634,27 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
             throw e;
         }
 
-        RenderOps::blitBegin(p->gl, false, SameScale);
-        // Blit just the current frame of the other animated bitmap
-        if (!other.isAnimated() || frame == -1) {
-            RenderOps::blitSource(other.getRenderTarget(), SameScale);
+        if (!other.isAnimated() && !other.hasHires()) {
+            try {
+                gpu::RenderContext::current().copyTexture(other.getRenderTarget().tex, p->gl.tex);
+            } catch (const std::exception &error) {
+                shState->texPool().release(p->gl);
+                delete p;
+                throw Exception(Exception::SDLError, "%s", error.what());
+            }
+        } else {
+            RenderOps::blitBegin(p->gl, false, SameScale);
+            // Blit just the current frame of the other animated bitmap
+            if (!other.isAnimated() || frame == -1) {
+                RenderOps::blitSource(other.getRenderTarget(), SameScale);
+            }
+            else {
+                auto &frames = other.getFrames();
+                RenderOps::blitSource(frames[clamp(frame, 0, (int)frames.size() - 1)], SameScale);
+            }
+            RenderOps::blitRectangle(rect(), rect());
+            RenderOps::blitEnd();
         }
-        else {
-            auto &frames = other.getFrames();
-            RenderOps::blitSource(frames[clamp(frame, 0, (int)frames.size() - 1)], SameScale);
-        }
-        RenderOps::blitRectangle(rect(), rect());
-        RenderOps::blitEnd();
     }
     else {
         p->animation.enabled = true;
