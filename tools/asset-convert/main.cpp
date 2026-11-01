@@ -101,8 +101,16 @@ public:
     void commit() { verified = true; }
 };
 
-static Surface loadImage(const fs::path &path) {
+static Surface loadImage(const fs::path &path, std::string *decoder = nullptr) {
     Surface decoded(IMG_Load(utf8(path).c_str()), SDL_DestroySurface);
+    bool bmpFallback = false;
+    if (!decoded && extension(path) == ".bmp") {
+        decoded.reset(SDL_LoadBMP(utf8(path).c_str()));
+        bmpFallback = true;
+    }
+    if (decoder) *decoder = bmpFallback
+        ? "SDL3 SDL_LoadBMP fallback (source BMP unsupported by SDL3_image)"
+        : "SDL3_image (engine build; vendored JPEG uses stb_image)";
     requireSDL(bool(decoded), "SDL3_image decode failed");
     Surface normalized(SDL_ConvertSurface(decoded.get(), SDL_PIXELFORMAT_ABGR8888), SDL_DestroySurface);
     requireSDL(bool(normalized), "ABGR8888 conversion failed");
@@ -117,7 +125,8 @@ struct SurfaceLock {
 };
 static json5pp::value convertImage(const fs::path &source, const fs::path &destination) {
     validatePaths(source, destination, ".png");
-    auto original = loadImage(source);
+    std::string decoder;
+    auto original = loadImage(source, &decoder);
     Stream encoded(SDL_IOFromDynamicMem(), SDL_CloseIO);
     requireSDL(bool(encoded), "PNG buffer creation failed");
     requireSDL(IMG_SavePNG_IO(original.get(), encoded.get(), false), "PNG encode failed");
@@ -139,7 +148,7 @@ static json5pp::value convertImage(const fs::path &source, const fs::path &desti
     }
     output.commit();
     return json5pp::object({{"kind", "image"}, {"source", utf8(source)}, {"destination", utf8(destination)},
-        {"decoder", "SDL3_image (engine build; vendored JPEG uses stb_image)"},
+        {"decoder", decoder},
         {"width", original->w}, {"height", original->h}, {"pixel_format", "ABGR8888"},
         {"decoded_crc32", crcText(crc)}, {"verified", "exact normalized decoded pixel bytes"}});
 }

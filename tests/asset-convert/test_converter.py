@@ -76,6 +76,17 @@ with tempfile.TemporaryDirectory(prefix="mkxp-convert-雨血-") as directory:
     assert target.read_bytes() == output
     invoke("image", source, source, success=False)
     assert source.read_bytes() == original
+    bmp = root / "legacy-save.bmp"
+    # A 24-bit BI_RGB DIB with one padded BGR row, as used by legacy saves.
+    bmp_header = struct.pack("<2sIHHI", b"BM", 58, 0, 0, 54)
+    dib_header = struct.pack("<IiiHHIIiiII", 40, 1, 1, 1, 24, 0, 4, 0, 0, 0, 0)
+    bmp_original = bmp_header + dib_header + bytes([20, 50, 120, 0])
+    bmp.write_bytes(bmp_original)
+    bmp_report = invoke("image", bmp, root / "legacy-save.png")
+    assert "SDL_LoadBMP fallback" in bmp_report["decoder"]
+    assert (bmp_report["width"], bmp_report["height"]) == (1, 1)
+    assert bmp_report["decoded_crc32"] == f"{zlib.crc32(bytes([120, 50, 20, 255])):08x}"
+    assert bmp.read_bytes() == bmp_original
     bad = root / "broken.jpg"
     bad.write_bytes(b"not an image")
     absent = root / "absent.png"

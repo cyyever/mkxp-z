@@ -2,6 +2,7 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include "util/sdl-util.h"
+#include "util/png-io.h"
 
 #include <chrono>
 #include <cstring>
@@ -53,6 +54,15 @@ static void imagesAndStreams(const fs::path &directory) {
     }
     Surface loadedBmp(SDL_LoadBMP(bmp.c_str()), SDL_DestroySurface);
     check(bool(loadedBmp) && loadedBmp->w == 7 && loadedBmp->h == 5, "SDL3 BMP roundtrip");
+
+    // The runtime policy remains PNG-only even with a full system image library.
+    for (const auto &path : {png, jpg, bmp}) {
+        Stream source(SDL_IOFromFile(path.c_str(), "rb"), SDL_CloseIO);
+        Surface runtime(image::loadPng(borrowIO(source.get())), SDL_DestroySurface);
+        check(bool(runtime) == (path == png), "runtime accepts PNG contents only");
+        check(SDL_SeekIO(source.get(), 0, SDL_IO_SEEK_SET) == 0,
+              "runtime owns only the supplied stream wrapper");
+    }
 
     Stream source(SDL_IOFromFile(png.c_str(), "rb"), SDL_CloseIO);
     check(bool(source), "open image source");

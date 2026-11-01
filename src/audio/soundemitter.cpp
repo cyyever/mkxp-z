@@ -19,6 +19,7 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "runtime-codecs.h"
 #include "soundemitter.h"
 
 #include "sharedstate.h"
@@ -149,6 +150,7 @@ void SoundEmitter::stop()
 struct SoundOpenHandler : FileSystem::OpenHandler
 {
 	std::unique_ptr<SoundBuffer> buffer;
+	const char *error = nullptr;
 
 	bool tryRead(SDL_IOStream *ops, const char *ext)
 	{
@@ -159,6 +161,11 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 		{
 			return false;
 		}
+
+        if (!isRuntimeAudio(sample.get())) {
+            error = "Audio assets must use WAV or FLAC decoding";
+            return false;
+        }
 
 		/* Do all of the decoding in the handler so we don't have
 		 * to keep the source ops around */
@@ -202,7 +209,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		{
 			char buf[512];
 			snprintf(buf, sizeof(buf), "Unable to decode sound: %s: %s",
-			         filename.c_str(), Sound_GetError());
+			         filename.c_str(), handler.error ? handler.error : Sound_GetError());
 			Debug() << buf;
 
 			return 0;

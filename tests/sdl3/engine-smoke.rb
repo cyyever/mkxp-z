@@ -7,6 +7,14 @@ begin
   bitmap.fill_rect(0, 0, 180, 40, Color.new(120, 50, 20))
   bitmap.font = Font.new('Liberation Sans', 18).dup
   bitmap.draw_text(0, 0, 180, 40, "UTF-8 \u00e9")
+  %w[unsupported.jpg unsupported.bmp].each do |filename|
+    begin
+      bitmap.to_file(filename)
+      raise 'non-PNG output unexpectedly accepted'
+    rescue ArgumentError
+      raise 'rejected output created a file' if File.exist?(filename)
+    end
+  end
   bitmap.to_file('generated.png')
   loaded = Bitmap.new('generated')
   raise 'new cached PNG did not load' unless loaded.width == 180 && loaded.height == 40
