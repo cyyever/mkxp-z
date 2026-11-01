@@ -42,7 +42,7 @@
 #include "tileatlas.h"
 #include "tilemap-common.h"
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -325,18 +325,18 @@ struct TilemapPrivate
 	bool tilemapReady;
 
 	/* Change watches */
-	sigslot::connection tilesetCon;
-	sigslot::connection autotilesCon[autotileCount];
-	sigslot::connection mapDataCon;
-	sigslot::connection prioritiesCon;
+	SignalConnection tilesetCon;
+	SignalConnection autotilesCon[autotileCount];
+	SignalConnection mapDataCon;
+	SignalConnection prioritiesCon;
 
 	/* Dispose watches */
-	sigslot::connection autotilesDispCon[autotileCount];
+	SignalConnection autotilesDispCon[autotileCount];
 
-	sigslot::connection tilesetDispCon;
+	SignalConnection tilesetDispCon;
 
 	/* Draw prepare call */
-	sigslot::connection prepareCon;
+	SignalConnection prepareCon;
 
 	NormValue opacity;
 	BlendType blendType;

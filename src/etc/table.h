@@ -25,7 +25,7 @@
 #include "serializable.h"
 
 #include <stdint.h>
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 #include <vector>
 
 class Table : public Serializable
@@ -62,7 +62,7 @@ public:
 		return data[xs*ys*z + xs*y + x];
 	}
 
-    sigslot::signal<> modified;
+    Signal modified;
 
 private:
 	int xs, ys, zs;

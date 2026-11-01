@@ -20,619 +20,206 @@
 */
 
 #include "filesystem.h"
-#include "util/paths.h"
-
-#include <map>
+#include "directory-search.h"
 #include "util/debugwriter.h"
-#include "util/exception.h"
-#include "util/util.h"
+#include "util/paths.h"
 #include "display/font.h"
-#include "crypto/rgssad.h"
-
 #include "eventthread.h"
 #include "sharedstate.h"
 
-#include <physfs.h>
-
 #include <algorithm>
-#include <stack>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <vector>
+#include <cctype>
+#include <functional>
+#include <map>
+#include <memory>
+#include <set>
 
 #ifdef SDL_PLATFORM_APPLE
 #include <iconv.h>
 #endif
 
-#ifdef SDL_PLATFORM_WIN32
-#include <direct.h>
+namespace fs = std::filesystem;
+
+static std::string lower(std::string value) {
+  std::ranges::transform(value, value.begin(), [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c); });
+  return value;
+}
+
+// Keep the spelling used on disk separately: macOS may enumerate decomposed
+// names even when the game asks for their composed UTF-8 representation.
+static std::string normalized(std::string value) {
+#ifdef SDL_PLATFORM_APPLE
+  iconv_t converter = iconv_open("UTF-8", "UTF-8-MAC");
+  if (converter == reinterpret_cast<iconv_t>(-1)) return value;
+  std::string output(value.size() * 4 + 1, '\0');
+  char *input = value.data();
+  char *target = output.data();
+  size_t inputSize = value.size(), outputSize = output.size();
+  const auto result = iconv(converter, &input, &inputSize, &target, &outputSize);
+  iconv_close(converter);
+  if (result != static_cast<size_t>(-1)) {
+    output.resize(output.size() - outputSize);
+    return output;
+  }
 #endif
-
-struct SDLRWIoContext {
-  SDL_IOStream *ops;
-  std::string filename;
-
-  SDLRWIoContext(const char *filename)
-      : ops(SDL_IOFromFile(filename, "r")), filename(filename) {
-    if (!ops)
-      throw Exception(Exception::SDLError, "Failed to open file: %s",
-                      SDL_GetError());
-  }
-
-  ~SDLRWIoContext() { SDL_CloseIO(ops); }
-};
-
-static PHYSFS_Io *createSDLRWIo(const char *filename);
-
-static SDL_IOStream *getSDLRWops(PHYSFS_Io *io) {
-  return static_cast<SDLRWIoContext *>(io->opaque)->ops;
+  return value;
 }
 
-static PHYSFS_sint64 SDLRWIoRead(struct PHYSFS_Io *io, void *buf,
-                                 PHYSFS_uint64 len) {
-  return SDL_ReadIO(getSDLRWops(io), buf, len);
-}
-
-static int SDLRWIoSeek(struct PHYSFS_Io *io, PHYSFS_uint64 offset) {
-  return (SDL_SeekIO(getSDLRWops(io), offset, SDL_IO_SEEK_SET) != -1);
-}
-
-static PHYSFS_sint64 SDLRWIoTell(struct PHYSFS_Io *io) {
-  return SDL_SeekIO(getSDLRWops(io), 0, SDL_IO_SEEK_CUR);
-}
-
-static PHYSFS_sint64 SDLRWIoLength(struct PHYSFS_Io *io) {
-  return SDL_GetIOSize(getSDLRWops(io));
-}
-
-static struct PHYSFS_Io *SDLRWIoDuplicate(struct PHYSFS_Io *io) {
-  SDLRWIoContext *ctx = static_cast<SDLRWIoContext *>(io->opaque);
-  int64_t offset = io->tell(io);
-  PHYSFS_Io *dup = createSDLRWIo(ctx->filename.c_str());
-
-  if (dup)
-    SDLRWIoSeek(dup, offset);
-
-  return dup;
-}
-
-static void SDLRWIoDestroy(struct PHYSFS_Io *io) {
-  delete static_cast<SDLRWIoContext *>(io->opaque);
-  delete io;
-}
-
-static PHYSFS_Io SDLRWIoTemplate = {0,
-                                    0, /* version, opaque */
-                                    SDLRWIoRead,
-                                    0, /* write */
-                                    SDLRWIoSeek,
-                                    SDLRWIoTell,
-                                    SDLRWIoLength,
-                                    SDLRWIoDuplicate,
-                                    0, /* flush */
-                                    SDLRWIoDestroy};
-
-static PHYSFS_Io *createSDLRWIo(const char *filename) {
-  SDLRWIoContext *ctx;
-
-  try {
-    ctx = new SDLRWIoContext(filename);
-  } catch (const Exception &e) {
-    Debug() << "Failed mounting" << filename;
-    return 0;
-  }
-
-  PHYSFS_Io *io = new PHYSFS_Io;
-  *io = SDLRWIoTemplate;
-  io->opaque = ctx;
-
-  return io;
-}
-
-static Sint64 streamSize(void *userdata) {
-  return PHYSFS_fileLength(static_cast<PHYSFS_File *>(userdata));
-}
-
-static Sint64 streamSeek(void *userdata, Sint64 offset, SDL_IOWhence whence) {
-  auto *file = static_cast<PHYSFS_File *>(userdata);
-  Sint64 base = 0;
-  if (whence == SDL_IO_SEEK_CUR)
-    base = PHYSFS_tell(file);
-  else if (whence == SDL_IO_SEEK_END)
-    base = PHYSFS_fileLength(file);
-  if (base < 0 || offset < -base || !PHYSFS_seek(file, base + offset)) {
-    SDL_SetError("PhysFS seek failed: %s", PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-    return -1;
-  }
-  return PHYSFS_tell(file);
-}
-
-static size_t streamRead(void *userdata, void *buffer, size_t bytes, SDL_IOStatus *status) {
-  const auto result = PHYSFS_readBytes(static_cast<PHYSFS_File *>(userdata), buffer, bytes);
-  if (result < 0) {
-    *status = SDL_IO_STATUS_ERROR;
-    SDL_SetError("PhysFS read failed: %s", PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-    return 0;
-  }
-  if (result == 0)
-    *status = SDL_IO_STATUS_EOF;
-  return static_cast<size_t>(result);
-}
-
-static bool streamClose(void *userdata) {
-  const bool closed = PHYSFS_close(static_cast<PHYSFS_File *>(userdata)) != 0;
-  if (!closed)
-    SDL_SetError("PhysFS close failed: %s", PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode()));
-  return closed;
-}
-
-/* Copies the first srcN characters from src into dst,
- * or the full string if srcN == -1. Never writes more
- * than dstMax, and guarantees dst to be null terminated.
- * Returns copied bytes (minus terminating null) */
-static size_t strcpySafe(char *dst, const char *src, size_t dstMax, int srcN) {
-  if (srcN < 0)
-    srcN = strlen(src);
-
-  size_t cpyMax = std::min<size_t>(dstMax - 1, srcN);
-
-  memcpy(dst, src, cpyMax);
-  dst[cpyMax] = '\0';
-
-  return cpyMax;
-}
-
-/* Attempt to locate an extension string in a filename.
- * Either a pointer into the input string pointing at the
- * extension, or null is returned */
-static const char *findExt(const char *filename) {
-  size_t len;
-
-  for (len = strlen(filename); len > 0; --len) {
-    if (filename[len] == '/')
-      return 0;
-
-    if (filename[len] == '.')
-      return &filename[len + 1];
-  }
-
-  return 0;
-}
-
-static SDL_IOStream *openReadStream(PHYSFS_File *handle) {
-  SDL_IOStreamInterface interface;
-  SDL_INIT_INTERFACE(&interface);
-  interface.size = streamSize;
-  interface.seek = streamSeek;
-  interface.read = streamRead;
-  interface.close = streamClose;
-  SDL_IOStream *stream = SDL_OpenIO(&interface, handle);
-  if (!stream) {
-    PHYSFS_close(handle);
-    throw Exception(Exception::SDLError, "%s", SDL_GetError());
-  }
+static SDL_IOStream *openStream(const fs::path &path) {
+  SDL_IOStream *stream = SDL_IOFromFile(paths::toUtf8(path.u8string()).c_str(), "rb");
+  if (!stream) throw Exception(Exception::SDLError, "%s", SDL_GetError());
   return stream;
 }
 
-static void strTolower(std::string &str) {
-  for (size_t i = 0; i < str.size(); ++i)
-    str[i] = tolower(str[i]);
-}
-
-
 struct FileSystemPrivate {
-  /* Maps: lower case full filepath,
-   * To:   mixed case full filepath */
-  std::map<std::string, std::string> pathCache;
-  /* Maps: lower case directory path,
-   * To:   list of lower case filenames */
+  DirectorySearch search;
+  bool havePathCache = false;
+  struct CachedPath {
+    fs::path actual;
+    std::string mixed;
+  };
+  std::map<std::string, CachedPath> pathCache;
   std::map<std::string, std::vector<std::string>> fileLists;
 
-  /* This is for compatibility with games that take Windows'
-   * case insensitivity for granted */
-  bool havePathCache;
+  explicit FileSystemPrivate(bool allowSymlinks) : search(allowSymlinks) {}
 };
 
-static void throwPhysfsError(const char *desc) {
-  PHYSFS_ErrorCode ec = PHYSFS_getLastErrorCode();
-  const char *englishStr;
-    if (ec == 0) {
-        // Sometimes on Windows PHYSFS_init can return null
-        // but the error code never changes
-        englishStr = "unknown error";
-    } else {
-        englishStr = PHYSFS_getErrorByCode(ec);
-    }
+FileSystem::FileSystem(const char *, bool allowSymlinks)
+    : p(std::make_unique<FileSystemPrivate>(allowSymlinks)) {}
 
-  throw Exception(Exception::PHYSFSError, "%s: %s", desc, englishStr);
-}
-
-FileSystem::FileSystem(const char *argv0, bool allowSymlinks) {
-  if (PHYSFS_init(argv0) == 0)
-    throwPhysfsError("Error initializing PhysFS");
-
-  /* One error (=return 0) turns the whole product to 0 */
-
-  int er = 1;
-
-  er *= PHYSFS_registerArchiver(&RGSS1_Archiver);
-  er *= PHYSFS_registerArchiver(&RGSS2_Archiver);
-  er *= PHYSFS_registerArchiver(&RGSS3_Archiver);
-
-  if (er == 0)
-    throwPhysfsError("Error registering PhysFS RGSS archiver");
-
-  p = new FileSystemPrivate;
-  p->havePathCache = false;
-
-  if (allowSymlinks)
-    PHYSFS_permitSymbolicLinks(1);
-}
-
-FileSystem::~FileSystem() {
-  delete p;
-
-  if (PHYSFS_deinit() == 0)
-    Debug() << "PhyFS failed to deinit.";
-}
+FileSystem::~FileSystem() = default;
 
 void FileSystem::addPath(const char *path, const char *mountpoint, bool reload) {
-  /* Try the normal mount first */
-    int state = PHYSFS_mount(path, mountpoint, 1);
-  if (!state) {
-    /* If it didn't work, try mounting via a wrapped
-     * SDL_IOStream */
-    PHYSFS_Io *io = createSDLRWIo(path);
-
-    if (io)
-      state = PHYSFS_mountIo(io, path, 0, 1);
+  try {
+    p->search.add(paths::fromRgss(path), mountpoint ? paths::fromRgss(mountpoint) : fs::path{});
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
   }
-    if (!state) {
-        PHYSFS_ErrorCode err = PHYSFS_getLastErrorCode();
-        throw Exception(Exception::PHYSFSError, "Failed to mount %s (%s)", path, PHYSFS_getErrorByCode(err));
-    }
-    
-    if (reload) reloadPathCache();
+  if (reload) reloadPathCache();
 }
 
 void FileSystem::removePath(const char *path, bool reload) {
-    
-    if (!PHYSFS_unmount(path)) {
-        PHYSFS_ErrorCode err = PHYSFS_getLastErrorCode();
-        throw Exception(Exception::PHYSFSError, "Failed to unmount %s (%s)", path, PHYSFS_getErrorByCode(err));
-    }
-    
-    if (reload) reloadPathCache();
-}
-
-struct CacheEnumData {
-  FileSystemPrivate *p;
-  std::stack<std::vector<std::string> *> fileLists;
-
-#ifdef SDL_PLATFORM_APPLE
-  iconv_t nfd2nfc;
-  char buf[512];
-#endif
-
-  CacheEnumData(FileSystemPrivate *p) : p(p) {
-#ifdef SDL_PLATFORM_APPLE
-    nfd2nfc = iconv_open("utf-8", "utf-8-mac");
-#endif
+  try {
+    if (!p->search.remove(paths::fromRgss(path)))
+      throw Exception(Exception::IOError, "Resource directory is not mounted: %s", path);
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
   }
-
-  ~CacheEnumData() {
-#ifdef SDL_PLATFORM_APPLE
-    iconv_close(nfd2nfc);
-#endif
-  }
-
-  /* Converts in-place */
-  void toNFC(char *inout) {
-#ifdef SDL_PLATFORM_APPLE
-    size_t srcSize = strlen(inout);
-    size_t bufSize = sizeof(buf);
-    char *bufPtr = buf;
-    char *inoutPtr = inout;
-
-    /* Reserve room for null terminator */
-    --bufSize;
-
-    iconv(nfd2nfc, &inoutPtr, &srcSize, &bufPtr, &bufSize);
-    /* Null-terminate */
-    *bufPtr = 0;
-    strcpy(inout, buf);
-#else
-    (void)inout;
-#endif
-  }
-};
-
-static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
-                                                  const char *fname) {
-  if (shState && shState->rtData().rqTerm)
-    throw Exception(Exception::MKXPError, "Game close requested. Aborting path cache enumeration.");
-
-  CacheEnumData &data = *static_cast<CacheEnumData *>(d);
-  char fullPath[512];
-
-  if (!*origdir)
-    snprintf(fullPath, sizeof(fullPath), "%s", fname);
-  else
-    snprintf(fullPath, sizeof(fullPath), "%s/%s", origdir, fname);
-
-  /* Deal with OSX' weird UTF-8 standards */
-  data.toNFC(fullPath);
-
-  std::string mixedCase(fullPath);
-  std::string lowerCase = mixedCase;
-  strTolower(lowerCase);
-
-  PHYSFS_Stat stat;
-  PHYSFS_stat(fullPath, &stat);
-
-  if (stat.filetype == PHYSFS_FILETYPE_DIRECTORY) {
-    /* Create a new list for this directory */
-    std::vector<std::string> &list = data.p->fileLists[lowerCase];
-
-    /* Iterate over its contents */
-    data.fileLists.push(&list);
-    PHYSFS_enumerate(fullPath, cacheEnumCB, d);
-    data.fileLists.pop();
-  } else {
-    /* Get the file list for the directory we're currently
-     * traversing and append this filename to it */
-    std::vector<std::string> &list = *data.fileLists.top();
-
-    std::string lowerFilename(fname);
-    strTolower(lowerFilename);
-    list.push_back(lowerFilename);
-
-    /* Add the lower -> mixed mapping of the file's full path */
-    data.p->pathCache.insert_or_assign(lowerCase, mixedCase);
-  }
-
-  return PHYSFS_ENUM_OK;
+  if (reload) reloadPathCache();
 }
 
 void FileSystem::createPathCache() {
   Debug() << "Loading path cache...";
-
-  CacheEnumData data(p);
-  data.fileLists.push(&p->fileLists[""]);
-  PHYSFS_enumerate("", cacheEnumCB, &data);
-
+  p->pathCache.clear();
+  p->fileLists.clear();
+  std::set<fs::path> ancestors;
+  std::function<void(const fs::path &)> visit = [&](const fs::path &dir) {
+    if (shState && shState->rtData().rqTerm)
+      throw Exception(Exception::MKXPError, "Game close requested. Aborting path cache enumeration.");
+    auto &files = p->fileLists[lower(normalized(paths::toUtf8(dir.generic_u8string())))];
+    for (const auto &[name, actual] : p->search.list(dir, true)) {
+      const auto virtualPath = dir / paths::fromUtf8(name);
+      if (actual.empty() || fs::is_directory(actual)) {
+        // Follow permitted symlinks, but never recurse into an ancestor again.
+        const auto canonical = actual.empty() ? fs::path{} : fs::canonical(actual);
+        if (!canonical.empty() && !ancestors.insert(canonical).second) continue;
+        visit(virtualPath);
+        if (!canonical.empty()) ancestors.erase(canonical);
+      } else if (fs::is_regular_file(actual)) {
+        const auto mixed = paths::toUtf8(virtualPath.generic_u8string());
+        auto [entry, inserted] = p->pathCache.try_emplace(lower(normalized(mixed)), actual, mixed);
+        if (inserted) files.push_back(lower(normalized(name)));
+      }
+    }
+    std::ranges::sort(files);
+  };
+  try {
+    visit({});
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
+  }
   p->havePathCache = true;
-
   Debug() << "Path cache completed.";
 }
 
 void FileSystem::reloadPathCache() {
-    if (!p->havePathCache) return;
-    
-    p->fileLists.clear();
-    p->pathCache.clear();
-    createPathCache();
-}
-
-struct FontSetsCBData {
-  FileSystemPrivate *p;
-  SharedFontState *sfs;
-};
-
-static PHYSFS_EnumerateCallbackResult fontSetEnumCB(void *data, const char *dir,
-                                                    const char *fname) {
-  FontSetsCBData *d = static_cast<FontSetsCBData *>(data);
-
-  /* Only consider filenames with font extensions */
-  const char *ext = findExt(fname);
-
-  if (!ext)
-    return PHYSFS_ENUM_OK;
-
-  char lowExt[8];
-  size_t i;
-
-  for (i = 0; i < sizeof(lowExt) - 1 && ext[i]; ++i)
-    lowExt[i] = tolower(ext[i]);
-  lowExt[i] = '\0';
-
-  if (strcmp(lowExt, "ttf") && strcmp(lowExt, "otf"))
-    return PHYSFS_ENUM_OK;
-
-  char filename[512];
-  snprintf(filename, sizeof(filename), "%s/%s", dir, fname);
-
-  PHYSFS_File *handle = PHYSFS_openRead(filename);
-
-  if (!handle)
-    return PHYSFS_ENUM_ERROR;
-
-  SDL_IOStream *ops = openReadStream(handle);
-
-  d->sfs->initFontSetCB(ops, filename);
-
-  SDL_CloseIO(ops);
-
-  return PHYSFS_ENUM_OK;
-}
-
-/* Basically just a case-insensitive search
- * for the folder "Fonts"... */
-static PHYSFS_EnumerateCallbackResult
-findFontsFolderCB(void *data, const char *, const char *fname) {
-  size_t i = 0;
-  char buffer[512];
-  const char *s = fname;
-
-  while (*s && i < sizeof(buffer))
-    buffer[i++] = tolower(*s++);
-
-  buffer[i] = '\0';
-
-  if (strcmp(buffer, "fonts") == 0)
-    PHYSFS_enumerate(fname, fontSetEnumCB, data);
-
-  return PHYSFS_ENUM_OK;
+  if (p->havePathCache) createPathCache();
 }
 
 void FileSystem::initFontSets(SharedFontState &sfs) {
-  FontSetsCBData d = {p, &sfs};
-
-  PHYSFS_enumerate("", findFontsFolderCB, &d);
-}
-
-struct OpenReadEnumData {
-  FileSystem::OpenHandler &handler;
-  SDL_IOStream *ops = nullptr;
-
-  /* The filename (without directory) we're looking for */
-  const char *filename;
-  size_t filenameN;
-
-  /* Optional hash to translate full filepaths
-   * (used with path cache) */
-  std::map<std::string, std::string> *pathTrans;
-
-  /* Number of files we've attempted to read and parse */
-  size_t matchCount;
-  bool stopSearching;
-
-  /* In case of a PhysFS error, save it here so it
-   * doesn't get changed before we get back into our code */
-  const char *physfsError;
-
-  OpenReadEnumData(FileSystem::OpenHandler &handler, const char *filename,
-                   size_t filenameN,
-                   std::map<std::string, std::string> *pathTrans)
-      : handler(handler), filename(filename), filenameN(filenameN),
-        pathTrans(pathTrans), matchCount(0), stopSearching(false),
-        physfsError(0) {}
-};
-
-static PHYSFS_EnumerateCallbackResult
-openReadEnumCB(void *d, const char *dirpath, const char *filename) {
-  OpenReadEnumData &data = *static_cast<OpenReadEnumData *>(d);
-  char buffer[512];
-  const char *fullPath;
-
-  if (data.stopSearching)
-    return PHYSFS_ENUM_STOP;
-
-  /* If there's not even a partial match, continue searching */
-  if (strncmp(filename, data.filename, data.filenameN) != 0)
-    return PHYSFS_ENUM_OK;
-
-  if (!*dirpath) {
-    fullPath = filename;
-  } else {
-    snprintf(buffer, sizeof(buffer), "%s/%s", dirpath, filename);
-    fullPath = buffer;
+  try {
+    for (const auto &[folder, actual] : p->search.list({})) {
+      if (lower(folder) != "fonts" || (!actual.empty() && !fs::is_directory(actual))) continue;
+      for (const auto &[name, path] : p->search.list(paths::fromUtf8(folder))) {
+        const auto ext = lower(paths::toUtf8(path.extension().u8string()));
+        if (ext != ".ttf" && ext != ".otf") continue;
+        std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(openStream(path), SDL_CloseIO);
+        const auto filename = folder + "/" + name;
+        sfs.initFontSetCB(stream.get(), filename.c_str());
+      }
+    }
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
   }
-
-  char last = filename[data.filenameN];
-  /* If fname matches up to a following '.' (meaning the rest is part
-   * of the extension), or up to a following '\0' (full match), we've
-   * found our file */
-  if (last != '.' && last != '\0')
-    return PHYSFS_ENUM_OK;
-
-  /* If the path cache is active, translate from lower case
-   * to mixed case path */
-  if (data.pathTrans)
-    fullPath = (*data.pathTrans)[fullPath].c_str();
-
-  PHYSFS_File *phys = PHYSFS_openRead(fullPath);
-
-  if (!phys) {
-    /* Failing to open this file here means there must
-     * be a deeper rooted problem somewhere within PhysFS.
-     * Just abort alltogether. */
-    data.stopSearching = true;
-    data.physfsError = PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode());
-
-    return PHYSFS_ENUM_ERROR;
-  }
-  data.ops = openReadStream(phys);
-
-  const char *ext = findExt(filename);
-
-  if (data.handler.tryRead(data.ops, ext))
-    data.stopSearching = true;
-
-  ++data.matchCount;
-  return PHYSFS_ENUM_OK;
 }
 
 void FileSystem::openRead(OpenHandler &handler, const char *filename) {
-  std::string filename_nm = paths::toUtf8(paths::fromRgss(filename).generic_u8string());
-  char buffer[512];
-  size_t len = strcpySafe(buffer, filename_nm.c_str(), sizeof(buffer), -1);
-  char *delim;
-
-  if (p->havePathCache)
-    for (size_t i = 0; i < len; ++i)
-      buffer[i] = tolower(buffer[i]);
-
-  /* Find the deliminator separating directory and file name */
-  for (delim = buffer + len; delim > buffer; --delim)
-    if (*delim == '/')
-      break;
-
-  const bool root = (delim == buffer);
-
-  const char *file = buffer;
-  const char *dir = "";
-
-  if (!root) {
-    /* Cut the buffer in half so we can use it
-     * for both filename and directory path */
-    *delim = '\0';
-    file = delim + 1;
-    dir = buffer;
+  const auto requested = paths::fromRgss(filename);
+  auto file = paths::toUtf8(requested.filename().u8string());
+  auto directory = paths::toUtf8(requested.parent_path().generic_u8string());
+  std::map<std::string, fs::path> candidates;
+  try {
+    if (p->havePathCache) {
+      file = lower(normalized(file));
+      directory = lower(normalized(directory));
+      const auto list = p->fileLists.find(directory);
+      if (list != p->fileLists.end())
+        for (const auto &name : list->second) {
+          const auto key = directory.empty() ? name : directory + "/" + name;
+          candidates.emplace(name, p->pathCache.at(key).actual);
+        }
+    } else {
+      candidates = p->search.list(requested.parent_path());
+    }
+    size_t matches = 0;
+    for (const auto &[name, actual] : candidates) {
+      if (!name.starts_with(file) || (name.size() != file.size() && name[file.size()] != '.')) continue;
+      if (actual.empty() || !fs::is_regular_file(actual)) continue;
+      ++matches;
+      const auto dot = name.find_last_of('.');
+      const char *ext = dot == std::string::npos ? nullptr : name.c_str() + dot + 1;
+      // OpenHandler takes ownership, including on a failed decode.
+      if (handler.tryRead(openStream(actual), ext)) return;
+    }
+    if (!matches) throw Exception(Exception::NoFileError, "%s", filename);
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
   }
-  OpenReadEnumData data(handler, file, len + buffer - delim - !root,
-                        p->havePathCache ? &p->pathCache : 0);
-
-  if (p->havePathCache) {
-    /* Get the list of files contained in this directory
-     * and manually iterate over them */
-    const std::vector<std::string> &fileList = p->fileLists[dir];
-
-    for (size_t i = 0; i < fileList.size(); ++i)
-      openReadEnumCB(&data, dir, fileList[i].c_str());
-  } else {
-    PHYSFS_enumerate(dir, openReadEnumCB, &data);
-  }
-
-  if (data.physfsError)
-    throw Exception(Exception::PHYSFSError, "PhysFS: %s", data.physfsError);
-
-  if (data.matchCount == 0)
-    throw Exception(Exception::NoFileError, "%s", filename);
 }
 
 SDL_IOStream *FileSystem::openReadRaw(const char *filename) {
-
-  PHYSFS_File *handle = PHYSFS_openRead(paths::toUtf8(paths::fromRgss(filename).generic_u8string()).c_str());
-
-  if (!handle)
-    throw Exception(Exception::NoFileError, "%s", filename);
-
-  return openReadStream(handle);
+  try {
+    const auto path = p->search.resolve(paths::fromRgss(filename));
+    if (!path.empty() && fs::is_regular_file(path)) return openStream(path);
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
+  }
+  throw Exception(Exception::NoFileError, "%s", filename);
 }
 
 bool FileSystem::exists(const char *filename) {
-  return PHYSFS_exists(paths::toUtf8(paths::fromRgss(filename).generic_u8string()).c_str());
+  try {
+    return !p->search.resolve(paths::fromRgss(filename)).empty();
+  } catch (const fs::filesystem_error &error) {
+    throw Exception(Exception::IOError, "%s", error.what());
+  }
 }
 
 const char *FileSystem::desensitize(const char *filename) {
-  std::string fn_lower(filename);
-    
-  std::transform(fn_lower.begin(), fn_lower.end(), fn_lower.begin(), [](unsigned char c){
-      return std::tolower(c);
-  });
-  if (p->havePathCache && p->pathCache.contains(fn_lower))
-    return p->pathCache[fn_lower].c_str();
+  if (p->havePathCache) {
+    const auto key = lower(normalized(paths::toUtf8(paths::fromRgss(filename).generic_u8string())));
+    if (auto found = p->pathCache.find(key); found != p->pathCache.end())
+      return found->second.mixed.c_str();
+  }
   return filename;
 }

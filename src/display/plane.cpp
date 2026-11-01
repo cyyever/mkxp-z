@@ -34,7 +34,7 @@
 #include "shader.h"
 #include "glstate.h"
 
-#include "sigslot/signal.hpp"
+#include "util/engine-signal.h"
 
 static float fwrap(float value, float range)
 {
@@ -47,7 +47,7 @@ struct PlanePrivate
 	Bitmap *bitmap;
 	Bitmap *realBitmap;
 
-	sigslot::connection bitmapDispCon;
+	SignalConnection bitmapDispCon;
 
 	NormValue opacity;
 	BlendType blendType;
@@ -69,7 +69,7 @@ struct PlanePrivate
 
 	EtcTemps tmp;
 
-	sigslot::connection prepareCon;
+	SignalConnection prepareCon;
 
 	PlanePrivate()
 	    : bitmap(0),
