@@ -134,7 +134,7 @@ jobs:
           arch: x86_64
           sync: rsync
           prepare: |
-            pkg install -y python3 meson cmake ninja pkgconf
+            pkg install -y git python3 meson cmake ninja pkgconf
           run: |
             set -eu
             export CC=clang CXX=clang++
