@@ -40,8 +40,15 @@ ensure
   $DEBUG, $VERBOSE = debug, verbose
 end
 
-# zlib is the only extension built into the packaged runtime.
+# zlib is required by the packaged game runtime.
 require 'zlib'
+
+# The autoconf installer loads RubyGems and needs the monitor extension. MSVC
+# links directly from its build tree and does not run that installer.
+unless RUBY_PLATFORM.include?('mswin')
+  require 'monitor'
+  check(Monitor.new.synchronize { 42 } == 42, 'Unix installer monitor extension')
+end
 
 payload = [1, -1, 2**80, "\x00\xff".b, ["日本語", {rgss: 3}]]
 check(Marshal.load(Zlib::Inflate.inflate(Zlib::Deflate.deflate(Marshal.dump(payload)))) == payload,

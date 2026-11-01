@@ -109,8 +109,9 @@ else
                     '--disable-shared',
                     '--disable-yjit',
                     '--disable-install-doc',
-                    # mkxp-z only needs zlib (auto-required by the binding); the supported games load no other extension.
-                    '--with-ext=zlib',
+                    # Ruby's Unix installer loads RubyGems, which requires monitor.
+                    # The games themselves only require zlib.
+                    '--with-ext=zlib,monitor',
                     '--with-static-linked-ext',
                     '--disable-rubygems',
                     '--without-gmp',
@@ -213,6 +214,7 @@ else
                 : [],
             meson.project_build_root() / 'build' / 'ext' / 'extinit.a',
             meson.project_build_root() / 'build' / 'ext' / 'zlib' / 'zlib.a',
+            meson.project_build_root() / 'build' / 'ext' / 'monitor' / 'monitor.a',
             meson.project_build_root() / 'build' / 'enc' / 'encinit.a',
             meson.project_build_root() / 'build' / 'enc' / 'libenc.a',
             meson.project_build_root() / 'build' / 'enc' / 'libtrans.a',
