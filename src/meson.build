@@ -84,7 +84,7 @@ if git_hash_fallback != ''
         },
     )
 else
-    git = meson.version().version_compare('>=1.10.0') ? find_program('git').cmd_array() : find_program('git')
+    git = find_program('git').cmd_array()
     git_hash_file = vcs_tag(
         input: 'git-hash.h.in',
         output: 'git-hash.h',
