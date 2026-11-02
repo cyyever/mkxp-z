@@ -39,7 +39,7 @@ int main(int argc, char **argv)
     struct Fixture { const char *file; const char *decoder; };
     for (const Fixture &fixture : {Fixture{"tone.wav", "WAV"}, Fixture{"tone.flac", "DRFLAC"},
                                    Fixture{"tone.mp3", "DRMP3"}, Fixture{"tone.ogg", "STBVORBIS"},
-                                   Fixture{"tone-looptag.ogg", "STBVORBIS"}}) {
+                                   Fixture{"tone-looptag.ogg", "STBVORBIS"}, Fixture{"tone-alaw.wav", "WAV"}}) {
         const std::string path = fixtures + "/" + fixture.file;
         MIX_AudioDecoder *decoder = MIX_CreateAudioDecoder(path.c_str(), ignoreLoops);
         CHECK(decoder);
