@@ -49,12 +49,10 @@ template <typename T>
 class IntruList
 {
 	IntruListLink<T> root;
-	int size;
 
 public:
 	IntruList()
-	    : root(0),
-	      size(0)
+	    : root(0)
 	{
 		root.prev = &root;
 		root.next = &root;
@@ -67,7 +65,6 @@ public:
 		node.prev = root.prev;
 		root.prev = &node;
 
-		size++;
 	}
 
 	void insertBefore(IntruListLink<T> &node,
@@ -78,7 +75,6 @@ public:
 		prev.prev->next = &node;
 		prev.prev = &node;
 
-		size++;
 	}
 
 	void remove(IntruListLink<T> &node)
@@ -92,7 +88,6 @@ public:
 		node.prev = 0;
 		node.next = 0;
 
-		size--;
 	}
 
 	void clear()
@@ -101,7 +96,6 @@ public:
 		root.prev = &root;
 		root.next = &root;
 
-		size = 0;
 	}
 
 	T *tail() const
@@ -123,10 +117,6 @@ public:
 		return &root;
 	}
 
-	int getSize() const
-	{
-		return size;
-	}
 };
 
 #endif // INTRULIST_H

@@ -75,9 +75,6 @@ findNextPow2(int start)
 #define DECL_ATTR(name, type) DECL_ATTR_DETAILED(name, type, , const)
 #define DECL_ATTR_VIRT(name, type) DECL_ATTR_DETAILED(name, type, virtual, const)
 #define DECL_ATTR_STATIC(name, type) DECL_ATTR_DETAILED(name, type, static, )
-#define DECL_ATTR_INLINE(name, type, loc) \
-	type get##name() const { return loc; } \
-	void set##name(type value) { loc = value; }
 
 #define DEF_ATTR_RD_SIMPLE_DETAILED(klass, name, type, location, keyword1) \
 	type klass :: get##name() keyword1 \
