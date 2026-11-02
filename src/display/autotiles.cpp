@@ -195,5 +195,3 @@ extern const StaticRect autotileRects[] =
 	{ 0, 16, 16, 16 },
 	{ 16, 16, 16, 16 }
 };
-
-extern const int autotileRectsN = sizeof(autotileRects) / sizeof(autotileRects[0]);

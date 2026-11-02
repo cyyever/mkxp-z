@@ -37,7 +37,7 @@ public:
 	Plane(Viewport *viewport = 0);
 	~Plane();
 
-	DECL_ATTR( Bitmap,    Bitmap* )
+	void setBitmap(Bitmap* value);
 	DECL_ATTR( OX,        int     )
 	DECL_ATTR( OY,        int     )
 	DECL_ATTR( ZoomX,     float   )

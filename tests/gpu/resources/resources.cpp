@@ -50,7 +50,7 @@ void clearRenderTarget() {
 
 static void textures() {
     auto id=TEX::gen();auto alias=id;
-    check(!id.empty() && bool(id) && !id.valid() && !id.native(),"texture identity before allocation");
+    check(!id.empty() && !id.valid() && !id.native(),"texture identity before allocation");
     rejects([&] { (void)id.resource(); });
     TEX::bind(id);TEX::setRepeat(true);TEX::setSmooth(false);
     const std::vector<Uint8> original{1,2,3,255,17,33,65,127,91,15,43,0,
@@ -110,7 +110,7 @@ static void textures() {
     rejects([&] { (void)alias.resource(); });
     const int after=flushes;TEX::del(alias);check(flushes==after,"duplicate texture release");
     auto unallocated=TEX::gen();auto unallocatedAlias=unallocated;TEX::del(unallocated);
-    check(!unallocatedAlias.valid()&&!bool(unallocatedAlias)&&!unallocatedAlias.empty(),"unallocated alias invalidation");
+    check(!unallocatedAlias.valid()&&!unallocatedAlias.empty(),"unallocated alias invalidation");
 }
 int main(){SDL_Window *window=nullptr;try{
     check(SDL_Init(SDL_INIT_VIDEO),SDL_GetError());

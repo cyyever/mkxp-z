@@ -187,12 +187,6 @@ bool SceneElement::operator<(const SceneElement &o) const
 	return false;
 }
 
-void SceneElement::setSpriteY(int value)
-{
-	spriteY = value;
-	scene->reinsert(*this);
-}
-
 void SceneElement::unlink()
 {
 	if (scene)

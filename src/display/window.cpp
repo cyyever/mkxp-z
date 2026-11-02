@@ -763,8 +763,6 @@ DEF_ATTR_SIMPLE(Window, X,          int,     p->position.x)
 DEF_ATTR_SIMPLE(Window, Y,          int,     p->position.y)
 DEF_ATTR_SIMPLE(Window, CursorRect, Rect&,  *p->cursorRect)
 
-DEF_ATTR_RD_SIMPLE(Window, Windowskin,      Bitmap*, p->windowskin)
-DEF_ATTR_RD_SIMPLE(Window, Contents,        Bitmap*, p->realContents)
 DEF_ATTR_RD_SIMPLE(Window, Stretch,         bool,    p->bgStretch)
 DEF_ATTR_RD_SIMPLE(Window, Active,          bool,    p->active)
 DEF_ATTR_RD_SIMPLE(Window, Pause,           bool,    p->pause)

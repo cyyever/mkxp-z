@@ -113,14 +113,6 @@ Viewport::Viewport(Rect *rect)
 	initViewport(rect->x, rect->y, rect->width, rect->height);
 }
 
-Viewport::Viewport()
-    : SceneElement(*shState->screen()),
-      sceneLink(this)
-{
-	const Graphics &graphics = shState->graphics();
-	initViewport(0, 0, graphics.width(), graphics.height());
-}
-
 void Viewport::initViewport(int x, int y, int width, int height)
 {
 	p = new ViewportPrivate(x, y, width, height, this);

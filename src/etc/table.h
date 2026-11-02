@@ -45,8 +45,6 @@ public:
 	void set(int16_t value, int x, int y = 0, int z = 0);
 
 	void resize(int x, int y, int z);
-	void resize(int x, int y);
-	void resize(int x);
 
 	int serialSize() const;
 	void serialize(char *buffer) const;

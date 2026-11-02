@@ -28,7 +28,6 @@ public:
     bool mipmaps() const;
     bool empty() const { return !storage; }
     bool valid() const;
-    explicit operator bool() const;
     bool operator==(const ID &) const = default;
 private:
     friend struct gpu_resources::Access;
@@ -38,7 +37,6 @@ ID gen();
 void del(ID);
 void bind(ID);
 void unbind();
-const ID &bound();
 void uploadImage(int width, int height, const void *pixels,
                  SDL_PixelFormat format = SDL_PIXELFORMAT_RGBA32, int pitch = 0);
 void uploadSubImage(int x, int y, int width, int height, const void *pixels,
@@ -60,7 +58,6 @@ public:
     TEX::ID texture() const;
     bool empty() const { return !storage; }
     bool valid() const;
-    explicit operator bool() const;
     bool operator==(const ID &) const = default;
 private:
     friend struct gpu_resources::Access;
@@ -89,7 +86,6 @@ struct TEXFBO {
     static void allocEmpty(TEXFBO &, int width, int height);
     static void linkFBO(TEXFBO &);
     static void fini(TEXFBO &);
-    static void clear(TEXFBO &);
 };
 
 #endif
