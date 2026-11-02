@@ -36,10 +36,10 @@
 #include "render-state.h"
 #include "quadarray.h"
 
-#include <math.h>
+#include <cmath>
+#include <algorithm>
 #include <numbers>
 #include <memory>
-#include <algorithm>
 #include "exception.h"
 
 #include <SDL3/SDL_rect.h>
@@ -141,8 +141,8 @@ struct SpritePrivate
     SignalConnection prepareCon;
     
     SpritePrivate()
-    : bitmap(0),
-    realBitmap(0),
+    : bitmap(nullptr),
+    realBitmap(nullptr),
     realOX(0),
     realOY(0),
     realZoomX(1.0f),
@@ -158,7 +158,7 @@ struct SpritePrivate
     bushOpacity(128),
     opacity(255),
     blendType(BlendNormal),
-    pattern(0),
+    pattern(nullptr),
     patternTile(true),
     patternOpacity(255),
     invert(false),
@@ -196,7 +196,7 @@ struct SpritePrivate
         {
             delete bitmap;
         }
-        realBitmap = bitmap = 0;
+        realBitmap = bitmap = nullptr;
         bitmapDispCon.disconnect();
     }
 
@@ -315,10 +315,7 @@ struct SpritePrivate
         {
             float overflowX = std::max(src.x + src.w - bitmap->width(), 0.0f);
             
-            if (src.x < 0)
-            {
-                src.x = 0;
-            }
+            src.x = std::max<float>(src.x, 0);
             src.x -= overflowX;
         }
 
@@ -478,7 +475,7 @@ struct SpritePrivate
     }
     
     void emitWaveChunk(SVertex *&vert, float phase, float width,
-                       const Vec2 &zoom, int chunkY, int chunkLength, int offsetLength)
+                       const Vec2 &zoom, int chunkY, int chunkLength, int offsetLength) const
     {
         float wavePos = phase + ((offsetLength + chunkY) / (float) wave.length) * (float) (std::numbers::pi * 2);
         float chunkX = sin(wavePos) * wave.amp / zoom.x;
@@ -583,7 +580,7 @@ struct SpritePrivate
                 }
             }
             wave.qArray.resize(1);
-            Quad::setTexPosRect(&wave.qArray.vertices[0], tex, pos);
+            Quad::setTexPosRect(wave.qArray.vertices.data(), tex, pos);
             wave.qArray.commit();
             
             return;
@@ -616,7 +613,7 @@ struct SpritePrivate
         int lastLength = (visibleLength - firstLength) % 8;
         
         wave.qArray.resize(!!firstLength + chunks + !!lastLength);
-        SVertex *vert = &wave.qArray.vertices[0];
+        SVertex *vert = wave.qArray.vertices.data();
         
         float phase = (wave.phase * (float) std::numbers::pi) / 180.0f;
         
@@ -729,7 +726,7 @@ void Sprite::setBitmap(Bitmap *bitmap)
     
     if (nullOrDisposed(bitmap))
     {
-        p->realBitmap = p->bitmap = 0;
+        p->realBitmap = p->bitmap = nullptr;
         return;
     }
     

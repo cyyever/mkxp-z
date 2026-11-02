@@ -40,7 +40,7 @@
 
 #include <SDL3/SDL_timer.h>
 
-SharedState *SharedState::instance = 0;
+SharedState *SharedState::instance = nullptr;
 
 struct SharedStatePrivate
 {
@@ -83,7 +83,7 @@ struct SharedStatePrivate
     Uint64 startupTicksNS;
 
 	SharedStatePrivate(RGSSThreadData *threadData)
-	    : bindingData(0),
+	    : bindingData(nullptr),
 	      sdlWindow(threadData->window),
 	      fileSystem(threadData->argv0, threadData->config.allowSymlinks),
 	      eThread(*threadData->ethread),
@@ -103,13 +103,13 @@ struct SharedStatePrivate
         startupTicksNS = SDL_GetTicksNS();
         
 
-		for (size_t i = 0; i < config.patches.size(); ++i)
-			fileSystem.addPath(config.patches[i].c_str());
+		for (const auto & patche : config.patches)
+			fileSystem.addPath(patche.c_str());
 
 		fileSystem.addPath(".");
 
-		for (size_t i = 0; i < config.rtps.size(); ++i)
-			fileSystem.addPath(config.rtps[i].c_str());
+		for (const auto & rtp : config.rtps)
+			fileSystem.addPath(rtp.c_str());
 
 		if (config.pathCache)
 			fileSystem.createPathCache();
@@ -142,8 +142,8 @@ struct SharedStatePrivate
 
 void SharedState::initInstance(RGSSThreadData *threadData)
 {
-	SharedState::instance = 0;
-	Font *defaultFont = 0;
+	SharedState::instance = nullptr;
+	Font *defaultFont = nullptr;
 
 	try
 	{
@@ -266,7 +266,7 @@ void SharedState::requestAtlasTex(int w, int h, TEXFBO &out)
 		TEXFBO::linkFBO(tex);
 	}
 
-	out = tex;
+	out = std::move(tex);
 }
 
 void SharedState::releaseAtlasTex(TEXFBO &tex)
@@ -331,7 +331,7 @@ SharedState::SharedState(RGSSThreadData *threadData)
 			return;
 		
 		delete p;
-		SharedState::instance = 0;
+		SharedState::instance = nullptr;
 		
 		throw exc;
 	}

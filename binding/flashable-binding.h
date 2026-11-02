@@ -40,7 +40,7 @@ RB_METHOD(flashableFlash)
 
 	if (NIL_P(colorObj))
 	{
-		f->flash(0, duration);
+		f->flash(nullptr, duration);
 		return Qnil;
 	}
 

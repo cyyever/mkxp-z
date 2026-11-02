@@ -72,8 +72,8 @@ struct PlanePrivate
 	SignalConnection prepareCon;
 
 	PlanePrivate()
-	    : bitmap(0),
-	      realBitmap(0),
+	    : bitmap(nullptr),
+	      realBitmap(nullptr),
 	      opacity(255),
 	      blendType(BlendNormal),
 	      color(&tmp.color),
@@ -104,7 +104,7 @@ struct PlanePrivate
         {
             delete bitmap;
         }
-        realBitmap = bitmap = 0;
+        realBitmap = bitmap = nullptr;
 		bitmapDispCon.disconnect();
 	}
 
@@ -117,11 +117,10 @@ struct PlanePrivate
 			srcRect.w = sceneGeo.rect.w / zoomX;
 			srcRect.h = sceneGeo.rect.h / zoomY;
 
-			Quad::setTexRect(&qArray.vertices[0], srcRect);
+			Quad::setTexRect(qArray.vertices.data(), srcRect);
 			qArray.commit();
 
-			return;
-
+			
 	}
 
 	void updateChild()
@@ -231,7 +230,7 @@ void Plane::setBitmap(Bitmap *value)
 
 	if (nullOrDisposed(value))
 	{
-		p->realBitmap = p->bitmap = 0;
+		p->realBitmap = p->bitmap = nullptr;
 		return;
 	}
 
@@ -368,7 +367,7 @@ void Plane::draw()
 
 void Plane::onGeometryChange(const Scene::Geometry &geo)
 {
-	Quad::setPosRect(&p->qArray.vertices[0], FloatRect(geo.rect));
+	Quad::setPosRect(p->qArray.vertices.data(), FloatRect(geo.rect));
 
 	p->sceneGeo = geo;
 	p->quadSourceDirty = true;

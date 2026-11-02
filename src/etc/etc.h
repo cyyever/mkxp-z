@@ -48,7 +48,7 @@ struct Color : public Serializable
 	Color(const Vec4 &norm);
 	Color(const Color &o);
 
-	virtual ~Color() {}
+	virtual ~Color() = default;
 
 	const Color &operator=(const Color &o);
 	void set(double red, double green, double blue, double alpha);
@@ -66,8 +66,8 @@ struct Color : public Serializable
 	double getAlpha() const { return alpha; }
 
 	/* Serializable */
-	int serialSize() const;
-	void serialize(char *buffer) const;
+	int serialSize() const override;
+	void serialize(char *buffer) const override;
 	static Color *deserialize(const char *data, int len);
 
 	bool hasEffect() const
@@ -100,7 +100,7 @@ struct Tone : public Serializable
 	Tone(double red, double green, double blue, double gray = 0);
 	Tone(const Tone &o);
 
-	virtual ~Tone() {}
+	virtual ~Tone() = default;
 
 	bool operator==(const Tone &o) const;
 
@@ -118,8 +118,8 @@ struct Tone : public Serializable
 	double getGray()  const { return gray;  }
 
 	/* Serializable */
-	int serialSize() const;
-	void serialize(char *buffer) const;
+	int serialSize() const override;
+	void serialize(char *buffer) const override;
 	static Tone *deserialize(const char *data, int len);
 
 	bool hasEffect() const
@@ -152,7 +152,7 @@ struct Rect : public Serializable
 	    : x(0), y(0), width(0), height(0)
 	{}
 
-	virtual ~Rect() {}
+	virtual ~Rect() = default;
 
 	Rect(int x, int y, int width, int height);
 	Rect(const Rect &o);
@@ -177,8 +177,8 @@ struct Rect : public Serializable
 	int getHeight() const { return height; }
 
 	/* Serializable */
-	int serialSize() const;
-	void serialize(char *buffer) const;
+	int serialSize() const override;
+	void serialize(char *buffer) const override;
 	static Rect *deserialize(const char *data, int len);
 
 	/* Internal */
@@ -187,7 +187,7 @@ struct Rect : public Serializable
 		return FloatRect(x, y, width, height);
 	}
 
-	IntRect toIntRect()
+	IntRect toIntRect() const
 	{
 		return IntRect(x, y, width, height);
 	}

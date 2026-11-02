@@ -38,13 +38,13 @@ struct SpritePrivate;
 class Sprite : public ViewportElement, public Flashable, public Disposable
 {
 public:
-	Sprite(Viewport *viewport = 0);
-	~Sprite();
+	Sprite(Viewport *viewport = nullptr);
+	~Sprite() override;
 
 	int getWidth()  const;
 	int getHeight() const;
 
-	void update();
+	void update() override;
 
 	void setBitmap(Bitmap* value);
 	DECL_ATTR( SrcRect,     Rect&   )
@@ -82,11 +82,11 @@ public:
 private:
 	SpritePrivate *p;
 
-	void draw();
-	void onGeometryChange(const Scene::Geometry &);
+	void draw() override;
+	void onGeometryChange(const Scene::Geometry &) override;
 
-	void releaseResources();
-	const char *klassName() const { return "sprite"; }
+	void releaseResources() override;
+	const char *klassName() const override { return "sprite"; }
 
 	ABOUT_TO_ACCESS_DISP
 };

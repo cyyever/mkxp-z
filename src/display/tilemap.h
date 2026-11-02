@@ -44,16 +44,16 @@ public:
 		void set(int i, Bitmap *bitmap);
 
 	private:
-		Autotiles() {}
-		~Autotiles() {}
+		Autotiles() = default;
+		~Autotiles() = default;
 
 		TilemapPrivate *p;
 		friend class Tilemap;
 		friend struct TilemapPrivate;
 	};
 
-	Tilemap(Viewport *viewport = 0);
-	~Tilemap();
+	Tilemap(Viewport *viewport = nullptr);
+	~Tilemap() override;
 
 	void update();
 
@@ -78,8 +78,8 @@ private:
 	TilemapPrivate *p;
 	Autotiles atProxy;
 
-	void releaseResources();
-	const char *klassName() const { return "tilemap"; }
+	void releaseResources() override;
+	const char *klassName() const override { return "tilemap"; }
 };
 
 #endif // TILEMAP_H

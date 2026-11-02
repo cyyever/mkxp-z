@@ -38,7 +38,7 @@
 #include "util.h"
 
 #include <algorithm>
-#include <assert.h>
+#include <cassert>
 
 const Vec2i winSize(840, 356);
 
@@ -55,7 +55,7 @@ static bool pointInRect(const SDL_Rect &r, int x, int y)
 	return (x >= r.x && x <= r.x+r.w && y >= r.y && y <= r.y+r.h);
 }
 
-typedef SettingsMenuPrivate SMP;
+using SMP = SettingsMenuPrivate;
 
 #define BTN_STRING_CUSTOM(btn, name) { Input:: btn, name }
 #define BTN_STRING(btn) BTN_STRING_CUSTOM(btn, #btn)
@@ -104,7 +104,7 @@ static std::string sourceDescString(const SourceDesc src)
 
 		if (*str == '\0')
 			return "Unknown key";
-		else
+		
 			return str;
 	}
 	case CButton:
@@ -177,15 +177,15 @@ protected:
 	 * or -1 if none */
 	int cellIndex(int x, int y) const;
 
-	void drawHandler(SDL_Surface *surf);
-	void motionHandler(int x, int y);
-	void leaveHandler();
-	void clickHandler(int x, int y, uint8_t button);
+	void drawHandler(SDL_Surface *surf) override;
+	void motionHandler(int x, int y) override;
+	void leaveHandler() override;
+	void clickHandler(int x, int y, uint8_t button) override;
 };
 
 struct Button : Widget
 {
-	typedef void (SMP::*Callback)();
+	using Callback = void (SMP::*)();
 
 	const char *str;
 	Callback cb;
@@ -201,10 +201,10 @@ protected:
 
 	void setHovered(bool val);
 
-	void drawHandler(SDL_Surface *surf);
-	void motionHandler(int, int);
-	void leaveHandler();
-	void clickHandler(int, int, uint8_t button);
+	void drawHandler(SDL_Surface *surf) override;
+	void motionHandler(int, int) override;
+	void leaveHandler() override;
+	void clickHandler(int, int, uint8_t button) override;
 };
 
 struct Label : Widget
@@ -212,7 +212,7 @@ struct Label : Widget
 	const char *str;
 	SDL_Color c;
 
-	Label() : Widget(0, IntRect()) {}
+	Label() : Widget(nullptr, IntRect()) {}
 
 	Label(SMP *p, const IntRect &rect,
 	      const char *str, uint8_t r, uint8_t g, uint8_t b)
@@ -231,10 +231,10 @@ struct Label : Widget
 protected:
 	bool visible;
 
-	void drawHandler(SDL_Surface *surf);
-	void motionHandler(int, int) {}
-	void leaveHandler() {}
-	void clickHandler(int, int, uint8_t) {}
+	void drawHandler(SDL_Surface *surf) override;
+	void motionHandler(int, int) override {}
+	void leaveHandler() override {}
+	void clickHandler(int, int, uint8_t) override {}
 };
 
 enum State
@@ -297,14 +297,14 @@ struct SettingsMenuPrivate
 		return SDL_CreateSurface(w, h, SDL_GetPixelFormatForMasks(bpp, rMask, gMask, bMask, 0));
 	}
 
-	void fillSurface(SDL_Surface *surf, uint8_t grey)
+	void fillSurface(SDL_Surface *surf, uint8_t grey) const
 	{
-		SDL_FillSurfaceRect(surf, 0, SDL_MapRGBA(rgb, nullptr, grey, grey, grey, 255));
+		SDL_FillSurfaceRect(surf, nullptr, SDL_MapRGBA(rgb, nullptr, grey, grey, grey, 255));
 	}
 
 	void fillRect(SDL_Surface *surf,
 	              int x, int y, int w, int h,
-	              uint8_t r, uint8_t g, uint8_t b)
+	              uint8_t r, uint8_t g, uint8_t b) const
 	{
 		SDL_Rect rect = { drawOff.x+x, drawOff.y+y, w, h };
 		SDL_FillSurfaceRect(surf, &rect, SDL_MapRGB(rgb, nullptr, r, g, b));
@@ -368,7 +368,7 @@ struct SettingsMenuPrivate
 		strokeRectInner(surf, x, y, w, h, lineW, grey, grey, grey);
 	}
 
-	void applyFontStyle(bool bold)
+	void applyFontStyle(bool bold) const
 	{
 		if (bold)
 			TTF_SetFontStyle(font, TTF_STYLE_BOLD);
@@ -394,7 +394,7 @@ struct SettingsMenuPrivate
 	/* Horizontally centered */
 	void blitTextSurf(SDL_Surface *surf, int x, int y,
 	                  int alignW, SDL_Surface *txtSurf,
-	                  Justification just)
+	                  Justification just) const
 	{
 		SDL_Rect dstRect;
 		dstRect.x = drawOff.x;
@@ -414,13 +414,13 @@ struct SettingsMenuPrivate
 
 		if (txtSurf->w <= alignW)
 		{
-			SDL_BlitSurface(txtSurf, 0, surf, &dstRect);
+			SDL_BlitSurface(txtSurf, nullptr, surf, &dstRect);
 		}
 		else
 		{
 			dstRect.w = alignW;
 			dstRect.x = x;
-			SDL_BlitSurfaceScaled(txtSurf, 0, surf, &dstRect, SDL_SCALEMODE_NEAREST);
+			SDL_BlitSurfaceScaled(txtSurf, nullptr, surf, &dstRect, SDL_SCALEMODE_NEAREST);
 		}
 	}
 
@@ -445,14 +445,13 @@ struct SettingsMenuPrivate
 	{
 		size_t slotI[vButtonsN] = { 0 };
 
-		for (size_t i = 0; i < bWidgets.size(); ++i)
+		for (auto & bWidget : bWidgets)
 			for (size_t j = 0; j < 4; ++j)
-				bWidgets[i].src[j].type = Invalid;
+				bWidget.src[j].type = Invalid;
 
-		for (size_t i = 0; i < d.size(); ++i)
+		for (auto desc : d)
 		{
-			const BindingDesc &desc = d[i];
-			const Input::ButtonCode trg = desc.target;
+				const Input::ButtonCode trg = desc.target;
 
 			size_t j;
 			for (j = 0; j < vButtonsN; ++j)
@@ -473,9 +472,9 @@ struct SettingsMenuPrivate
 
 	void updateDuplicateStatus()
 	{
-		for (size_t i = 0; i < bWidgets.size(); ++i)
+		for (auto & bWidget : bWidgets)
 			for (size_t j = 0; j < 4; ++j)
-				bWidgets[i].dupFlag[j] = false;
+				bWidget.dupFlag[j] = false;
 
 		bool haveDup = false;
 
@@ -513,8 +512,8 @@ struct SettingsMenuPrivate
 	{
 		fillSurface(winSurf, cBgNorm);
 
-		for (size_t i = 0; i < widgets.size(); ++i)
-			widgets[i]->draw(winSurf);
+		for (auto & widget : widgets)
+			widget->draw(winSurf);
 
 		if (state == AwaitingInput)
 		{
@@ -529,7 +528,7 @@ struct SettingsMenuPrivate
 			SDL_SetSurfaceBlendMode(dark, SDL_BLENDMODE_BLEND);
 			SDL_Surface *txt = createTextSurface(buf, false);
 
-			SDL_BlitSurface(dark, 0, winSurf, 0);
+			SDL_BlitSurface(dark, nullptr, winSurf, nullptr);
 
 			SDL_Rect fill;
 			fill.x = (winSize.x - txt->w - 20) / 2;
@@ -545,7 +544,7 @@ struct SettingsMenuPrivate
 			fill.w = txt->w;
 			fill.h = txt->h;
 
-			SDL_BlitSurface(txt, 0, winSurf, &fill);
+			SDL_BlitSurface(txt, nullptr, winSurf, &fill);
 
 			SDL_DestroySurface(txt);
 			SDL_DestroySurface(dark);
@@ -556,12 +555,12 @@ struct SettingsMenuPrivate
 
 	Widget *findWidget(int x, int y)
 	{
-		Widget *w = 0;
+		Widget *w = nullptr;
 
-		for (size_t i = 0; i < widgets.size(); ++i)
-			if (widgets[i]->hit(x, y))
+		for (auto & widget : widgets)
+			if (widget->hit(x, y))
 			{
-				w = widgets[i];
+				w = widget;
 				break;
 			}
 
@@ -646,7 +645,7 @@ struct SettingsMenuPrivate
 			return false;
 		}
 
-		captureDesc = 0;
+		captureDesc = nullptr;
 		state = Idle;
 		updateDuplicateStatus();
 		redraw();
@@ -686,8 +685,8 @@ struct SettingsMenuPrivate
 	{
 		BDescVec binds;
 
-		for (size_t i = 0; i < bWidgets.size(); ++i)
-			bWidgets[i].appendBindings(binds);
+		for (const auto & bWidget : bWidgets)
+			bWidget.appendBindings(binds);
 
 		rtData.bindingUpdateMsg.post(binds);
 
@@ -855,13 +854,13 @@ int BindingWidget::cellIndex(int x, int y) const
 
 void BindingWidget::appendBindings(BDescVec &d) const
 {
-	for (size_t i = 0; i < 4; ++i)
+	for (auto i : src)
 	{
-		if (src[i].type == Invalid)
+		if (i.type == Invalid)
 			continue;
 
 		BindingDesc desc;
-		desc.src = src[i];
+		desc.src = i;
 		desc.target = vb.code;
 		d.push_back(desc);
 	}
@@ -965,8 +964,8 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 			p->bWidgets.push_back(w);
 		}
 
-	for (size_t i = 0; i< p->bWidgets.size(); ++i)
-		p->widgets.push_back(&p->bWidgets[i]);
+	for (auto & bWidget : p->bWidgets)
+		p->widgets.push_back(&bWidget);
 
 	BDescVec binds;
 	rtData.bindingUpdateMsg.get(binds);
@@ -983,12 +982,12 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	    IntRect(winSize.x-16-64, buttonY, 64, buttonH)
 	};
 
-	p->buttons.push_back(Button(p, btRects[0], "Reset defaults", &SMP::onResetToDefault));
-	p->buttons.push_back(Button(p, btRects[1], "Cancel", &SMP::onCancel));
-	p->buttons.push_back(Button(p, btRects[2], "Accept", &SMP::onAccept));
+	p->buttons.emplace_back(p, btRects[0], "Reset defaults", &SMP::onResetToDefault);
+	p->buttons.emplace_back(p, btRects[1], "Cancel", &SMP::onCancel);
+	p->buttons.emplace_back(p, btRects[2], "Accept", &SMP::onAccept);
 
-	for (size_t i = 0; i< p->buttons.size(); ++i)
-		p->widgets.push_back(&p->buttons[i]);
+	for (auto & button : p->buttons)
+		p->widgets.push_back(&button);
 
 	/* Labels */
 	const char *info = "Use left click to bind a slot, right click to clear its binding";
@@ -1000,9 +999,9 @@ SettingsMenu::SettingsMenu(RGSSThreadData &rtData)
 	p->widgets.push_back(&p->infoLabel);
 	p->widgets.push_back(&p->dupWarnLabel);
 
-	p->hovered = 0;
-	p->captureDesc = 0;
-	p->captureName = 0;
+	p->hovered = nullptr;
+	p->captureDesc = nullptr;
+	p->captureName = nullptr;
 
 	p->updateDuplicateStatus();
 
@@ -1076,7 +1075,7 @@ bool SettingsMenu::onEvent(const SDL_Event &event)
 			if (p->hovered)
 			{
 				p->hovered->leave();
-				p->hovered = 0;
+				p->hovered = nullptr;
 			}
 			break;
 

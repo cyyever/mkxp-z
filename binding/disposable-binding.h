@@ -65,7 +65,7 @@ template<class C>
 inline void
 checkDisposed(VALUE self)
 {
-	if (disposableIsDisposed<C>(0, 0, self) == Qtrue)
+	if (disposableIsDisposed<C>(0, nullptr, self) == Qtrue)
 		raiseDisposedAccess(self);
 }
 

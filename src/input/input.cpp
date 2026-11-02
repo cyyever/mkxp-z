@@ -37,8 +37,8 @@
 #include <vector>
 #include <cmath>
 #include <unordered_map>
-#include <string.h>
-#include <assert.h>
+#include <cstring>
+#include <cassert>
 
 #define BUTTON_CODE_COUNT 26
 
@@ -541,7 +541,7 @@ struct CtrlAxisBinding : public Binding
         
         if (dir == Negative)
             return val < -JAXIS_THRESHOLD;
-        else
+        
             return val > JAXIS_THRESHOLD;
     }
     
@@ -763,7 +763,7 @@ struct InputPrivate
         vScrollDistance = 0;
     }
     
-    inline ButtonState &getStateCheck(int code)
+    ButtonState &getStateCheck(int code) const
     {
         int index;
         
@@ -775,12 +775,12 @@ struct InputPrivate
         return states[index];
     }
     
-    inline ButtonState &getState(Input::ButtonCode code)
+    ButtonState &getState(Input::ButtonCode code) const
     {
         return states[mapToIndex[code]];
     }
     
-    inline ButtonState &getOldState(Input::ButtonCode code)
+    ButtonState &getOldState(Input::ButtonCode code) const
     {
         return statesOld[mapToIndex[code]];
     }
@@ -843,7 +843,7 @@ struct InputPrivate
         return b;
     }
     
-    ButtonState getControllerButtonState(int button) {
+    ButtonState getControllerButtonState(int button) const {
         checkControllerButton(button);
         ButtonState b;
         
@@ -871,7 +871,7 @@ struct InputPrivate
         rawButtonStatesOld = tmpb;
     }
     
-    void clearBuffer()
+    void clearBuffer() const
     {
         const size_t size = sizeof(ButtonState) * BUTTON_CODE_COUNT;
         memset(states, 0, size);
@@ -904,9 +904,8 @@ struct InputPrivate
         ctrlABindings.clear();
         ctrlBBindings.clear();
         
-        for (size_t i = 0; i < d.size(); ++i)
+        for (auto desc : d)
         {
-            const BindingDesc &desc = d[i];
             const SourceDesc src = desc.src;
             
             if (desc.target == Input::None)
@@ -963,8 +962,8 @@ struct InputPrivate
     {
         kbStatBindings.clear();
         
-        for (size_t i = 0; i < staticKbBindingsN; ++i)
-            kbStatBindings.push_back(KbBinding(staticKbBindings[i]));
+        for (auto staticKbBinding : staticKbBindings)
+            kbStatBindings.emplace_back(staticKbBinding);
     }
     
     void initMsBindings()
@@ -1116,13 +1115,13 @@ struct InputPrivate
             }
         }
         
-        for (size_t i = 0; i < 4; ++i)
+        for (auto dir : dirs)
         {
-            if (!getState(dirs[i]).pressed)
+            if (!getState(dir).pressed)
                 continue;
             
-            dir4Data.active = dirs[i];
-            dir4Data.previous = dirs[i];
+            dir4Data.active = dir;
+            dir4Data.previous = dir;
             return;
         }
         

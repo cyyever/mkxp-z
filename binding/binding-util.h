@@ -95,7 +95,7 @@ DEF_TYPE_CUSTOMNAME_AND_FREE(Klass, Name, freeInstance<Klass>)
 
 
 template <rb_data_type_t *rbType> static VALUE classAllocate(VALUE klass) {
-    return rb_data_typed_object_wrap(klass, 0, rbType);
+    return rb_data_typed_object_wrap(klass, nullptr, rbType);
 }
 
 #define CLASS_ALLOCATE_PRE_INIT(Name, initializeFunc)  \
@@ -193,7 +193,7 @@ int rb_get_args(int argc, VALUE *argv, const char *format, ...);
 #define RB_ARG_END
 #endif
 
-typedef VALUE (*RubyMethod)(int argc, VALUE *argv, VALUE self);
+using RubyMethod = VALUE (*)(int argc, VALUE *argv, VALUE self);
 
 static inline void _rb_define_method(VALUE klass, const char *name,
                                      RubyMethod func) {
@@ -231,7 +231,7 @@ static inline VALUE objectLoad(int argc, VALUE *argv, VALUE self) {
     
     VALUE obj = rb_obj_alloc(self);
     
-    C *c = 0;
+    C *c = nullptr;
     
     c = C::deserialize(data, dataLen);
     

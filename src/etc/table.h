@@ -35,7 +35,7 @@ public:
 	Table(int x, int y = 1, int z = 1);
 	/* Clone constructor */
 	Table(const Table &other);
-	virtual ~Table() {}
+	virtual ~Table() = default;
 
 	int xSize() const { return xs; }
 	int ySize() const { return ys; }
@@ -46,19 +46,19 @@ public:
 
 	void resize(int x, int y, int z);
 
-	int serialSize() const;
-	void serialize(char *buffer) const;
+	int serialSize() const override;
+	void serialize(char *buffer) const override;
     void serialize(std::span<char> buffer) const;
 	static Table *deserialize(const char *data, int len);
     static Table *deserialize(std::span<const char> bytes);
 
 	/* <internal */
-	inline int16_t &at(int x, int y = 0, int z = 0)
+	int16_t &at(int x, int y = 0, int z = 0)
 	{
 		return data[xs*ys*z + xs*y + x];
 	}
 
-	inline const int16_t &at(int x, int y = 0, int z = 0) const
+	const int16_t &at(int x, int y = 0, int z = 0) const
 	{
 		return data[xs*ys*z + xs*y + x];
 	}

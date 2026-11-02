@@ -26,11 +26,11 @@
 #include "font.h"
 #include "sharedstate.h"
 
-#include <string.h>
+#include <cstring>
 
 static void collectStrings(VALUE obj, std::vector<std::string> &out) {
   if (RB_TYPE_P(obj, RUBY_T_STRING)) {
-    out.push_back(RSTRING_PTR(obj));
+    out.emplace_back(RSTRING_PTR(obj));
   } else if (RB_TYPE_P(obj, RUBY_T_ARRAY)) {
     for (long i = 0; i < RARRAY_LEN(obj); ++i) {
       VALUE str = rb_ary_entry(obj, i);
@@ -39,7 +39,7 @@ static void collectStrings(VALUE obj, std::vector<std::string> &out) {
       if (!RB_TYPE_P(str, RUBY_T_STRING))
         continue;
 
-      out.push_back(RSTRING_PTR(str));
+      out.emplace_back(RSTRING_PTR(str));
     }
   }
 }
@@ -49,7 +49,7 @@ DEF_TYPE(Font);
 RB_METHOD(fontDoesExist) {
   RB_UNUSED_PARAM;
 
-  const char *name = 0;
+  const char *name = nullptr;
   VALUE nameObj;
 
   rb_get_args(argc, argv, "o", &nameObj RB_ARG_END);
@@ -72,7 +72,7 @@ RB_METHOD(fontInitialize) {
 
   if (NIL_P(namesObj)) {
     namesObj = rb_iv_get(rb_obj_class(self), "default_name");
-    f = new Font(0, size);
+    f = new Font(nullptr, size);
   } else {
     std::vector<std::string> names;
     collectStrings(namesObj, names);
@@ -228,8 +228,8 @@ void fontBindingInit() {
   } else {
     defNamesObj = rb_ary_new2(defNames.size());
 
-    for (size_t i = 0; i < defNames.size(); ++i)
-      rb_ary_push(defNamesObj, rb_utf8_str_new_cstr(defNames[i].c_str()));
+    for (const auto & defName : defNames)
+      rb_ary_push(defNamesObj, rb_utf8_str_new_cstr(defName.c_str()));
   }
 
   rb_iv_set(klass, "default_name", defNamesObj);

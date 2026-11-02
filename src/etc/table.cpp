@@ -36,7 +36,7 @@ constexpr size_t headerSize = 20;
 constexpr size_t maxElements = (std::numeric_limits<int>::max() - headerSize) / sizeof(int16_t);
 
 size_t checkedCount(int x, int y, int z, Exception::Type error) {
-    auto invalid = [error]() -> size_t {
+    auto invalid = [error] -> size_t {
         throw Exception(error, error == Exception::RGSSError ? "Marshal: Table: bad file format" :
                         "Table dimensions are negative or too large");
     };
@@ -110,8 +110,7 @@ void Table::resize(int x, int y, int z)
 	ys = y;
 	zs = z;
 
-	return;
-}
+	}
 
 /* Serializable */
 int Table::serialSize() const {

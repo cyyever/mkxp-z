@@ -34,9 +34,9 @@ class Viewport : public Scene, public SceneElement, public Flashable, public Dis
 public:
 	Viewport(int x, int y, int width, int height);
 	Viewport(Rect *rect);
-	~Viewport();
+	~Viewport() override;
 
-	void update();
+	void update() override;
 
 	DECL_ATTR( Rect,  Rect&  )
 	DECL_ATTR( OX,    int    )
@@ -49,12 +49,12 @@ public:
 private:
 	void initViewport(int x, int y, int width, int height);
 
-	void composite();
-	void draw();
-	void onGeometryChange(const Geometry &);
+	void composite() override;
+	void draw() override;
+	void onGeometryChange(const Geometry &) override;
 
-	void releaseResources();
-	const char *klassName() const { return "viewport"; }
+	void releaseResources() override;
+	const char *klassName() const override { return "viewport"; }
 
 	ABOUT_TO_ACCESS_DISP
 
@@ -67,8 +67,8 @@ private:
 class ViewportElement : public SceneElement
 {
 public:
-	ViewportElement(Viewport *viewport = 0, int z = 0, int spriteY = 0);
-	~ViewportElement();
+	ViewportElement(Viewport *viewport = nullptr, int z = 0, int spriteY = 0);
+	~ViewportElement() override;
 
 	DECL_ATTR( Viewport,  Viewport* )
 

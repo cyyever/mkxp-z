@@ -34,7 +34,7 @@ public:
 	      emptyFlashFlag(false)
 	{}
 
-	virtual ~Flashable() {}
+	virtual ~Flashable() = default;
 
 	void flash(const Vec4 *color, int duration)
 	{

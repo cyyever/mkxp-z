@@ -36,7 +36,7 @@ serializableDump(int, VALUE *, VALUE self)
 
 	VALUE data = rb_str_new(0, dataSize);
 
-	Exception *exc = 0;
+	Exception *exc = nullptr;
 	try{
 		s->serialize(RSTRING_PTR(data));
 	} catch (const Exception &e) {

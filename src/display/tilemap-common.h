@@ -210,8 +210,8 @@ private:
 				Quad::setPosRect(v, posRect);
 				Quad::setColor(v, color);
 
-				for (size_t i = 0; i < 4; ++i)
-					geometry.vertices.push_back(v[i]);
+				for (const auto & i : v)
+					geometry.vertices.push_back(i);
 			}
 
 		geometry.resize(geometry.vertices.size() / 4);

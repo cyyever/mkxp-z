@@ -92,8 +92,8 @@ struct Quad
 
 	void setColor(const Vec4 &c)
 	{
-		for (int i = 0; i < 4; ++i)
-			vert[i].color = c;
+		for (auto & i : vert)
+			i.color = c;
 
 		vboDirty = true;
 	}

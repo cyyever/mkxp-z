@@ -29,6 +29,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <utility>
 
 #include <stdint.h>
 
@@ -74,7 +75,7 @@ public:
 	static void cleanup();
 
 	/* Called from RGSS thread */
-	void requestFullscreenMode(bool mode);
+	void requestFullscreenMode(bool mode) const;
 	static void requestWindowResize(int width, int height);
     static void requestWindowCenter();
     static void requestWindowRename(const char *title);
@@ -96,7 +97,7 @@ public:
 	void showMessageBox(const char *body, int flags = 0);
 
 	/* RGSS thread calls this once per frame */
-	void notifyFrame();
+	void notifyFrame() const;
 
 	/* Called on game screen (size / offset) changes */
 	static void notifyGameScreenChange(const SDL_Rect &screen);
@@ -106,7 +107,7 @@ private:
 	static void resetInputStates();
 	void setFullscreen(SDL_Window *, bool mode);
 	void updateCursorState(bool inWindow,
-	                       const SDL_Rect &screen);
+	                       const SDL_Rect &screen) const;
 	void cursorTimer();
 
 	bool fullscreen;
@@ -223,14 +224,14 @@ struct RGSSThreadData
 	               const char *argv0,
 	               SDL_Window *window,
 	               int refreshRate,
-	               const Config& newconf,
+	               Config  newconf,
                    gpu::Device *device, gpu::FrameHandoff *presentation)
 	    : ethread(ethread),
 	      argv0(argv0),
           window(window),
           gpuDevice(device), gpuPresentation(presentation),
           sizeResoRatio(1, 1), refreshRate(refreshRate),
-          config(newconf)
+          config(std::move(newconf))
 	{
 		rqResetFinish = true;
 	}

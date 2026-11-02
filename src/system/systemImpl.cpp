@@ -11,7 +11,7 @@
 #include <memory>
 
 #if defined(SDL_PLATFORM_WIN32)
-#include <stdlib.h>
+#include <cstdlib>
 #include <windows.h>
 #else
 #include <locale>
@@ -85,11 +85,11 @@ systemImpl::WineHostType systemImpl::getRealHostType() {
     void (*wine_get_host_version)(const char **, const char **) =
     (void (*)(const char **, const char **))SDL_LoadFunction(ntdll.get(), "wine_get_host_version");
     
-    if (wine_get_host_version == 0)
+    if (wine_get_host_version == nullptr)
         return WineHostType::Windows;
     
-    const char *kernel = 0;
-    wine_get_host_version(&kernel, 0);
+    const char *kernel = nullptr;
+    wine_get_host_version(&kernel, nullptr);
 
     if (!strcmp(kernel, "Darwin"))
         return WineHostType::Mac;

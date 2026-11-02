@@ -4,10 +4,10 @@
 
 #define MINIFFI_MAX_ARGS 16l
 
-typedef uintptr_t mffi_value;
+using mffi_value = uintptr_t;
 // Be sure to add more args to the below line if MINIFFI_MAX_ARGS is bumped
 // in the future.
-typedef mffi_value (*MINIFFI_FUNC)(mffi_value, mffi_value,
+using MINIFFI_FUNC = mffi_value (*)(mffi_value, mffi_value,
                                    mffi_value, mffi_value,
                                    mffi_value, mffi_value,
                                    mffi_value, mffi_value,
@@ -16,8 +16,8 @@ typedef mffi_value (*MINIFFI_FUNC)(mffi_value, mffi_value,
                                    mffi_value, mffi_value,
                                    mffi_value, mffi_value);
 
-typedef struct {
+struct MiniFFIFuncArgs {
   mffi_value params[MINIFFI_MAX_ARGS];
-} MiniFFIFuncArgs;
+};
 
 mffi_value miniffi_call_intern(MINIFFI_FUNC target, MiniFFIFuncArgs *p, int nparams);

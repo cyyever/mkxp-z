@@ -51,7 +51,6 @@
 #include "display/gpu-embedded.h"
 #include "graphics.h"
 #include <memory>
-#include <cstdlib>
 
 #include "filesystem/filesystem.h"
 
@@ -111,19 +110,19 @@ static int rgssThreadFun(void *userdata) {
         return 1;
     }
     threadData->rqTermAck = true;
-    threadData->ethread->requestTerminate();
+    EventThread::requestTerminate();
     return 0;
 }
 
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg) {
   rtData->rgssErrorMsg = msg;
-  rtData->ethread->requestTerminate();
+  EventThread::requestTerminate();
   rtData->rqTermAck = true;
 }
 
 static void showInitError(const std::string &msg) {
   Debug() << msg;
-  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "mkxp-z", msg.c_str(), 0);
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "mkxp-z", msg.c_str(), nullptr);
 }
 
 [[maybe_unused]] static void setupWindowIcon(const Config &conf, SDL_Window *win) {
@@ -406,7 +405,7 @@ int main(int argc, char *argv[]) {
     gpuDevice.reset();
 
     /* Clean up any remainin events */
-    eventThread.cleanup();
+    EventThread::cleanup();
 
     MIX_DestroyMixer(audioMixer);
     SDL_DestroyWindow(win);

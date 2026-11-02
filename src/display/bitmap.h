@@ -82,8 +82,8 @@ struct ChildPublic
     height(0),
     x(0),
     y(0),
-    sceneRect(0),
-    sceneOrig(0),
+    sceneRect(nullptr),
+    sceneOrig(nullptr),
     wrap(false),
     mirrored(false),
     angle(0),
@@ -109,7 +109,7 @@ public:
     
     // frame is -2 for "any and all", -1 for "current", anything else for a specific frame
 	Bitmap(const Bitmap &other, int frame = -2);
-	~Bitmap();
+	~Bitmap() override;
 
 	void initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool forceMega = false);
 
@@ -250,9 +250,9 @@ private:
 	void ensureAnimated() const;
 	void taintArea(const IntRect &rect);
 
-	void releaseResources();
+	void releaseResources() override;
 	SignalConnection loresDispCon;
-	const char *klassName() const { return "bitmap"; }
+	const char *klassName() const override { return "bitmap"; }
 
 	BitmapPrivate *p = nullptr;
 

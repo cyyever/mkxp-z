@@ -86,7 +86,7 @@ void FileSystem::initFontSets(SharedFontState &sfs) {
         if (ext != ".ttf" && ext != ".otf" && ext != ".ttc") continue;
         std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(openStream(path), SDL_CloseIO);
         const auto filename = folder + "/" + name;
-        sfs.initFontSetCB(stream.get(), filename.c_str());
+        sfs.initFontSetCB(stream.get(), filename);
       }
     }
   } catch (const fs::filesystem_error &error) {

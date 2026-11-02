@@ -35,8 +35,8 @@ struct WindowPrivate;
 class Window : public ViewportElement, public Disposable
 {
 public:
-	Window(Viewport *viewport = 0);
-	~Window();
+	Window(Viewport *viewport = nullptr);
+	~Window() override;
 
 	void update();
 
@@ -61,15 +61,15 @@ public:
 private:
 	WindowPrivate *p;
 
-	void draw();
-	void onGeometryChange(const Scene::Geometry &);
-	void setZ(int value);
-	void setVisible(bool value);
+	void draw() override;
+	void onGeometryChange(const Scene::Geometry &) override;
+	void setZ(int value) override;
+	void setVisible(bool value) override;
 
-	void onViewportChange();
+	void onViewportChange() override;
 
-	void releaseResources();
-	const char *klassName() const { return "window"; }
+	void releaseResources() override;
+	const char *klassName() const override { return "window"; }
 
 	ABOUT_TO_ACCESS_DISP
 };

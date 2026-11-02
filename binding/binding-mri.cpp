@@ -58,7 +58,7 @@ extern "C" {
 #include "binding-mri-win32.h"
 #endif
 
-#include <assert.h>
+#include <cassert>
 #include <string>
 #include <zlib.h>
 
@@ -506,7 +506,7 @@ RB_METHOD_GUARD(mkxpAddPath) {
     SafeStringValue(path);
     if (mountpoint != Qnil) SafeStringValue(mountpoint);
     
-    const char *mp = (mountpoint == Qnil) ? 0 : RSTRING_PTR(mountpoint);
+    const char *mp = (mountpoint == Qnil) ? nullptr : RSTRING_PTR(mountpoint);
     
     bool rl = true;
     if (reload != Qnil)
@@ -609,11 +609,11 @@ RB_METHOD_GUARD(mkxpLaunch) {
     SafeStringValue(cmdname);
     
     std::string command(OPENCMD);
-    command += "\""; command += RSTRING_PTR(cmdname); command += "\"";
+    command += '"'; command += RSTRING_PTR(cmdname); command += '"';
     
     if (args != RUBY_Qnil) {
 #if defined(SDL_PLATFORM_APPLE) || defined(_WIN32)
-        command += " ";
+        command += ' ';
         command += OPENARGS;
         Check_Type(args, T_ARRAY);
         
@@ -624,7 +624,7 @@ RB_METHOD_GUARD(mkxpLaunch) {
             if (RSTRING_LEN(arg) <= 0)
                 continue;
             
-            command += " ";
+            command += ' ';
             command += RSTRING_PTR(arg);
         }
 #else
@@ -738,7 +738,7 @@ RB_METHOD(_kernelCaller) {
     RB_UNUSED_PARAM;
     
     VALUE trace =
-    rb_funcall2(rb_mKernel, rb_intern("_mkxp_kernel_caller_alias"), 0, 0);
+    rb_funcall2(rb_mKernel, rb_intern("_mkxp_kernel_caller_alias"), 0, nullptr);
     
     if (!RB_TYPE_P(trace, RUBY_T_ARRAY))
         return trace;
@@ -857,12 +857,11 @@ static void runRMXPScripts(BacktraceData &btData) {
     }
     
     /* Execute preloaded scripts */
-    for (std::vector<std::string>::const_iterator i = conf.preloadScripts.begin();
-         i != conf.preloadScripts.end(); ++i)
+    for (const auto & preloadScript : conf.preloadScripts)
     {
         if (shState->rtData().rqTerm)
             break;
-        runCustomScript(*i);
+        runCustomScript(preloadScript);
     }
     
     VALUE exc = rb_gv_get("$!");
@@ -970,7 +969,7 @@ static void mriBindingExecute() {
      * but not doing it will lead to crashes due to closed
      * stdio streams on some platforms (eg. Windows) */
     int argc = 0;
-    char **argv = 0;
+    char **argv = nullptr;
     ruby_sysinit(&argc, &argv);
     
     RUBY_INIT_STACK;
@@ -1018,9 +1017,7 @@ static void mriBindingExecute() {
     
     if (!conf.rubyLoadpaths.empty()) {
         /* Setup custom load paths */
-        for (size_t i = 0; i < conf.rubyLoadpaths.size(); ++i) {
-            std::string &path = conf.rubyLoadpaths[i];
-            
+        for (auto & path : conf.rubyLoadpaths) {
             VALUE pathv = rb_str_new(path.c_str(), path.size());
             rb_ary_push(lpaths, pathv);
         }
