@@ -16,6 +16,11 @@ IOTestState testState;
 IOTestState *shState = &testState;
 static std::atomic<int> liveStreams{0};
 static std::atomic<int> closedStreams{0};
+// A Ruby String holds at most LONG_MAX bytes. SDL sizes are Sint64, so a stream can only report a
+// size above that where long is narrower than Sint64 (LLP64 Windows, 32-bit targets); on LP64 the
+// limits are equal and the oversize case cannot occur.
+static constexpr bool oversizeReportable =
+    (std::numeric_limits<long>::max)() < (std::numeric_limits<Sint64>::max)();
 struct TestStream {
     std::string bytes;
     size_t offset = 0;
@@ -46,7 +51,10 @@ static SDL_IOStream *testStream(const char *kind) {
     SDL_INIT_INTERFACE(&ioInterface);
     ioInterface.size = [](void *opaque) -> Sint64 {
         const auto &data = *static_cast<TestStream *>(opaque);
-        if (data.oversized) return static_cast<Sint64>((std::numeric_limits<long>::max)()) + 1;
+        if (data.oversized) {
+            if (!oversizeReportable) { SDL_SetError("oversize stream is not representable"); return -1; }
+            return static_cast<Sint64>(static_cast<Uint64>((std::numeric_limits<long>::max)()) + 1);
+        }
         if (data.failSize) { SDL_SetError("injected size failure"); return -1; }
         return data.bytes.size();
     };
@@ -97,6 +105,7 @@ SDL_IOStream *FileSystem::openReadRaw(const char *filename) {
 
 static VALUE live(VALUE) { return INT2NUM(liveStreams); }
 static VALUE closed(VALUE) { return INT2NUM(closedStreams); }
+static VALUE canOversize(VALUE) { return oversizeReportable ? Qtrue : Qfalse; }
 static VALUE verifyLoad(VALUE) {
     const int liveBefore = liveStreams, closedBefore = closedStreams;
     bool success;
@@ -131,6 +140,7 @@ int main(int argc, char **argv) {
     fileIntBindingInit();
     rb_define_global_function("fileint_test_live", RUBY_METHOD_FUNC(live), 0);
     rb_define_global_function("fileint_test_closed", RUBY_METHOD_FUNC(closed), 0);
+    rb_define_global_function("fileint_test_can_oversize", RUBY_METHOD_FUNC(canOversize), 0);
     rb_define_global_function("fileint_test_load", RUBY_METHOD_FUNC(verifyLoad), 0);
     char noGems[] = "--disable-gems";
     std::vector<char *> args{argv[0], noGems};
