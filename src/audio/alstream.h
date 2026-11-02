@@ -24,18 +24,10 @@
 
 #include "audio-util.h"
 
-#include <atomic>
 #include <cstdint>
-#include <deque>
-#include <memory>
-#include <mutex>
 #include <string>
-#include <thread>
-#include <utility>
 
-struct ALDataSource;
-
-/* State-machine like audio playback stream.
+/* State-machine like playback of one file on its own SDL_mixer track.
  * This class is NOT thread safe */
 struct ALStream
 {
@@ -71,35 +63,14 @@ private:
 	bool looped;
 	State state = Closed;
 
-	std::unique_ptr<ALDataSource> source;
-	AudioStreamPtr stream;
-
-	/* Set by the streaming thread once the data source has
-	 * no more data; the stream ends when the queue drains */
-	std::atomic<bool> sourceExhausted{false};
-
-	/* Playback position bookkeeping, shared with the streaming thread.
-	 * Positions are in source frames pushed since startStream(). */
-	std::mutex posMut;
-	uint64_t startFrames = 0;
-	uint64_t pushedFrames = 0;
-	int frameSize = 0;
+	MixAudioPtr audio;
+	MixTrackPtr track;
 	int sampleRate = 0;
-	/* (pushed frame at which the source wrapped, loop start frame) */
-	std::deque<std::pair<uint64_t, uint32_t>> wraps;
 
-	void openSource(const std::string &filename);
-
-	void stopStream();
-	void startStream(double offset);
+	/* Frame the last play() started at */
+	int64_t startFrame = 0;
 
 	void checkStopped();
-
-	/* thread func */
-	void streamData(std::stop_token stop);
-
-	/* Declared last so it is joined before the members it uses are destroyed */
-	std::jthread thread;
 };
 
 #endif // ALSTREAM_H

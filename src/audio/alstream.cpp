@@ -24,35 +24,21 @@
 #include "sharedstate.h"
 #include "filesystem.h"
 #include "exception.h"
-#include "aldatasource.h"
-#include "debugwriter.h"
 
 #include <algorithm>
 #include <format>
-#include <thread>
-#include <vector>
-
-/* Keep roughly this many bytes of decoded data queued ahead of playback */
-static constexpr int QUEUE_AHEAD_BYTES = 3 * STREAM_BUF_SIZE * 2;
 
 ALStream::ALStream(LoopMode loopMode)
 	: looped(loopMode == Looped),
-	  stream(SDL_CreateAudioStream(nullptr, nullptr))
+	  track(MIX_CreateTrack(audioMixer))
 {
-	if (!stream)
-		throw Exception(Exception::SDLError, "SDL_CreateAudioStream: %s", SDL_GetError());
+	if (!track)
+		throw Exception(Exception::SDLError, "MIX_CreateTrack: %s", SDL_GetError());
 
 	setVolume(1.0f);
 }
 
-ALStream::~ALStream()
-{
-	close();
-
-	/* The stream thread may have finished on its own without being joined */
-	thread = {};
-
-}
+ALStream::~ALStream() = default;
 
 void ALStream::close()
 {
@@ -62,19 +48,58 @@ void ALStream::close()
 	{
 	case Playing:
 	case Paused:
-		stopStream();
+		MIX_StopTrack(track.get(), 0);
 	case Stopped:
-		source.reset();
+		MIX_SetTrackAudio(track.get(), nullptr);
+		audio.reset();
 		state = Closed;
 	case Closed:
 		return;
 	}
 }
 
+struct ALStreamOpenHandler : FileSystem::OpenHandler
+{
+	MixAudioPtr audio;
+	std::string errorMsg;
+
+	bool tryRead(SDL_IOStream *ops, const char *)
+	{
+		/* The encoded file stays in memory and is decoded while playing */
+		audio = loadRuntimeAudio(ops, false, errorMsg);
+		return bool(audio);
+	}
+};
+
 void ALStream::open(const std::string &filename)
 {
-	openSource(filename);
+	ALStreamOpenHandler handler;
+	try
+	{
+		shState->fileSystem().openRead(handler, filename.c_str());
+	} catch (const Exception &e)
+	{
+		/* If no file was found then we leave the stream open.
+		 * A PHYSFSError means we found a match but couldn't
+		 * open the file, so we'll close it in that case. */
+		if (e.type != Exception::NoFileError)
+			close();
 
+		throw;
+	}
+
+	close();
+
+	SDL_AudioSpec spec;
+	if (!handler.audio || !MIX_GetAudioFormat(handler.audio.get(), &spec))
+		throw Exception(Exception::SDLError, std::format("Unable to decode audio stream: {}: {}", filename, handler.errorMsg));
+
+	if (!MIX_SetTrackAudio(track.get(), handler.audio.get()))
+		throw Exception(Exception::SDLError, "MIX_SetTrackAudio: %s", SDL_GetError());
+
+	audio = std::move(handler.audio);
+	sampleRate = spec.freq;
+	startFrame = 0;
 	state = Stopped;
 }
 
@@ -89,7 +114,7 @@ void ALStream::stop()
 		return;
 	case Playing:
 	case Paused:
-		stopStream();
+		MIX_StopTrack(track.get(), 0);
 	}
 
 	state = Stopped;
@@ -97,7 +122,7 @@ void ALStream::stop()
 
 void ALStream::play(double offset)
 {
-	if (!source)
+	if (!audio)
 		return;
 
 	checkStopped();
@@ -107,15 +132,38 @@ void ALStream::play(double offset)
 	case Closed:
 	case Playing:
 		return;
+	case Paused:
+		/* Resumes where it was paused; the offset is ignored */
+		MIX_ResumeTrack(track.get());
+		state = Playing;
+		return;
 	case Stopped:
-		startStream(offset);
 		break;
-	case Paused :
-		/* Queued data stays in the stream while it is unbound */
-		if (!SDL_BindAudioStream(audioDevice, stream.get()))
-			throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
 	}
 
+	int64_t frame = offset > 0 ? static_cast<int64_t>(offset * sampleRate) : 0;
+	const int64_t length = MIX_GetAudioDuration(audio.get());
+	if (length > 0 && frame >= length)
+	{
+		/* Past the end: a looped stream wraps around, others have nothing left */
+		if (!looped)
+		{
+			startFrame = length;
+			return;
+		}
+		frame %= length;
+	}
+
+	const SDL_PropertiesID options = SDL_CreateProperties();
+	SDL_SetNumberProperty(options, MIX_PROP_PLAY_LOOPS_NUMBER, looped ? -1 : 0);
+	SDL_SetNumberProperty(options, MIX_PROP_PLAY_START_FRAME_NUMBER, frame);
+	const bool started = MIX_PlayTrack(track.get(), options);
+	SDL_DestroyProperties(options);
+
+	if (!started)
+		throw Exception(Exception::SDLError, "MIX_PlayTrack: %s", SDL_GetError());
+
+	startFrame = frame;
 	state = Playing;
 }
 
@@ -123,27 +171,21 @@ void ALStream::pause()
 {
 	checkStopped();
 
-	switch (state)
-	{
-	case Closed:
-	case Stopped:
-	case Paused:
+	if (state != Playing)
 		return;
-	case Playing:
-		SDL_UnbindAudioStream(stream.get());
-	}
 
+	MIX_PauseTrack(track.get());
 	state = Paused;
 }
 
 void ALStream::setVolume(float value)
 {
-	SDL_SetAudioStreamGain(stream.get(), rgssVolumeToGain(value));
+	MIX_SetTrackGain(track.get(), rgssVolumeToGain(value));
 }
 
 void ALStream::setPitch(float value)
 {
-	SDL_SetAudioStreamFrequencyRatio(stream.get(), value);
+	MIX_SetTrackFrequencyRatio(track.get(), value);
 }
 
 ALStream::State ALStream::queryState()
@@ -155,193 +197,21 @@ ALStream::State ALStream::queryState()
 
 double ALStream::queryOffset()
 {
-	if (state == Closed || !source)
+	if (state == Closed || sampleRate == 0)
 		return 0;
 
-	std::scoped_lock lock(posMut);
+	/* A stopped stream reports where it was last started */
+	const bool ended = state == Stopped
+	    || (state == Playing && !MIX_TrackPlaying(track.get()) && !MIX_TrackPaused(track.get()));
+	const int64_t frame = ended ? startFrame : MIX_GetTrackPlaybackPosition(track.get());
 
-	if (sampleRate == 0 || frameSize == 0)
-		return 0;
-
-	/* Frames handed to SDL minus those still waiting in its input queue */
-	const uint64_t queued = std::max(SDL_GetAudioStreamQueued(stream.get()), 0) / frameSize;
-	const uint64_t played = pushedFrames - std::min(pushedFrames, queued);
-
-	/* Forget wrap points that playback has moved past */
-	while (wraps.size() > 1 && wraps[1].first <= played)
-		wraps.pop_front();
-
-	uint64_t frame = startFrames + played;
-
-	if (!wraps.empty() && wraps.front().first <= played)
-		frame = wraps.front().second + (played - wraps.front().first);
-
-	return static_cast<double>(frame) / sampleRate;
-}
-
-struct ALStreamOpenHandler : FileSystem::OpenHandler
-{
-	bool looped;
-	ALDataSource *source;
-	std::string errorMsg;
-
-	ALStreamOpenHandler(bool looped)
-	    : looped(looped), source(0)
-	{}
-
-	bool tryRead(SDL_IOStream *ops, const char *ext)
-	{
-		try
-		{
-			source = createSDLSource(ops, ext, STREAM_BUF_SIZE, looped);
-		}
-		catch (const Exception &e)
-		{
-			/* All source constructors will close the passed ops
-			 * before throwing errors */
-			errorMsg = e.msg;
-			return false;
-		}
-
-		return true;
-	}
-};
-
-void ALStream::openSource(const std::string &filename)
-{
-	ALStreamOpenHandler handler(looped);
-	try
-	{
-		shState->fileSystem().openRead(handler, filename.c_str());
-	} catch (const Exception &e)
-	{
-		/* If no file was found then we leave the stream open.
-		 * A PHYSFSError means we found a match but couldn't
-		 * open the file, so we'll close it in that case. */
-		if (e.type != Exception::NoFileError)
-			close();
-		
-		throw;
-	}
-
-	close();
-
-	if (!handler.source)
-	{
-        throw Exception(Exception::SDLError, std::format("Unable to decode audio stream: {}: {}", filename, handler.errorMsg));
-	}
-	
-	source.reset(handler.source);
-}
-
-void ALStream::stopStream()
-{
-	// jthread assignment requests stop and joins before queued data is cleared.
-	thread = {};
-
-	/* Unbind and drop queued data _after_ the thread has terminated,
-	 * because it might still have been pushing data */
-	SDL_UnbindAudioStream(stream.get());
-	SDL_ClearAudioStream(stream.get());
-
-	std::scoped_lock lock(posMut);
-	pushedFrames = 0;
-	wraps.clear();
-}
-
-void ALStream::startStream(double offset)
-{
-	SDL_UnbindAudioStream(stream.get());
-	SDL_ClearAudioStream(stream.get());
-
-	const SDL_AudioSpec spec = source->spec();
-	if (!SDL_SetAudioStreamFormat(stream.get(), &spec, nullptr))
-		throw Exception(Exception::SDLError, "SDL_SetAudioStreamFormat: %s", SDL_GetError());
-
-	{
-		std::scoped_lock lock(posMut);
-		sampleRate = spec.freq;
-		frameSize = SDL_AUDIO_FRAMESIZE(spec);
-		startFrames = static_cast<uint64_t>(offset * spec.freq);
-		pushedFrames = 0;
-		wraps.clear();
-	}
-
-	sourceExhausted = false;
-
-	source->seekToOffset(offset);
-
-	/* Binding before any data is queued is fine; SDL plays silence until data arrives */
-	if (!SDL_BindAudioStream(audioDevice, stream.get()))
-		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
-
-	thread = std::jthread([this](std::stop_token stop) { streamData(stop); });
+	return static_cast<double>(std::max<int64_t>(frame, 0)) / sampleRate;
 }
 
 void ALStream::checkStopped()
 {
-	/* This only concerns the scenario where
-	 * state is still 'Playing', but the stream
-	 * has already ended on its own (EOF, Error) */
-	if (state != Playing)
-		return;
-
-	/* If the source still has data, an empty queue
-	 * is just a buffer underrun */
-	if (!sourceExhausted)
-		return;
-
-	if (SDL_GetAudioStreamQueued(stream.get()) > 0 || SDL_GetAudioStreamAvailable(stream.get()) > 0)
-		return;
-
-	stopStream();
-	state = Stopped;
-}
-
-/* thread func */
-void ALStream::streamData(std::stop_token stop)
-{
-	std::vector<uint8_t> chunk;
-
-	while (!stop.stop_requested())
-	{
-
-		/* Top up the queue, then sleep until it drains a bit */
-		while (!stop.stop_requested() && SDL_GetAudioStreamQueued(stream.get()) < QUEUE_AHEAD_BYTES)
-		{
-			const ALDataSource::Status status = source->fillBuffer(chunk);
-
-			if (status == ALDataSource::Error || chunk.empty())
-			{
-				SDL_FlushAudioStream(stream.get());
-				sourceExhausted = true;
-				return;
-			}
-
-			{
-				std::scoped_lock lock(posMut);
-				if (!SDL_PutAudioStreamData(stream.get(), chunk.data(), static_cast<int>(chunk.size())))
-				{
-					sourceExhausted = true;
-					return;
-				}
-				pushedFrames += chunk.size() / frameSize;
-
-				/* The chunk ended at the loop end; playback position
-				 * jumps back to the loop start once it gets there */
-				if (status == ALDataSource::WrapAround)
-					wraps.emplace_back(pushedFrames, source->loopStartFrames());
-			}
-
-			if (status == ALDataSource::EndOfStream)
-			{
-				/* Let the resampler emit its tail */
-				SDL_FlushAudioStream(stream.get());
-				sourceExhausted = true;
-				return;
-			}
-		}
-
-		std::this_thread::sleep_for(AUDIO_SLEEP);
-	}
+	/* This only concerns the scenario where state is still
+	 * 'Playing', but the track has already ended on its own */
+	if (state == Playing && !MIX_TrackPlaying(track.get()) && !MIX_TrackPaused(track.get()))
+		state = Stopped;
 }
