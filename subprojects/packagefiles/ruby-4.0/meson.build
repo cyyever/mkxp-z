@@ -108,7 +108,10 @@ else
                     '--with-baseruby=' + baseruby,
                     '--with-soname=ruby',
                     '--disable-shared',
+                    # The binding never enables a JIT; Ruby 4.0 builds ZJIT whenever a
+                    # recent rustc is on PATH, and its link step needs a real LD.
                     '--disable-yjit',
+                    '--disable-zjit',
                     '--disable-install-doc',
                     # Ruby's Unix installer loads RubyGems, which requires monitor.
                     # The games themselves only require zlib.
