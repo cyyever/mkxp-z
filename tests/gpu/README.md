@@ -101,12 +101,3 @@ Device textures also preserve configurable mip chains. Native tests read back
 4x4->2x2->1x1 generated levels, verifying exact first-level blocks and terminal
 average colors; invalid level counts/readback/generation are rejected.
 
-## Production renderer integration pixels
-
-`context-pixels.cpp` exercises actual ShaderSet, Quad, RenderContext, texture
-resources and FrameEncoder together, without resource/context stubs. Its native
-D3D12 checks cover top-down checkerboard UVs, preserving queued pixels before
-source-image replacement, disabling a disposed sprite pattern, and submitting
-pending geometry before deleting its sampled texture. It does not instantiate
-the complete engine SharedState/Ruby runtime; the engine smoke test covers that
-boundary with the full engine build.
