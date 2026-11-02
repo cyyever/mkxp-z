@@ -20,7 +20,6 @@
  */
 
 #include "util/paths.h"
-#include "util/png-io.h"
 
 #include "bitmap.h"
 
@@ -462,7 +461,7 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
 
     bool tryRead(SDL_IOStream *ops, const char *)
     {
-        surface = image::loadPng(ops);
+        surface = SDL_LoadPNG_IO(ops, true);
         return surface != nullptr;
     }
 };

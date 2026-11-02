@@ -92,23 +92,6 @@ def main() -> None:
         sdl_options += ["-DSDL_UNIX_CONSOLE_BUILD=ON", "-DSDL_X11=OFF", "-DSDL_WAYLAND=OFF"]
     install("sdl3", sdl_options)
 
-    install("freetype", ["-DBUILD_SHARED_LIBS=OFF", *[
-        f"-DFT_DISABLE_{dependency}=ON" for dependency in ("ZLIB", "BZIP2", "PNG", "HARFBUZZ", "BROTLI")
-    ]])
-    # SDL_image 3.4 uses native SDL PNG; avoid its optional libpng dependency.
-    image_options = ["-DSDLIMAGE_SAMPLES=OFF", "-DSDLIMAGE_TESTS=OFF", "-DSDLIMAGE_INSTALL=ON",
-                     "-DSDLIMAGE_INSTALL_CPACK=OFF", "-DSDLIMAGE_VENDORED=OFF",
-                     "-DSDLIMAGE_BACKEND_STB=ON", "-DSDLIMAGE_BACKEND_IMAGEIO=OFF",
-                     "-DSDLIMAGE_BACKEND_WIC=OFF", "-DSDLIMAGE_PNG=ON", "-DSDLIMAGE_JPG=ON",
-                     "-DSDLIMAGE_PNG_SAVE=ON", "-DSDLIMAGE_JPG_SAVE=ON",
-                     "-DSDLIMAGE_PNG_LIBPNG=OFF"]
-    image_options += [f"-DSDLIMAGE_{format}=OFF" for format in
-                      ("ANI", "AVIF", "BMP", "GIF", "JXL", "LBM", "PCX", "PNM", "QOI", "SVG",
-                       "TGA", "TIF", "WEBP", "XCF", "XPM", "XV")]
-    install("sdl3_image", image_options)
-    install("sdl3_ttf", ["-DSDLTTF_SAMPLES=OFF", "-DSDLTTF_INSTALL=ON",
-                         "-DSDLTTF_INSTALL_CPACK=OFF", "-DSDLTTF_VENDORED=OFF",
-                         "-DSDLTTF_HARFBUZZ=OFF", "-DSDLTTF_PLUTOSVG=OFF"])
     # Only the header-only decoders the engine plays: no codec libraries or DLLs.
     mixer_options = ["-DSDLMIXER_TESTS=OFF", "-DSDLMIXER_EXAMPLES=OFF", "-DSDLMIXER_INSTALL=ON",
                      "-DSDLMIXER_INSTALL_CPACK=OFF", "-DSDLMIXER_VENDORED=OFF",

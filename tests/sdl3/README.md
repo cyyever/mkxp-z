@@ -1,16 +1,17 @@
 # SDL3 migration checks
 
-Build the standalone API tests against an installed SDL3, SDL3_image and
-SDL3_ttf SDK. Set `CMAKE_PREFIX_PATH` to its install directory:
+Build the focused regression tests against an installed SDL3 SDK. Set
+`CMAKE_PREFIX_PATH` to its install directory:
 
 ```sh
 meson setup build/sdl3-tests tests/sdl3
 meson test -C build/sdl3-tests --print-errorlogs
 ```
 
-These use the dummy video/audio drivers and test real codecs, pixel conversion,
-scaled blits, opaque/borrowed IO ownership and EOF, font measurement/rendering,
-window resizing and user events. `tests/audio` covers streaming playback states.
+These test borrowed IO ownership and EOF, folder dialog callback lifetime,
+and keybinding persistence (legacy bytes,
+Unicode paths, corrupt files and default fallback). The folder dialog test uses
+the dummy video driver. `tests/audio` covers streaming playback states.
 `tests/io` additionally checks the production Ruby IO bindings and Marshal cleanup.
 
 After a full engine build, run the integration smoke from a desktop session
