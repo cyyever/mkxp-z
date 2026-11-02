@@ -34,6 +34,8 @@
 #include <SDL3_mixer/SDL_mixer.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cassert>
 #include <cstring>
 #include <string>
@@ -153,7 +155,20 @@ static SDL_Window *initVideo(const Config &conf) {
   }
 
 
-  SDL_Window *window = SDL_CreateWindow(conf.windowTitle.c_str(), conf.defScreenW, conf.defScreenH, winFlags);
+  // SDL window coordinates are physical pixels on Windows/X11. High pixel
+  // density alone does not apply the display's preferred content size there.
+  const SDL_DisplayID display = SDL_GetPrimaryDisplay();
+  const float contentScale = SDL_GetDisplayContentScale(display);
+  double scale = contentScale > 0 ? contentScale : 1.0;
+  SDL_Rect usable;
+  if (SDL_GetDisplayUsableBounds(display, &usable) && usable.w > 0 && usable.h > 0) {
+    // Leave room for decorations and the desktop panel, preserving aspect ratio.
+    scale = std::min({scale, usable.w * 0.9 / conf.defScreenW,
+                            usable.h * 0.9 / conf.defScreenH});
+  }
+  const int width = std::max(1, static_cast<int>(std::lround(conf.defScreenW * scale)));
+  const int height = std::max(1, static_cast<int>(std::lround(conf.defScreenH * scale)));
+  SDL_Window *window = SDL_CreateWindow(conf.windowTitle.c_str(), width, height, winFlags);
   if (window == nullptr) {
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
   }
