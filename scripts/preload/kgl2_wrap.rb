@@ -7,7 +7,6 @@
 # https://creativecommons.org/publicdomain/zero/1.0/
 
 require_relative 'win32_wrap' unless Win32API.method_defined? :mkxp_native_call
-require 'objspace'
 
 module KGL2_Impl
 	class << self
