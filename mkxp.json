@@ -435,12 +435,6 @@
     // (default: 0)
     // "fontHeightReporting": 0,
 
-    // Crops top row and left column of text that has an outline.
-    // Disabling it generally looks nicer, but RGSS enables it, so enabling it
-    // should make text appearance more accurate.
-    // (default: true)
-    // "fontOutlineCrop": true,
-
 
     // Because mkxp is usually distributed as a stand alone
     // build, no predefined load paths are initialized

@@ -150,7 +150,7 @@ struct SharedFontStatePrivate
 
 	/* Pool of already opened fonts; once opened, they are reused
 	 * and never closed until the termination of the program */
-	std::map<FontPPEMKey, std::array<TTF_Font*, 2>> ppem_to_font;
+	std::map<FontPPEMKey, TTF_Font*> ppem_to_font;
     
     /* Internal default font family that is used anytime an
      * empty/invalid family is requested */
@@ -191,13 +191,9 @@ SharedFontState::SharedFontState(const Config &conf)
 
 SharedFontState::~SharedFontState()
 {
-	std::map<FontPPEMKey, std::array<TTF_Font*, 2>>::const_iterator iter;
-	for (iter = p->ppem_to_font.cbegin(); iter != p->ppem_to_font.cend(); ++iter)
-	{
-		for (int i=0; i < iter->second.size(); i++)
-			if (iter->second[i] != 0)
-				TTF_CloseFont(iter->second[i]);
-	}
+	for (const auto &[key, font] : p->ppem_to_font)
+		if (font)
+			TTF_CloseFont(font);
 
 }
 
@@ -536,7 +532,7 @@ static int calc_ppem_for_height(Font_Container *font, int height)
 /* /wine */
 
 MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
-                                    int size, float hiresMult, int outline_size)
+                                    int size, float hiresMult)
 {
 	std::transform(family.begin(), family.end(), family.begin(),
 		[](unsigned char c){ return std::tolower(c); });
@@ -566,18 +562,9 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 	if (ppem != 0)
 	{
 		ppemMult = std::max<int>(ppem * hiresMult, 1);
-		auto &group = p->ppem_to_font[FontPPEMKey(family, ppemMult)];
-		if(outline_size == 0)
-			font = group[0];
-		else
-			font = group[1];
-		
+		font = p->ppem_to_font[FontPPEMKey(family, ppemMult)];
 		if (font)
-		{
-			if(outline_size && TTF_GetFontOutline(font) != outline_size)
-				TTF_SetFontOutline(font, outline_size);
 			return font;
-		}
 	}
 	
 	/* Not in pool; open new handle */
@@ -661,15 +648,7 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 		throw Exception(Exception::SDLError, "%s", SDL_GetError());
 	}
 	
-	auto &group = p->ppem_to_font[FontPPEMKey(family, std::max<int>(ppem * hiresMult, 1))];
-	if(outline_size == 0)
-	{
-		group[0] = font;
-	} else {
-		if(TTF_GetFontOutline(font) != outline_size)
-			TTF_SetFontOutline(font, outline_size);
-		group[1] = font;
-	}
+	p->ppem_to_font[FontPPEMKey(family, std::max<int>(ppem * hiresMult, 1))] = font;
 	
 	if (!p->fontKerning)
 		TTF_SetFontKerning(font, 0);
@@ -746,25 +725,17 @@ struct FontPrivate
 	float hiresMult;
 	bool bold;
 	bool italic;
-	bool outline;
-	bool shadow;
 	Color *color;
-	Color *outColor;
 
 	Color colorTmp;
-	Color outColorTmp;
 
 	static std::string defaultName;
 	static int defaultSize;
 	static bool defaultBold;
 	static bool defaultItalic;
-	static bool defaultOutline;
-	static bool defaultShadow;
 	static Color *defaultColor;
-	static Color *defaultOutColor;
 
 	static Color defaultColorTmp;
-	static Color defaultOutColorTmp;
 
 	static std::vector<std::string> initialDefaultNames;
 
@@ -772,7 +743,6 @@ struct FontPrivate
 	 * (when it is queried by a Bitmap), prior it is
 	 * set to null */
 	TTF_Font *sdlFont;
-	TTF_Font *sdlFontOutline;
     
     bool isSolid;
 
@@ -781,14 +751,9 @@ struct FontPrivate
 	      hiresMult(1.0f),
 	      bold(defaultBold),
 	      italic(defaultItalic),
-	      outline(defaultOutline),
-	      shadow(defaultShadow),
 	      color(&colorTmp),
-	      outColor(&outColorTmp),
 	      colorTmp(*defaultColor),
-	      outColorTmp(*defaultOutColor),
 	      sdlFont(0),
-	      sdlFontOutline(0),
           isSolid(false)
 	{}
 
@@ -798,38 +763,24 @@ struct FontPrivate
 	      hiresMult(1.0f),
 	      bold(other.bold),
 	      italic(other.italic),
-	      outline(other.outline),
-	      shadow(other.shadow),
 	      color(&colorTmp),
-	      outColor(&outColorTmp),
 	      colorTmp(*other.color),
-	      outColorTmp(*other.outColor),
 	      sdlFont(other.sdlFont),
-	      sdlFontOutline(other.sdlFontOutline),
           isSolid(false)
 	{}
 
 	void operator=(const FontPrivate &o)
 	{
 		if (size != o.size || name != o.name)
-		{
 			sdlFont = 0;
-			sdlFontOutline = 0;
-		}
-		if (hiresMult == o.hiresMult)
-		{
-			sdlFont = sdlFont == 0 ? o.sdlFont : sdlFont;
-			sdlFontOutline = sdlFontOutline == 0 ? o.sdlFontOutline : sdlFontOutline;
-		}
+		if (hiresMult == o.hiresMult && sdlFont == 0)
+			sdlFont = o.sdlFont;
 
 		 name     =  o.name;
 		 size     =  o.size;
 		 bold     =  o.bold;
 		 italic   =  o.italic;
-		 outline  =  o.outline;
-		 shadow   =  o.shadow;
 		*color    = *o.color;
-		*outColor = *o.outColor;
 
         isSolid = o.isSolid;
 	}
@@ -839,13 +790,9 @@ std::string FontPrivate::defaultName     = "Arial";
 int         FontPrivate::defaultSize     = 22;
 bool        FontPrivate::defaultBold     = false;
 bool        FontPrivate::defaultItalic   = false;
-bool        FontPrivate::defaultOutline  = false; /* Inited at runtime */
-bool        FontPrivate::defaultShadow   = false; /* Inited at runtime */
 Color      *FontPrivate::defaultColor    = &FontPrivate::defaultColorTmp;
-Color      *FontPrivate::defaultOutColor = &FontPrivate::defaultOutColorTmp;
 
 Color FontPrivate::defaultColorTmp(255, 255, 255, 255);
-Color FontPrivate::defaultOutColorTmp(0, 0, 0, 128);
 
 std::vector<std::string> FontPrivate::initialDefaultNames;
 
@@ -888,10 +835,7 @@ const Font &Font::operator=(const Font &o)
 void Font::setName(const std::vector<std::string> &names)
 {
 	if (pickExistingFontName(names, p->name, shState->fontState()))
-	{
 		p->sdlFont = 0;
-		p->sdlFontOutline = 0;
-	}
 	p->isSolid = strcmp(p->name.c_str(), "") && shState->config().fontIsSolid(p->name.c_str());
 }
 
@@ -909,7 +853,6 @@ void Font::setSize(int value, bool checkIllegal)
 
 	p->size = value;
 	p->sdlFont = 0;
-	p->sdlFontOutline = 0;
 }
 
 void Font::setHiresMult(float value)
@@ -919,7 +862,6 @@ void Font::setHiresMult(float value)
 
 	p->hiresMult = value;
 	p->sdlFont = 0;
-	p->sdlFontOutline = 0;
 }
 
 static void guardDisposed() {}
@@ -928,18 +870,12 @@ DEF_ATTR_RD_SIMPLE(Font, Size, int, p->size)
 
 DEF_ATTR_SIMPLE(Font, Bold,     bool,    p->bold)
 DEF_ATTR_SIMPLE(Font, Italic,   bool,    p->italic)
-DEF_ATTR_SIMPLE(Font, Shadow,   bool,    p->shadow)
-DEF_ATTR_SIMPLE(Font, Outline,  bool,    p->outline)
 DEF_ATTR_SIMPLE(Font, Color,    Color&, *p->color)
-DEF_ATTR_SIMPLE(Font, OutColor, Color&, *p->outColor)
 
 DEF_ATTR_SIMPLE_STATIC(Font, DefaultSize,     int,     FontPrivate::defaultSize)
 DEF_ATTR_SIMPLE_STATIC(Font, DefaultBold,     bool,    FontPrivate::defaultBold)
 DEF_ATTR_SIMPLE_STATIC(Font, DefaultItalic,   bool,    FontPrivate::defaultItalic)
-DEF_ATTR_SIMPLE_STATIC(Font, DefaultShadow,   bool,    FontPrivate::defaultShadow)
-DEF_ATTR_SIMPLE_STATIC(Font, DefaultOutline,  bool,    FontPrivate::defaultOutline)
 DEF_ATTR_SIMPLE_STATIC(Font, DefaultColor,    Color&, *FontPrivate::defaultColor)
-DEF_ATTR_SIMPLE_STATIC(Font, DefaultOutColor, Color&, *FontPrivate::defaultOutColor)
 
 void Font::setDefaultName(const std::vector<std::string> &names,
                           const SharedFontState &sfs)
@@ -970,25 +906,15 @@ void Font::initDefaults(const SharedFontState &sfs)
 	names.push_back("Arial");
 
 	setDefaultName(names, sfs);
-
-	FontPrivate::defaultOutline = false;
-	FontPrivate::defaultShadow  = false;
 }
 
-MKXPZ_TTF_FONT *Font::getSdlFont(int outline_size)
+MKXPZ_TTF_FONT *Font::getSdlFont()
 {
-	MKXPZ_TTF_FONT **font;
-	if (outline_size == 0)
-		font = &p->sdlFont;
-	else
-		font = &p->sdlFontOutline;
+	MKXPZ_TTF_FONT **font = &p->sdlFont;
 
 	if (!*font)
 		*font = shState->fontState().getFont(p->name.c_str(),
-		                                     p->size, p->hiresMult, outline_size);
-
-	if(outline_size && TTF_GetFontOutline(*font) != outline_size)
-		TTF_SetFontOutline(*font, outline_size);
+		                                     p->size, p->hiresMult);
 
 	int style = TTF_STYLE_NORMAL;
 
