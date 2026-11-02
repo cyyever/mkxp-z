@@ -27,8 +27,14 @@ def main():
             executable = fixture / binary.name
             shutil.copy2(binary, executable)
             script = fixture / 'probe.rb'
+            # Handshake instead of a fixed sleep: the engine keeps presenting
+            # frames until the test has found the window and posted the
+            # messages, so a slow runner cannot make the probe exit first.
+            # Input.update is not called while waiting, so the click and
+            # release both land between two Input.update calls.
             script.write_text('''File.write('ready', 'ready')
-sleep 0.4
+deadline = Time.now + 30
+Graphics.update until File.exist?('posted') || Time.now > deadline
 triggers = releases = 0
 30.times do
   Graphics.update
@@ -70,7 +76,12 @@ File.write('result.txt', "#{triggers},#{releases}")
                             if windows:
                                 break
                         time.sleep(.01)
-                    assert windows, 'engine window did not become ready'
+                    if not windows:
+                        process.terminate()
+                        process.wait()
+                        stderr_text = (fixture / 'stderr.log').read_text(errors='replace')
+                        raise AssertionError('engine window did not become ready: '
+                                             f'exit={process.returncode}\n{stderr_text}')
                     window = windows[0]
                     # Activate only the test window's SDL event state. No physical
                     # pointer movement or clicks reach the user's other windows.
@@ -80,6 +91,7 @@ File.write('result.txt', "#{triggers},#{releases}")
                                 (0x201, 1, point), (0x202, 0, point)]
                     for message, button, position in messages:
                         assert user.PostMessageW(window, message, button, position)
+                    (fixture / 'posted').write_text('posted')
                     process.wait(timeout=15)
                     assert process.returncode == 0, 'engine failed'
                     actual = (fixture / 'result.txt').read_text()
