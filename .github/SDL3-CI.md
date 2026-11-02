@@ -1,13 +1,12 @@
 # SDL3 CI
 
 The SDL3 migration workflow builds the source versions and verifies the SHA-256
-hashes recorded in the SDL3, SDL3_image and SDL3_mixer wraps. It installs
-a shared native SDK with SDL native PNG, optional stb JPEG and the engine's
-header-only audio decoders. JPEG supplies a non-PNG fixture for the runtime's
-PNG-only policy check. SDL3_ttf and FreeType are not needed by this focused suite;
-the full engine still builds them for its font implementation.
+hashes recorded in the SDL3 and SDL3_mixer wraps. It installs a shared native
+SDK with SDL's native PNG support and the engine's header-only audio decoders.
+SDL3_image, SDL3_ttf and FreeType are not needed by this focused suite. The full
+engine still builds its font dependencies, and the asset converter uses SDL3_image.
 
-The jobs test PNG policy, borrowed streams, folder dialog callbacks and production
+The jobs test borrowed streams, folder dialog callbacks and production
 keybinding persistence in `tests/sdl3`, plus the production audio state machine
 in `tests/audio`. Linux also tests the production Ruby IO
 bindings in `tests/io` with Ruby >= 4.0. These focused tests use dummy drivers

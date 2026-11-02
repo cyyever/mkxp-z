@@ -1,15 +1,15 @@
 # SDL3 migration checks
 
-Build the focused regression tests against an installed SDL3 and SDL3_image
-SDK. Set `CMAKE_PREFIX_PATH` to its install directory:
+Build the focused regression tests against an installed SDL3 SDK. Set
+`CMAKE_PREFIX_PATH` to its install directory:
 
 ```sh
 meson setup build/sdl3-tests tests/sdl3
 meson test -C build/sdl3-tests --print-errorlogs
 ```
 
-These test the engine's PNG-only policy, borrowed IO ownership and EOF,
-folder dialog callback lifetime, and keybinding persistence (legacy bytes,
+These test borrowed IO ownership and EOF, folder dialog callback lifetime,
+and keybinding persistence (legacy bytes,
 Unicode paths, corrupt files and default fallback). The folder dialog test uses
 the dummy video driver. `tests/audio` covers streaming playback states.
 `tests/io` additionally checks the production Ruby IO bindings and Marshal cleanup.

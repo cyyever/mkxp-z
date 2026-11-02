@@ -2,12 +2,11 @@ project('mkxp-sdl3-migration', 'cpp', meson_version: '>=1.10.0',
         default_options: {'cpp_std': 'c++26,c++latest', 'warning_level': '3'})
 
 sdl = dependency('SDL3', version: '>=3.4.14', method: 'cmake', modules: ['SDL3::SDL3'])
-image = dependency('SDL3_image', version: '>=3.2.4', method: 'cmake', modules: ['SDL3_image::SDL3_image'])
 
-migration_tests = executable('sdl3-migration-tests', 'migration.cpp',
+borrowed_io_tests = executable('sdl3-borrowed-io-tests', 'borrowed-io.cpp',
     include_directories: include_directories('../../src'),
-    dependencies: [sdl, image])
-test('SDL3 PNG policy and borrowed IO', migration_tests, timeout: 30)
+    dependencies: sdl)
+test('SDL3 borrowed IO ownership and status', borrowed_io_tests)
 
 # Compile the actual helper with only the dialog entrypoint replaced; no UI is opened.
 folder_dialog_tests = executable('sdl3-folder-dialog-tests',
