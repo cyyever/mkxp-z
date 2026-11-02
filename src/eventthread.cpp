@@ -52,7 +52,6 @@
 
 uint8_t EventThread::keyStates[];
 EventThread::ControllerState EventThread::controllerState;
-EventThread::MouseState EventThread::mouseState;
 EventThread::TouchState EventThread::touchState;
 std::atomic<int> EventThread::verticalScrollDistance;
 
@@ -206,6 +205,18 @@ void EventThread::process(RGSSThreadData &rtData)
         }
     };
 
+    // SDL owns native coordinates, capture and button state. Publish one
+    // synchronized snapshot so RGSS never reads main-thread mutable fields.
+    auto publishMouse = [&]() {
+        MouseState state;
+        state.buttons = SDL_GetMouseState(&state.x, &state.y);
+        state.inWindow = SDL_GetMouseFocus() == win;
+        if (SDL_GetKeyboardFocus() != win)
+            state.buttons = 0;
+        rtData.mouseStateMsg.post(state);
+    };
+    publishMouse();
+
     while (true)
     {
         if (!SDL_WaitEvent(&event))
@@ -213,6 +224,7 @@ void EventThread::process(RGSSThreadData &rtData)
             Debug() << "EventThread: Event error";
             break;
         }
+        publishMouse();
         if (event.type == usrIdStart + REQUEST_GPU_PRESENT) {
             gpuPresentQueued = false;
             if (!presentGpuFrame()) break;
@@ -271,14 +283,12 @@ void EventThread::process(RGSSThreadData &rtData)
                     }
                     case SDL_EVENT_WINDOW_MOUSE_ENTER :
                         cursorInWindow = true;
-                        mouseState.inWindow = true;
                         updateCursorState(cursorInWindow && windowFocused && !sMenu, gameScreen);
                         
                         break;
                         
                     case SDL_EVENT_WINDOW_MOUSE_LEAVE :
                         cursorInWindow = false;
-                        mouseState.inWindow = false;
                         updateCursorState(cursorInWindow && windowFocused && !sMenu, gameScreen);
                         
                         break;
@@ -439,16 +449,14 @@ void EventThread::process(RGSSThreadData &rtData)
                 break;
                 
             case SDL_EVENT_MOUSE_BUTTON_DOWN :
-                mouseState.buttons[event.button.button] = true;
-                break;
-                
-            case SDL_EVENT_MOUSE_BUTTON_UP :
-                mouseState.buttons[event.button.button] = false;
+                // Retain quick clicks even when SDL has pumped their release
+                // before the next RGSS Input.update.
+                if (event.button.windowID == SDL_GetWindowID(win) &&
+                    event.button.button >= 1 && event.button.button <= 32)
+                    rtData.mousePresses.fetch_or(SDL_BUTTON_MASK(event.button.button));
                 break;
                 
             case SDL_EVENT_MOUSE_MOTION :
-                mouseState.x = event.motion.x;
-                mouseState.y = event.motion.y;
                 cursorTimer();
                 updateCursorState(cursorInWindow, gameScreen);
                 break;
@@ -602,7 +610,6 @@ void EventThread::resetInputStates()
 {
     memset(&keyStates, 0, sizeof(keyStates));
     memset(&controllerState, 0, sizeof(controllerState));
-    memset(&mouseState.buttons, 0, sizeof(mouseState.buttons));
     memset(&touchState, 0, sizeof(touchState));
 }
 
@@ -616,7 +623,9 @@ void EventThread::setFullscreen(SDL_Window *win, bool mode)
 void EventThread::updateCursorState(bool inWindow,
                                     const SDL_Rect &screen)
 {
-    SDL_Point pos = { mouseState.x, mouseState.y };
+    float mouseX, mouseY;
+    SDL_GetMouseState(&mouseX, &mouseY);
+    SDL_Point pos = { static_cast<int>(mouseX), static_cast<int>(mouseY) };
     bool inScreen = inWindow && SDL_PointInRect(&pos, &screen);
     
     if (inScreen)
