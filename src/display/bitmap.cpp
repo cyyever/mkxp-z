@@ -65,6 +65,7 @@
 #include "util/engine-signal.h"
 
 #include <cmath>
+#include <vector>
 #include <cstring>
 
 extern "C" {
@@ -3128,17 +3129,78 @@ void Bitmap::kglCompressAlpha()
     p->onModified();
 }
 
+namespace {
+/* What a KGL shadow does to one logical pixel: clear it, or scale its RGB by
+ * before/4 and then after/4 (soft edges left/above and right/below). */
+struct KglShadowAction
+{
+	bool clear = false;
+	int before = 0;
+	int after = 0;
+};
+
+/* Logical index of physical pixel i when n logical pixels span N physical
+ * ones: floor((i + 0.5) * n / N), the same texel the shader samples. */
+int kglLogicalIndex(int i, int n, int physical)
+{
+	return (int)(((long long)2 * i + 1) * n / (2LL * physical));
+}
+
+void kglApplyShadow(const KglShadowAction &action, uint8_t *pixel)
+{
+	if (action.clear) {
+		std::memset(pixel, 0, 4);
+		return;
+	}
+	for (int k = 0; k < 3; ++k) {
+		if (action.before)
+			pixel[k] = (uint8_t)std::lround((double)pixel[k] * ((double)action.before / 4.));
+		if (action.after)
+			pixel[k] = (uint8_t)std::lround((double)pixel[k] * ((double)action.after / 4.));
+	}
+}
+
+/* Actions along one logical line of length n for a shadow spanning
+ * [start, end], with the original KGL soft-edge bounds checks. */
+void kglShadowLine(std::vector<KglShadowAction> &actions, int n, int start, int end,
+                   bool soft, bool softBefore, bool softAfter,
+                   int a1, int a2, int center)
+{
+	actions.assign(n, {});
+	for (int i = std::max(start, 0); i <= std::min(end, n - 1); ++i)
+		actions[i].clear = true;
+	if (!soft)
+		return;
+	if (softBefore) {
+		for (int j = 3; j >= 1; --j) {
+			if ((a1 < center ? start - j < 0 : start - j < a1) // This bounds check is incorrect but is consistent with the original shader
+			        || (a2 < center ? start - j >= a2 : start - j >= n)) // This bounds check is incorrect but is consistent with the original shader
+				continue;
+			actions[start - j].before = j;
+		}
+	}
+	if (softAfter) {
+		for (int j = 1; j <= 3; ++j) {
+			if ((a1 < center ? end < -j : end < a1 - j) // This bounds check is incorrect but is consistent with the original shader
+			        || (a2 < center ? end >= a2 - j : end >= n - j)) // This bounds check is incorrect but is consistent with the original shader
+				continue;
+			actions[end + j].after = j;
+		}
+	}
+}
+} // namespace
+
+/* KGL shadows are defined on the logical pixel grid. The public functions
+ * validate arguments and derive the geometry in logical coordinates once; the
+ * raster functions apply that same geometry to this bitmap or its HiRes
+ * companion, where every physical pixel takes its logical pixel's result. */
 int Bitmap::kglShadowShaderH(int x1, int x2, int y, bool soft)
 {
     guardDisposed();
     GUARD_ANIMATED;
 
-    if (hasHires()) {
-        return p->selfHires->kglShadowShaderH(x1 * p->selfHires->width() / width(), x2 * p->selfHires->width() / width(), y * p->selfHires->height() / height(), soft);
-    }
-
-    int w = width();
-    int h = height();
+    const int w = width();
+    const int h = height();
 
     if (y < 0 || y >= h || y == h / 2) {
         return 111;
@@ -3151,68 +3213,43 @@ int Bitmap::kglShadowShaderH(int x1, int x2, int y, bool soft)
     x1 = clamp(x1, 0, w - 1);
     x2 = clamp(x2, 0, w - 1);
 
-    int x_center = w / 2;
-    int y_center = h / 2;
+    const int x_center = w / 2;
+    const int y_center = h / 2;
 
-    double slope1 = (double)(x1 - x_center) / (double)(y - y_center);
-    double slope2 = (double)(x2 - x_center) / (double)(y - y_center);
+    const double slope1 = (double)(x1 - x_center) / (double)(y - y_center);
+    const double slope2 = (double)(x2 - x_center) / (double)(y - y_center);
 
+    Bitmap &target = hasHires() ? *p->selfHires : *this;
+    target.kglShadowRasterH(x1, x2, y, soft, w, h, x_center, y_center, slope1, slope2);
+
+    return 1;
+}
+
+void Bitmap::kglShadowRasterH(int x1, int x2, int y, bool soft, int w, int h,
+                              int x_center, int y_center, double slope1, double slope2)
+{
     if (isMega()) {
-        uint32_t *shadowbuffer = (uint32_t *)p->megaSurface->pixels;
+        SDL_Surface *surface = p->megaSurface;
+        const int rowStart = y < y_center ? 0 : y;
+        const int rowEnd = y < y_center ? y - 1 : h - 1;
 
-        int y_start, y_end;
-        if (y < y_center) {
-            y_start = 0;
-            y_end = y - 1;
-        } else {
-            y_start = y;
-            y_end = h - 1;
-        }
-
-        for (int i = y_start; i <= y_end; ++i) {
-            double x_start_raw = std::round(slope1 * (double)(i - y_center) + (double)x_center);
-            double x_end_raw = std::round(slope2 * (double)(i - y_center) + (double)x_center + 0.2f); // The original shader contains a +0.2 adjustment factor for some reason
-
-            int x_start = (int)clamp(x_start_raw, 0., (double)w + 3.);
-            int x_end = (int)clamp(x_end_raw, -4., x2 < x_center ? (double)x2 - 1. : (double)w - 1.); // This bounds check is incorrect but is consistent with the original shader
-
-            if (x_start <= x_end) {
-                std::memset(
-                    shadowbuffer + (size_t)w * (size_t)i + (size_t)x_start,
-                    0,
-                    (size_t)4 * ((size_t)x_end - (size_t)x_start + (size_t)1)
-                );
+        std::vector<KglShadowAction> actions;
+        int cached = -1;
+        for (int row = 0; row < surface->h; ++row) {
+            const int i = kglLogicalIndex(row, h, surface->h);
+            if (i < rowStart || i > rowEnd)
+                continue;
+            if (i != cached) {
+                const double x_start_raw = std::round(slope1 * (double)(i - y_center) + (double)x_center);
+                const double x_end_raw = std::round(slope2 * (double)(i - y_center) + (double)x_center + 0.2f); // The original shader contains a +0.2 adjustment factor for some reason
+                const int x_start = (int)clamp(x_start_raw, 0., (double)w + 3.);
+                const int x_end = (int)clamp(x_end_raw, -4., x2 < x_center ? (double)x2 - 1. : (double)w - 1.); // This bounds check is incorrect but is consistent with the original shader
+                kglShadowLine(actions, w, x_start, x_end, soft, true, x2 != x_center, x1, x2, x_center);
+                cached = i;
             }
-
-            if (soft) {
-                for (int j = 3; j >= 1; --j) {
-                    if (
-                        (x1 < x_center ? x_start - j < 0 : x_start - j < x1) // This bounds check is incorrect but is consistent with the original shader
-                            || (x2 < x_center ? x_start - j >= x2 : x_start - j >= w) // This bounds check is incorrect but is consistent with the original shader
-                    ) {
-                        continue;
-                    }
-                    uint32_t *pixel = shadowbuffer + (size_t)w * (size_t)i + (size_t)x_start - (size_t)j;
-                    for (size_t k = 0; k < 3; ++k) {
-                        ((uint8_t *)pixel)[k] = std::lround((double)((uint8_t *)pixel)[k] * ((double)j / (double)4));
-                    }
-                }
-
-                if (x2 != x_center) {
-                    for (int j = 1; j <= 3; ++j) {
-                        if (
-                            (x1 < x_center ? x_end < -j : x_end < x1 - j) // This bounds check is incorrect but is consistent with the original shader
-                                || (x2 < x_center ? x_end >= x2 - j : x_end >= w - j) // This bounds check is incorrect but is consistent with the original shader
-                        ) {
-                            continue;
-                        }
-                        uint32_t *pixel = shadowbuffer + (size_t)w * (size_t)i + (size_t)x_end + (size_t)j;
-                        for (size_t k = 0; k < 3; ++k) {
-                            ((uint8_t *)pixel)[k] = std::lround((double)((uint8_t *)pixel)[k] * ((double)j / (double)4));
-                        }
-                    }
-                }
-            }
+            uint8_t *pixels = (uint8_t *)surface->pixels + (size_t)row * surface->pitch;
+            for (int column = 0; column < surface->w; ++column)
+                kglApplyShadow(actions[kglLogicalIndex(column, w, surface->w)], pixels + 4 * (size_t)column);
         }
     } else {
         TEXFBO newTex = shState->texPool().request(width(), height());
@@ -3223,6 +3260,7 @@ int Bitmap::kglShadowShaderH(int x1, int x2, int y, bool soft)
         quad.setTexPosRect(texRect, texRect);
         quad.setColor(Vec4(1, 1, 1, 1));
 
+        // Logical dimensions: the shader maps each texel to its logical pixel.
         KglShadowShaderH &shader = shState->shaders().kglShadowH;
         shader.bind();
         shader.setParams(x1, x2, y, soft, w, h, x_center, y_center, slope1, slope2);
@@ -3242,8 +3280,6 @@ int Bitmap::kglShadowShaderH(int x1, int x2, int y, bool soft)
     }
 
     p->onModified();
-
-    return 1;
 }
 
 int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
@@ -3251,14 +3287,10 @@ int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
     guardDisposed();
     GUARD_ANIMATED;
 
-    if (hasHires()) {
-        return p->selfHires->kglShadowShaderV(y1 * p->selfHires->height() / height(), y2 * p->selfHires->height() / height(), x * p->selfHires->width() / width(), wall, soft);
-    }
+    const int w = width();
+    const int h = height();
 
-    int w = width();
-    int h = height();
-
-    if (x < 0 || x >= h || x == w / 2) {
+    if (x < 0 || x >= w || x == w / 2) {
         return 111;
     }
 
@@ -3269,68 +3301,44 @@ int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
     y1 = clamp(y1, 0, h - 1);
     y2 = clamp(y2, 0, h - 1);
 
-    int x_center = w / 2;
-    int y_center = h / 2;
+    const int x_center = w / 2;
+    const int y_center = h / 2;
 
-    double slope1 = (double)(y1 - y_center) / (double)(x - x_center);
-    double slope2 = (double)(y2 - y_center) / (double)(x - x_center);
+    const double slope1 = (double)(y1 - y_center) / (double)(x - x_center);
+    const double slope2 = (double)(y2 - y_center) / (double)(x - x_center);
 
+    Bitmap &target = hasHires() ? *p->selfHires : *this;
+    target.kglShadowRasterV(y1, y2, x, wall, soft, w, h, x_center, y_center, slope1, slope2);
+
+    return 1;
+}
+
+void Bitmap::kglShadowRasterV(int y1, int y2, int x, bool wall, bool soft, int w, int h,
+                              int x_center, int y_center, double slope1, double slope2)
+{
     if (isMega()) {
-        uint32_t *shadowbuffer = (uint32_t *)p->megaSurface->pixels;
+        SDL_Surface *surface = p->megaSurface;
+        const int columnStart = x < x_center ? 0 : x;
+        const int columnEnd = x < x_center ? x - 1 : w - 1;
 
-        int x_start, x_end;
-        if (x < x_center) {
-            x_start = 0;
-            x_end = x - 1;
-        } else {
-            x_start = x;
-            x_end = w - 1;
-        }
-
-        for (int i = x_start; i <= x_end; ++i) {
-            double y_start_raw = std::round(slope1 * (double)(i - x_center) + (double)y_center);
-            double y_end_raw = std::round(slope2 * (double)(i - x_center) + (double)y_center + 0.2f); // The original shader contains a +0.2 adjustment factor for some reason
-
-            int y_start = wall && y1 >= y_center ? y1 : (int)clamp(y_start_raw, 0., (double)h + 3.);
-            int y_end = wall && y2 >= y_center ? y2 - 1 : (int)clamp(y_end_raw, -4., y2 < y_center ? (double)y2 - 1. : (double)h - 1.); // This bounds check is incorrect but is consistent with the original shader
-
-            if (y_start <= y_end) {
-                for (int j = y_start; j <= y_end; ++j) {
-                    shadowbuffer[(size_t)w * (size_t)j + (size_t)i] = 0;
-                }
+        std::vector<KglShadowAction> actions;
+        int cached = -1;
+        for (int column = 0; column < surface->w; ++column) {
+            const int i = kglLogicalIndex(column, w, surface->w);
+            if (i < columnStart || i > columnEnd)
+                continue;
+            if (i != cached) {
+                const double y_start_raw = std::round(slope1 * (double)(i - x_center) + (double)y_center);
+                const double y_end_raw = std::round(slope2 * (double)(i - x_center) + (double)y_center + 0.2f); // The original shader contains a +0.2 adjustment factor for some reason
+                const int y_start = wall && y1 >= y_center ? y1 : (int)clamp(y_start_raw, 0., (double)h + 3.);
+                const int y_end = wall && y2 >= y_center ? y2 - 1 : (int)clamp(y_end_raw, -4., y2 < y_center ? (double)y2 - 1. : (double)h - 1.); // This bounds check is incorrect but is consistent with the original shader
+                kglShadowLine(actions, h, y_start, y_end, soft, !wall || y1 < y_center,
+                              y2 != y_center && (!wall || y2 < y_center), y1, y2, y_center);
+                cached = i;
             }
-
-            if (soft) {
-                if (!wall || y1 < y_center) {
-                    for (int j = 3; j >= 1; --j) {
-                        if (
-                            (y1 < y_center ? y_start - j < 0 : y_start - j < y1) // This bounds check is incorrect but is consistent with the original shader
-                                || (y2 < y_center ? y_start - j >= y2 : y_start - j >= h) // This bounds check is incorrect but is consistent with the original shader
-                        ) {
-                            continue;
-                        }
-                        uint32_t *pixel = shadowbuffer + (size_t)w * ((size_t)y_start - (size_t)j) + (size_t)i;
-                        for (size_t k = 0; k < 3; ++k) {
-                            ((uint8_t *)pixel)[k] = std::lround((double)((uint8_t *)pixel)[k] * ((double)j / (double)4));
-                        }
-                    }
-                }
-
-                if (y2 != y_center && (!wall || y2 < y_center)) {
-                    for (int j = 1; j <= 3; ++j) {
-                        if (
-                            (y1 < y_center ? y_end < -j : y_end < y1 - j) // This bounds check is incorrect but is consistent with the original shader
-                                || (y2 < y_center ? y_end >= y2 - j : y_end >= h - j) // This bounds check is incorrect but is consistent with the original shader
-                        ) {
-                            continue;
-                        }
-                        uint32_t *pixel = shadowbuffer + (size_t)w * ((size_t)y_end + (size_t)j) + (size_t)i;
-                        for (size_t k = 0; k < 3; ++k) {
-                            ((uint8_t *)pixel)[k] = std::lround((double)((uint8_t *)pixel)[k] * ((double)j / (double)4));
-                        }
-                    }
-                }
-            }
+            for (int row = 0; row < surface->h; ++row)
+                kglApplyShadow(actions[kglLogicalIndex(row, h, surface->h)],
+                               (uint8_t *)surface->pixels + (size_t)row * surface->pitch + 4 * (size_t)column);
         }
     } else {
         TEXFBO newTex = shState->texPool().request(width(), height());
@@ -3341,6 +3349,7 @@ int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
         quad.setTexPosRect(texRect, texRect);
         quad.setColor(Vec4(1, 1, 1, 1));
 
+        // Logical dimensions: the shader maps each texel to its logical pixel.
         KglShadowShaderV &shader = shState->shaders().kglShadowV;
         shader.bind();
         shader.setParams(y1, y2, x, wall, soft, w, h, x_center, y_center, slope1, slope2);
@@ -3360,8 +3369,6 @@ int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
     }
 
     p->onModified();
-
-    return 1;
 }
 
 void Bitmap::bindTex(ShaderBase &shader, bool substituteLoresSize)

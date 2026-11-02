@@ -27,12 +27,7 @@ SCRIPTS = [
 ]
 
 # KGL2 tests that cannot pass in HiRes yet. Each entry needs a reason.
-KGL2_HIRES_SKIP = {
-    # The shadow geometry (center, slopes, the y == h / 2 check) is recomputed
-    # from integer-scaled HiRes coordinates instead of scaling the logical
-    # geometry, so odd sizes shift the shadow and its status code.
-    'shadow.rb',
-}
+KGL2_HIRES_SKIP = set()
 
 KGL2_WRAPPER = '''LOG = {log!r}
 module System
