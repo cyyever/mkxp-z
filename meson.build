@@ -229,7 +229,9 @@ foreach install_tag : global_install_tags
         install_tag: install_tag,
     )
 
-    if ruby.type_name() == 'internal'
+    # The MSVC Ruby build (build-msvc.py) links only what the engine embeds and
+    # never installs a standard library tree, so there is nothing to copy.
+    if ruby.type_name() == 'internal' and compilers['cpp'].get_argument_syntax() != 'msvc'
         meson.add_install_script(
             common.get_variable('install_directory'),
             ruby_build_dir / 'dist' / 'lib' / 'ruby' / (get_option('mri_version') + '.0'),
