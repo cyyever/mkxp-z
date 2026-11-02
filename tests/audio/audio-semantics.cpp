@@ -79,9 +79,7 @@ int main(int argc, char **argv) {
 
         RGSSThreadData data;
         data.config.SE.sourceCount = 4;
-        // One BGM track, the default. With more tracks the ME watch has a
-        // pre-existing bug: an unused track ends the fade-in after an ME, so
-        // the BGM resumes silent. Behaviour is kept as is; see below.
+        // One BGM track, the default; several tracks are tested below.
         data.config.BGM.trackCount = 1;
         auto state = std::make_unique<SharedStatePrivate>(data);
         Audio &audio = state->audio;
@@ -217,6 +215,32 @@ int main(int argc, char **argv) {
         rejected = false;
         try { multi.bgmPlay("tone.ogg", 100, 100, 0, 2); } catch (const Exception &) { rejected = true; }
         require(rejected, "BGM track beyond BGM.trackCount accepted");
+
+        // An ME pauses every playing BGM track; when it ends, each one fades back
+        // in to its prior volume, like the single-track case, whichever tracks
+        // are unused or stopped.
+        auto meCycle = [&](const char *what, double prior) {
+            multi.mePlay("tone.flac", 100, 100);
+            advanceFor(1060);
+            const double early = advance(100);
+            const double after = advanceFor(1700);
+            std::printf("%s: level %.4f before the ME, %.4f fading in, %.4f after\n", what, prior, early, after);
+            require(early < after * .8, std::string(what) + ": no fade-in after the ME");
+            require(std::abs(after - prior) < .005, std::string(what) + ": not back at its prior volume");
+        };
+        multi.bgmPlay("tone.ogg", 100, 100, 0, 0);
+        meCycle("track 0 of 2", advanceFor(200));
+        multi.bgmStop();
+        multi.bgmPlay("tone.ogg", 80, 100, 0, 1);
+        const double trackOneLevel = advanceFor(200);
+        meCycle("track 1 of 2", trackOneLevel);
+        multi.bgmPlay("tone.ogg", 100, 100, 0, 0);
+        meCycle("tracks 0 and 1", advanceFor(200));
+        const double pos0 = multi.bgmPos(0), pos1 = multi.bgmPos(1);
+        advance(60);
+        require(multi.bgmPos(0) != pos0 && multi.bgmPos(1) != pos1, "a BGM track did not resume after the ME");
+        multi.bgmStop(0);
+        require(std::abs(advanceFor(200) - trackOneLevel) < .005, "track 1 lost its volume over the ME");
 
         multiState.reset();
 
