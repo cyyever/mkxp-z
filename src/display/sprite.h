@@ -46,7 +46,7 @@ public:
 
 	void update();
 
-	DECL_ATTR( Bitmap,      Bitmap* )
+	void setBitmap(Bitmap* value);
 	DECL_ATTR( SrcRect,     Rect&   )
 	DECL_ATTR( X,           int     )
 	DECL_ATTR( Y,           int     )
@@ -63,7 +63,7 @@ public:
 	DECL_ATTR( BlendType,   int     )
 	DECL_ATTR( Color,       Color&  )
 	DECL_ATTR( Tone,        Tone&   )
-    DECL_ATTR( Pattern,     Bitmap* )
+    void setPattern(Bitmap* value);
     DECL_ATTR( PatternBlendType, int)
     DECL_ATTR( PatternTile, bool    )
     DECL_ATTR( PatternOpacity, int  )

@@ -202,7 +202,6 @@ Plane::Plane(Viewport *viewport)
 	onGeometryChange(scene->getGeometry());
 }
 
-DEF_ATTR_RD_SIMPLE(Plane, Bitmap,    Bitmap*, p->realBitmap)
 DEF_ATTR_RD_SIMPLE(Plane, OX,        int,     p->realOX)
 DEF_ATTR_RD_SIMPLE(Plane, OY,        int,     p->realOY)
 DEF_ATTR_RD_SIMPLE(Plane, ZoomX,     float,   p->realZoomX)

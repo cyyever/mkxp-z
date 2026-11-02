@@ -150,9 +150,7 @@ bool ID::mipmaps() const {
     return valid() && storage->requestedMipmaps && storage->smoothing && !storage->dirty && storage->texture.mipLevels() > 1;
 }
 bool ID::valid() const { return storage && storage->alive && storage->texture.native(); }
-ID::operator bool() const { return storage && storage->alive; }
 ID gen() { ID id; Access::texture(id) = std::make_shared<Storage>(); return id; }
-const ID &bound() { return activeTexture; }
 void bind(ID id) {
     if (!id.empty()) textureStorage(id);
     checkedGpu([&] { gpu::bindPrimaryTexture(id); });
@@ -229,7 +227,6 @@ namespace FBO {
 ID::ID(int zero) { if (zero != 0) invalid("Render target IDs are opaque"); }
 TEX::ID ID::texture() const { return storage && storage->alive ? storage->target : TEX::ID{}; }
 bool ID::valid() const { return storage && storage->alive; }
-ID::operator bool() const { return valid(); }
 ID gen() { ID id; Access::framebuffer(id) = std::make_shared<Storage>(); return id; }
 void bind(ID id) {
     if (!id.empty()) framebufferStorage(id);
@@ -281,4 +278,3 @@ void TEXFBO::allocEmpty(TEXFBO &value, int width, int height) {
 }
 void TEXFBO::linkFBO(TEXFBO &value) { FBO::bind(value.fbo); FBO::setTarget(value.tex); }
 void TEXFBO::fini(TEXFBO &value) { FBO::del(value.fbo); TEX::del(value.tex); }
-void TEXFBO::clear(TEXFBO &value) { value.tex = {}; value.fbo = {}; value.width = value.height = 0; }

@@ -555,59 +555,6 @@ Bitmap::Bitmap(int width, int height, bool isHires)
     clear();
 }
 
-Bitmap::Bitmap(void *pixeldata, int width, int height)
-{
-    if (!pixeldata || width <= 0 || height <= 0)
-        throw Exception(Exception::ArgumentError, "Bitmap pixel data and dimensions must be valid");
-    SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA32);
-
-    if (!surface)
-        throw Exception(Exception::SDLError, "Error creating Bitmap: %s",
-                        SDL_GetError());
-
-    const std::size_t rowBytes = std::size_t(width) * 4;
-    for (int y = 0; y < height; ++y)
-        std::memcpy(static_cast<std::byte *>(surface->pixels) + std::size_t(y) * surface->pitch,
-                    static_cast<const std::byte *>(pixeldata) + std::size_t(y) * rowBytes, rowBytes);
-
-    if (surface->w > renderState.caps.maxTexSize || surface->h > renderState.caps.maxTexSize)
-    {
-        p = new BitmapPrivate(this);
-        p->megaSurface = surface;
-        SDL_SetSurfaceBlendMode(p->megaSurface, SDL_BLENDMODE_NONE);
-    }
-    else
-    {
-        TEXFBO tex;
-
-        try
-        {
-            tex = shState->texPool().request(surface->w, surface->h);
-        }
-        catch (const Exception &e)
-        {
-            SDL_DestroySurface(surface);
-            throw e;
-        }
-
-        p = new BitmapPrivate(this);
-        p->gl = tex;
-
-        TEX::bind(p->gl.tex);
-        TEX::uploadImage(p->gl.width, p->gl.height, surface->pixels, SDL_PIXELFORMAT_RGBA32);
-
-        SDL_DestroySurface(surface);
-    }
-
-    if (width > INT16_MAX || height > INT16_MAX)
-    {
-        p->pixmanUseRegion32 = true;
-        pixman_region_fini(&p->tainted);
-        pixman_region32_init(&p->tainted32);
-    }
-    p->addTaintedArea(rect());
-}
-
 // frame is -2 for "any and all", -1 for "current", anything else for a specific frame
 Bitmap::Bitmap(const Bitmap &other, int frame)
 {

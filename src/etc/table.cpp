@@ -113,16 +113,6 @@ void Table::resize(int x, int y, int z)
 	return;
 }
 
-void Table::resize(int x, int y)
-{
-	resize(x, y, zs);
-}
-
-void Table::resize(int x)
-{
-	resize(x, ys, zs);
-}
-
 /* Serializable */
 int Table::serialSize() const {
     return static_cast<int>(headerSize + data.size() * sizeof(int16_t));

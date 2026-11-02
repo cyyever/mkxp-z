@@ -40,8 +40,8 @@ public:
 
 	void update();
 
-	DECL_ATTR( Windowskin,      Bitmap* )
-	DECL_ATTR( Contents,        Bitmap* )
+	void setWindowskin(Bitmap* value);
+	void setContents(Bitmap* value);
 	DECL_ATTR( Stretch,         bool    )
 	DECL_ATTR( CursorRect,      Rect&   )
 	DECL_ATTR( Active,          bool    )

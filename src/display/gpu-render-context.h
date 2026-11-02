@@ -39,7 +39,6 @@ public:
                      const EffectParameters & = {});
     void clear();
     void draw(std::span<const QuadVertex>);
-    [[nodiscard]] Fence submit();
     void flush();
     // Preserve the existing per-shader hires/ping-pong decision at the engine
     // boundary, without coupling GPU primitives to global SharedState.

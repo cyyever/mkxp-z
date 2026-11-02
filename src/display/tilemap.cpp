@@ -1292,17 +1292,6 @@ void Tilemap::Autotiles::set(int i, Bitmap *bitmap)
 	p->updateAutotileInfo();
 }
 
-Bitmap *Tilemap::Autotiles::get(int i) const
-{
-	if (!p)
-		return 0;
-
-	if (i < 0 || i > autotileCount-1)
-		return 0;
-
-	return p->autotiles[i];
-}
-
 Tilemap::Tilemap(Viewport *viewport)
 {
 	p = new TilemapPrivate(viewport);
@@ -1339,11 +1328,6 @@ Tilemap::Autotiles &Tilemap::getAutotiles()
 	return atProxy;
 }
 
-DEF_ATTR_RD_SIMPLE(Tilemap, Viewport, Viewport*, p->viewport)
-DEF_ATTR_RD_SIMPLE(Tilemap, Tileset, Bitmap*, p->tileset)
-DEF_ATTR_RD_SIMPLE(Tilemap, MapData, Table*, p->mapData)
-DEF_ATTR_RD_SIMPLE(Tilemap, FlashData, Table*, p->flashMap.getData())
-DEF_ATTR_RD_SIMPLE(Tilemap, Priorities, Table*, p->priorities)
 DEF_ATTR_RD_SIMPLE(Tilemap, Visible, bool, p->visible)
 DEF_ATTR_RD_SIMPLE(Tilemap, OX, int, p->origin.x)
 DEF_ATTR_RD_SIMPLE(Tilemap, OY, int, p->origin.y)

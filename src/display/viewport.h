@@ -34,7 +34,6 @@ class Viewport : public Scene, public SceneElement, public Flashable, public Dis
 public:
 	Viewport(int x, int y, int width, int height);
 	Viewport(Rect *rect);
-	Viewport();
 	~Viewport();
 
 	void update();
@@ -49,12 +48,10 @@ public:
 
 private:
 	void initViewport(int x, int y, int width, int height);
-	void geometryChanged();
 
 	void composite();
 	void draw();
 	void onGeometryChange(const Geometry &);
-	bool isEffectiveViewport(Rect *&, Color *&, Tone *&) const;
 
 	void releaseResources();
 	const char *klassName() const { return "viewport"; }

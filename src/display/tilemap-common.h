@@ -112,11 +112,6 @@ atSelectSubPos(FloatRect &pos, int i)
 
 struct FlashMap
 {
-	Table *getData() const
-	{
-		return data;
-	}
-
 	void setData(Table *value)
 	{
 		if (data == value)

@@ -117,7 +117,6 @@ protected:
 	 * elements with lower priority are drawn earlier */
 	bool operator<(const SceneElement &o) const;
 
-	void setSpriteY(int value);
 	void unlink();
 
 	IntruListLink<SceneElement> link;

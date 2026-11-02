@@ -204,13 +204,6 @@ void RenderContext::clear() {
     encoder.draw(Program::FlatColor, vertices, {}, vp, fp, clearState);
     if (!FBO::boundFramebufferID.empty()) TEX::markModified(FBO::boundFramebufferID.texture());
 }
-Fence RenderContext::submit() {
-    if (!recording) return {};
-    auto result = encoder.submit();
-    recording = false;
-    pendingResources.clear();
-    return result;
-}
 void RenderContext::flush() {
     if (!recording) return;
     encoder.submitWithoutFence();

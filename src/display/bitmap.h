@@ -102,7 +102,6 @@ class Bitmap : public Disposable
 public:
 	Bitmap(const char *filename);
 	Bitmap(int width, int height, bool isHires = false);
-	Bitmap(void *pixeldata, int width, int height);
 	Bitmap(TEXFBO &other);
 	Bitmap(SDL_Surface *imgSurf, SDL_Surface *imgSurfHires, bool forceMega = false);
 

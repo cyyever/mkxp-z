@@ -42,7 +42,6 @@ public:
 	{
 	public:
 		void set(int i, Bitmap *bitmap);
-		Bitmap *get(int i) const;
 
 	private:
 		Autotiles() {}
@@ -59,12 +58,11 @@ public:
 	void update();
 
 	Autotiles &getAutotiles();
-	Viewport *getViewport() const;
 
-	DECL_ATTR( Tileset,    Bitmap*   )
-	DECL_ATTR( MapData,    Table*    )
-	DECL_ATTR( FlashData,  Table*    )
-	DECL_ATTR( Priorities, Table*    )
+	void setTileset(Bitmap* value);
+	void setMapData(Table* value);
+	void setFlashData(Table* value);
+	void setPriorities(Table* value);
 	DECL_ATTR( Visible,    bool      )
 	DECL_ATTR( OX,         int       )
 	DECL_ATTR( OY,         int       )
