@@ -1938,7 +1938,7 @@ void Bitmap::gradientFillRect(const IntRect &rect,
     }
     else
     {
-        SimpleColorShader &shader = shState->shaders().simpleColor;
+        ShaderBase &shader = shState->shaders().simpleColor;
         shader.bind();
         shader.setTranslation(Vec2i());
 
@@ -3545,7 +3545,7 @@ void Bitmap::kglInvert()
         quad.setTexPosRect(texRect, texRect);
         quad.setColor(Vec4(1, 1, 1, 1));
 
-        KglInvertShader &shader = shState->shaders().kglInvert;
+        ShaderBase &shader = shState->shaders().kglInvert;
         shader.bind();
 
         FBO::bind(newTex.fbo);
@@ -3592,7 +3592,7 @@ void Bitmap::kglCompressAlpha()
         quad.setTexPosRect(texRect, texRect);
         quad.setColor(Vec4(1, 1, 1, 1));
 
-        KglCompressAlphaShader &shader = shState->shaders().kglCompressAlpha;
+        ShaderBase &shader = shState->shaders().kglCompressAlpha;
         shader.bind();
 
         FBO::bind(newTex.fbo);

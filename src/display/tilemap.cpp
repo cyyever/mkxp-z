@@ -572,7 +572,7 @@ struct TilemapPrivate
 				renderState.blend.pushSet(false);
 				renderState.viewport.pushSet(IntRect(0, 0, atlas.size.x, atlas.size.y));
 
-				SimpleShader &shader = shState->shaders().simple;
+				ShaderBase &shader = shState->shaders().simple;
 				shader.bind();
 				shader.applyViewportProj();
 				shader.setTranslation(Vec2i());

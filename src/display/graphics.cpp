@@ -148,7 +148,7 @@ public:
         Scene::composite();
         
         if (brightEffect) {
-            SimpleColorShader &shader = shState->shaders().simpleColor;
+            ShaderBase &shader = shState->shaders().simpleColor;
             shader.bind();
             shader.applyViewportProj();
             shader.setTranslation(Vec2i());

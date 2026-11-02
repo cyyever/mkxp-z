@@ -1109,7 +1109,7 @@ void Sprite::draw()
             break;
         case Lanczos3:
         {
-            Lanczos3SpriteShader &shader = shState->shaders().lanczos3Sprite;
+            SimpleSpriteShader &shader = shState->shaders().lanczos3Sprite;
             shader.bind();
             
             shader.setTexSize(Vec2i(sourceWidthHires, sourceHeightHires));
@@ -1148,13 +1148,6 @@ void Sprite::draw()
     
     p->bitmap->bindTex(*base, false);
 
-#ifdef MKXPZ_HAVE_EXTRA_SHADERS
-    if (scalingMethod == xBRZ)
-    {
-        XbrzShader &shader = shState->shaders().xbrz;
-        shader.setTargetScale(Vec2((float)(shState->config().xbrzScalingFactor), (float)(shState->config().xbrzScalingFactor)));
-    }
-#endif
     
     TEX::setSmooth(scalingMethod == Bilinear);
 
