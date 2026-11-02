@@ -190,7 +190,7 @@ void Viewport::composite()
 
 	bool renderEffect = p->needsEffectRender(flashing);
 
-	if (elements.getSize() == 0 && !renderEffect)
+	if (elements.begin() == elements.end() && !renderEffect)
 		return;
 
 	/* Setup scissor */

@@ -41,20 +41,16 @@ Shader::Shader(gpu::Program program) {
 }
 void Shader::bind() { gpu::bindShaderState(&state); }
 void Shader::unbind() { gpu::bindShaderState(nullptr); }
-ShaderBase::ShaderBase(gpu::Program program) : Shader(program),projMat(*this) {}
-void ShaderBase::Projection::set(const Vec2i &size) {
-    if(size.x<=0||size.y<=0) throw std::invalid_argument("Shader projection requires positive dimensions");
-    auto &projection=owner.state.vertex.projection;
+ShaderBase::ShaderBase(gpu::Program program) : Shader(program) {}
+void ShaderBase::applyViewportProj() {
+    const auto size=gpu::shaderProjectionSize(state.program != gpu::Program::Gray);
+    if(size[0]<=0||size[1]<=0) throw std::invalid_argument("Shader projection requires positive dimensions");
+    auto &projection=state.vertex.projection;
     std::fill_n(projection,16,0.f);
     // Native GPU texture coordinates/readback are top-down; D3D depth is [0,1].
-    projection[0]=2.f/size.x; projection[5]=-2.f/size.y;
+    projection[0]=2.f/size[0]; projection[5]=-2.f/size[1];
     projection[12]=-1; projection[13]=1; projection[15]=1;
 }
-void ShaderBase::applyViewportProj() {
-    const auto size=gpu::shaderProjectionSize(framebufferScalingAllowed());
-    projMat.set(Vec2i(size[0],size[1]));
-}
-bool ShaderBase::framebufferScalingAllowed() { return true; }
 void ShaderBase::setTexSize(const Vec2i &size) {
     if(size.x<=0||size.y<=0) throw std::invalid_argument("Shader texture requires positive dimensions");
     state.vertex.textureScaleTranslation[0]=1.f/size.x;
@@ -152,14 +148,11 @@ void BltShader::setSubRect(const FloatRect &value) {
     state.fragment.subrect[0]=value.x;state.fragment.subrect[1]=value.y;
     state.fragment.subrect[2]=value.w;state.fragment.subrect[3]=value.h;
 }
-bool GrayShader::framebufferScalingAllowed() { return false; }
 void TilemapShader::setAniIndex(int value) { state.tilemap.animation[0]=value; }
 void TilemapShader::setATFrames(int values[7]) {
     std::copy_n(values,4,state.tilemap.autotileFrames0);
     std::copy_n(values+4,3,state.tilemap.autotileFrames1);
 }
-void Lanczos3Shader::setTexSize(const Vec2i &value) { ShaderBase::setTexSize(value); }
-void Lanczos3SpriteShader::setTexSize(const Vec2i &value) { ShaderBase::setTexSize(value); }
 void BicubicShader::setSharpness(int value) { sharpness(state,value); }
 void BicubicSpriteShader::setSharpness(int value) { sharpness(state,value); }
 void SpriteShader::setBushDepth(bool y,bool under,float slope,float intercept) {

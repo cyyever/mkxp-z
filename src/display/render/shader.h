@@ -41,20 +41,11 @@ protected:
 
 class ShaderBase : public Shader {
 public:
-    class Projection {
-    public:
-        explicit Projection(ShaderBase &owner) : owner(owner) {}
-        void set(const Vec2i &);
-    private:
-        ShaderBase &owner;
-    };
-    Projection projMat;
     void applyViewportProj();
     virtual void setTexSize(const Vec2i &);
     void setTranslation(const Vec2i &);
 protected:
     explicit ShaderBase(gpu::Program program = gpu::Program::Simple);
-    virtual bool framebufferScalingAllowed();
     int blurAxis = -1;
 };
 
@@ -174,10 +165,6 @@ public:
 	GrayShader();
 
 	void setGray(float value);
-
-protected:
-	virtual bool framebufferScalingAllowed();
-
 };
 
 class TilemapShader : public ShaderBase
@@ -295,7 +282,6 @@ class Lanczos3Shader : public SimpleShader
 public:
 	Lanczos3Shader();
 
-	void setTexSize(const Vec2i &value);
 
 };
 
@@ -324,7 +310,6 @@ class Lanczos3SpriteShader : public SimpleSpriteShader
 public:
 	Lanczos3SpriteShader();
 
-	void setTexSize(const Vec2i &value);
 
 };
 

@@ -28,10 +28,4 @@ struct Serializable
 	virtual void serialize(char *buffer) const = 0;
 };
 
-template<class C>
-C *deserialize(const char *data)
-{
-	return C::deserialize(data);
-}
-
 #endif // SERIALIZABLE_H
