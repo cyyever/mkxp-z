@@ -2,6 +2,7 @@
 import ctypes
 from ctypes import wintypes
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -55,7 +56,10 @@ File.write('result.txt', "#{triggers},#{releases}")
             (fixture / 'mkxp.json').write_text(json.dumps(configuration), encoding='utf-8')
             (fixture / 'Game.ini').write_text('[Game]\nTitle=SDL3 mouse regression\nScripts=Data/Scripts.rxdata\n')
             with (fixture / 'stdout.log').open('w') as stdout, (fixture / 'stderr.log').open('w') as stderr:
-                process = subprocess.Popen([str(executable)], cwd=fixture, stdout=stdout, stderr=stderr)
+                # CI runners have no audio device; like the other engine tests,
+                # use SDL's dummy driver so startup does not fail.
+                process = subprocess.Popen([str(executable)], cwd=fixture, stdout=stdout, stderr=stderr,
+                                           env=dict(os.environ, SDL_AUDIO_DRIVER='dummy'))
                 windows = []
 
                 @callback_type
