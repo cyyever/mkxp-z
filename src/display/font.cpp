@@ -41,12 +41,10 @@
 
 #include <SDL3_ttf/SDL_ttf.h>
 #include <memory>
+#include <optional>
+#include <tuple>
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_SFNT_NAMES_H
-#include FT_TRUETYPE_TABLES_H
-#include FT_TRUETYPE_IDS_H
+#include "sfnt.h"
 
 #ifndef MKXPZ_CJK_FONT
 #include "liberation.ttf.xxd"
@@ -68,17 +66,13 @@
 #define BNDL_F_D(f) BUNDLED_FONT_D(f)
 #define BNDL_F_L(f) BUNDLED_FONT_L(f)
 
-// SDL_ttf's font handle is opaque. Read metrics through an independent
-// FreeType face backed by the same bytes, without relying on its struct layout.
+// SDL_ttf's font handle is opaque. Read the SFNT tables needed for name
+// lookup and Windows-style size selection directly from the same bytes.
 namespace {
 struct FontMetrics {
-    FT_Library library = nullptr;
-    FT_Face face = nullptr;
     std::unique_ptr<void, decltype(&SDL_free)> data{nullptr, SDL_free};
-    ~FontMetrics() {
-        if (face) FT_Done_Face(face);
-        if (library) FT_Done_FreeType(library);
-    }
+    size_t size = 0;
+    sfnt::Font sfnt; // invalid for non-SFNT fonts SDL_ttf can still open
 };
 } // namespace
 
@@ -92,11 +86,10 @@ static std::unique_ptr<FontMetrics> loadFontMetrics(SDL_IOStream *stream) {
     const auto status = SDL_GetIOStatus(stream);
     const bool restored = SDL_SeekIO(stream, offset, SDL_IO_SEEK_SET) == offset;
     if (!metrics->data || !restored ||
-        (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF) ||
-        FT_Init_FreeType(&metrics->library) ||
-        FT_New_Memory_Face(metrics->library,
-            static_cast<const FT_Byte *>(metrics->data.get()), size, 0, &metrics->face))
+        (status != SDL_IO_STATUS_READY && status != SDL_IO_STATUS_EOF))
         return nullptr;
+    metrics->size = size;
+    metrics->sfnt = sfnt::Font({static_cast<const std::uint8_t *>(metrics->data.get()), size});
     return metrics;
 }
 
@@ -201,14 +194,15 @@ SharedFontState::~SharedFontState()
 
 }
 
-static std::string decodeSfntName(const FT_SfntName &aname)
+static std::string decodeSfntName(const sfnt::Font::NameRecord &aname)
 {
-    const std::string_view text(reinterpret_cast<const char *>(aname.string), aname.string_len);
+    constexpr std::uint16_t appleUnicode = 0, microsoft = 3, msUnicodeBmp = 1, msUcs4 = 10;
+    const std::string_view text = aname.text;
     try {
-        if ((aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UNICODE_CS)
-            || aname.platform_id == TT_PLATFORM_APPLE_UNICODE)
+        if ((aname.platformId == microsoft && aname.encodingId == msUnicodeBmp)
+            || aname.platformId == appleUnicode)
             return FontEncoding::decodeName(text);
-        if (aname.platform_id == TT_PLATFORM_MICROSOFT && aname.encoding_id == TT_MS_ID_UCS_4)
+        if (aname.platformId == microsoft && aname.encodingId == msUcs4)
             return FontEncoding::decodeName(text, true);
         return Encoding::convertString(text);
     } catch (const Exception &) {
@@ -222,9 +216,15 @@ void SharedFontState::initFontSetCB(SDL_IOStream *ops,
 	auto metrics = loadFontMetrics(ops);
     if (!metrics)
         return;
-    FT_Face face = metrics->face;
-    std::string family = face->family_name ? face->family_name : "";
-    std::string style = face->style_name ? face->style_name : "";
+    // SDL_ttf reports the same family/style names FreeType derives for a face.
+    TTF_Font *ttf = TTF_OpenFontIO(SDL_IOFromConstMem(metrics->data.get(), metrics->size), true, 1.0f);
+    if (!ttf)
+        return;
+    const char *familyName = TTF_GetFontFamilyName(ttf);
+    const char *styleName = TTF_GetFontStyleName(ttf);
+    std::string family = familyName ? familyName : "";
+    std::string style = styleName ? styleName : "";
+    TTF_CloseFont(ttf);
 
 	std::transform(family.begin(), family.end(), family.begin(),
 		[](unsigned char c){ return std::tolower(c); });
@@ -237,28 +237,21 @@ void SharedFontState::initFontSetCB(SDL_IOStream *ops,
 		set.other = filename;
 
 
-	if (FT_IS_SFNT(face))
+	if (metrics->sfnt.valid())
 	{
+		constexpr std::uint16_t nameFamily = 1, nameSubfamily = 2;
 		std::unordered_map<uint32_t, std::pair<std::string, std::string>> name_map;
 
-		for (unsigned int i = 0, name_count = FT_Get_Sfnt_Name_Count(face); i < name_count; ++i)
+		metrics->sfnt.forEachName([&](const sfnt::Font::NameRecord &aname)
 		{
-			FT_SfntName aname;
-			if (FT_Get_Sfnt_Name(face, i, &aname))
-				continue;
-			uint32_t key = aname.platform_id;
+			uint32_t key = aname.platformId;
 			key <<= 16;
-			key |= aname.language_id;
-			switch (aname.name_id)
-			{
-				case TT_NAME_ID_FONT_FAMILY:
-					name_map[key].first = decodeSfntName(aname);
-					break;
-				case TT_NAME_ID_FONT_SUBFAMILY:
-					name_map[key].second = decodeSfntName(aname);
-					break;
-			}
-		}
+			key |= aname.languageId;
+			if (aname.nameId == nameFamily)
+				name_map[key].first = decodeSfntName(aname);
+			else if (aname.nameId == nameSubfamily)
+				name_map[key].second = decodeSfntName(aname);
+		});
 
 		for (const auto &entry : name_map)
 		{
@@ -292,176 +285,81 @@ void SharedFontState::initFontSetCB(SDL_IOStream *ops,
  * but it could be useful later. */
 namespace {
 typedef struct {
-	FT_Face face;
+	const sfnt::Font *sfnt;
 	int ppem;
 	short yMax;
 	short yMin;
 } Font_Container;
 } // namespace
 
-#define DWORD uint32_t
-#define SHORT short
-#define USHORT unsigned short
-#define GDI_ERROR ~0u
-
-#define MS_MAKE_TAG(ch0, ch1, ch2, ch3)                                                 \
-                    ((uint32_t)(uint8_t)(ch0) | ((uint32_t)(uint8_t)(ch1) << 8) |       \
-                    ((uint32_t)(uint8_t)(ch2) << 16) | ((uint32_t)(uint8_t)(ch3) << 24))
-#define MS_VDMX_TAG MS_MAKE_TAG('V', 'D', 'M', 'X')
-
-/* Wine's code suggests the tables are stored in big endian format. */
-#define RTLUSHORTBYTESWAP(x) (uint16_t)((x >> 8) | (x << 8))
-#define RTLULONGBYTESWAP(x) (((uint32_t)RTLUSHORTBYTESWAP((uint16_t)x) << 16) | RTLUSHORTBYTESWAP((uint16_t)(x >> 16)))
-
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-#define GET_BE_WORD(x) (x)
-#else
-#define GET_BE_WORD(x) RTLUSHORTBYTESWAP(x)
-#endif
-
-static unsigned int freetype_get_font_data( Font_Container *font, uint32_t table,
-                                            unsigned int offset, void *buf, unsigned int cbData)
-{
-	FT_Face ft_face = font->face;
-	FT_ULong len;
-	FT_Error err;
-
-	if (!FT_IS_SFNT(ft_face)) return GDI_ERROR;
-
-	if(!buf)
-		len = 0;
-	else
-		len = cbData;
-
-	/* MS tags differ in endianness from FT ones */
-	table = RTLULONGBYTESWAP( table );
-
-	/* make sure value of len is the value freetype says it needs */
-	if (buf && len)
-	{
-		FT_ULong needed = 0;
-		err = FT_Load_Sfnt_Table(ft_face, table, offset, nullptr, &needed);
-		if(!err && needed < len)
-			len = needed;
-	}
-	err = FT_Load_Sfnt_Table(ft_face, table, offset, (FT_Byte*)buf, &len);
-	if (err) /* Can't find table */
-		return GDI_ERROR;
-	return (int)len;
-}
-
-namespace {
-typedef struct {
-	uint16_t version;
-	uint16_t numRecs;
-	uint16_t numRatios;
-} VDMX_Header;
-
-typedef struct {
-	uint8_t bCharSet;
-	uint8_t xRatio;
-	uint8_t yStartRatio;
-	uint8_t yEndRatio;
-} Ratios;
-
-typedef struct {
-	uint16_t recs;
-	uint8_t startsz;
-	uint8_t endsz;
-} VDMX_group;
-
-typedef struct {
-	uint16_t yPelHeight;
-	uint16_t yMax;
-	uint16_t yMin;
-} VDMX_vTable;
-} // namespace
-
 static int load_VDMX(Font_Container *font, int height)
 {
-	VDMX_Header hdr;
-	VDMX_group group;
-	uint8_t devXRatio, devYRatio;
-	unsigned short numRatios;
-	unsigned int result, offset = -1;
-	int i, ppem = 0;
-
-	result = freetype_get_font_data(font, MS_VDMX_TAG, 0, &hdr, sizeof(hdr));
-
-	if(result == GDI_ERROR) /* no vdmx table present, use linear scaling */
-		return ppem;
+	const sfnt::Bytes vdmx = font->sfnt->table(sfnt::tag("VDMX"));
+	/* Header: version, numRecs, numRatios; then 4-byte ratio records and
+	 * one 16-bit group offset per ratio. */
+	const auto numRatios = sfnt::u16(vdmx, 4);
+	if (!numRatios) /* no vdmx table present, use linear scaling */
+		return 0;
 
 	/* FIXME: need the real device aspect ratio */
-	devXRatio = 1;
-	devYRatio = 1;
+	const uint8_t devXRatio = 1, devYRatio = 1;
 
-	numRatios = GET_BE_WORD(hdr.numRatios);
+	std::optional<size_t> offset;
+	for (size_t i = 0; i < *numRatios; ++i) {
+		const size_t ratio = 6 + i * 4;
+		if (ratio + 4 > vdmx.size())
+			return 0;
+		const uint8_t bCharSet = vdmx[ratio], xRatio = vdmx[ratio + 1],
+		              yStartRatio = vdmx[ratio + 2], yEndRatio = vdmx[ratio + 3];
 
-	for(i = 0; i < numRatios; i++) {
-		Ratios ratio;
-
-		offset = sizeof(hdr) + (i * sizeof(Ratios));
-		freetype_get_font_data(font, MS_VDMX_TAG, offset, &ratio, sizeof(Ratios));
-		offset = -1;
-
-		if (!ratio.bCharSet)
+		if (!bCharSet)
 			continue;
 
-		if((ratio.xRatio == 0 &&
-			ratio.yStartRatio == 0 &&
-			ratio.yEndRatio == 0) ||
-		   (devXRatio == ratio.xRatio &&
-			devYRatio >= ratio.yStartRatio &&
-			devYRatio <= ratio.yEndRatio))
+		if((xRatio == 0 && yStartRatio == 0 && yEndRatio == 0) ||
+		   (devXRatio == xRatio && devYRatio >= yStartRatio && devYRatio <= yEndRatio))
 		{
-			uint16_t group_offset;
-
-			offset = sizeof(hdr) + numRatios * sizeof(ratio) + i * sizeof(group_offset);
-			freetype_get_font_data(font, MS_VDMX_TAG, offset, &group_offset, sizeof(group_offset));
-			offset = GET_BE_WORD(group_offset);
+			const auto groupOffset = sfnt::u16(vdmx, 6 + size_t(*numRatios) * 4 + i * 2);
+			if (!groupOffset)
+				return 0;
+			offset = *groupOffset;
 			break;
 		}
 	}
 
-	if(offset == -1) return 0;
+	if (!offset) return 0;
 
-	if(freetype_get_font_data(font, MS_VDMX_TAG, offset, &group, sizeof(group)) != GDI_ERROR) {
-		uint16_t recs;
-		std::vector<VDMX_vTable> vTable;
+	/* Group: recs, startsz, endsz; then 6-byte (yPelHeight, yMax, yMin) records */
+	const auto recs = sfnt::u16(vdmx, *offset);
+	const size_t base = *offset + 4;
+	if (!recs || base > vdmx.size() || (vdmx.size() - base) / 6 < *recs)
+		return 0;
+	const auto entry = [&](int i) {
+		const size_t at = base + size_t(i) * 6;
+		return std::tuple(int(*sfnt::u16(vdmx, at)), *sfnt::s16(vdmx, at + 2), *sfnt::s16(vdmx, at + 4));
+	};
 
-		recs = GET_BE_WORD(group.recs);
+	int ppem = 0;
+	for (int i = 0; i < *recs; i++) {
+		const auto [pelHeight, yMax, yMin] = entry(i);
+		ppem = pelHeight;
 
-		vTable.resize(recs);
-		result = freetype_get_font_data(font, MS_VDMX_TAG, offset + sizeof(group), &vTable[0], recs * sizeof(VDMX_vTable));
-		if(result == GDI_ERROR) /* Failed to retrieve vTable */
-			return 0;
-
-		for(i = 0; i < recs; i++) {
-			VDMX_vTable &entry = vTable[i];
-			short yMax = GET_BE_WORD(entry.yMax);
-			short yMin = GET_BE_WORD(entry.yMin);
-			ppem = GET_BE_WORD(entry.yPelHeight);
-
-			if(yMax + -yMin == height) {
-				font->yMax = yMax;
-				font->yMin = yMin;
-				break;
-			}
-			if(yMax + -yMin > height) {
-				if(--i < 0) {
-					ppem = 0;
-					return 0; /* failed */
-				}
-				VDMX_vTable &entry = vTable[i];
-				font->yMax = GET_BE_WORD(entry.yMax);
-				font->yMin = GET_BE_WORD(entry.yMin);
-				ppem = GET_BE_WORD(entry.yPelHeight);
-				break;
-			}
+		if(yMax + -yMin == height) {
+			font->yMax = yMax;
+			font->yMin = yMin;
+			break;
 		}
-		if(!font->yMax) /* ppem not found for height */
-			ppem = 0;
+		if(yMax + -yMin > height) {
+			if(--i < 0)
+				return 0; /* failed */
+			const auto [smallerHeight, smallerMax, smallerMin] = entry(i);
+			font->yMax = smallerMax;
+			font->yMin = smallerMin;
+			ppem = smallerHeight;
+			break;
+		}
 	}
+	if(!font->yMax) /* ppem not found for height */
+		ppem = 0;
 
 	return ppem;
 }
@@ -469,22 +367,19 @@ static int load_VDMX(Font_Container *font, int height)
 /* Some fonts have large usWinDescent values, as a result of storing signed short
    in unsigned field. That's probably caused by sTypoDescent vs usWinDescent confusion in
    some font generation tools. */
-static inline USHORT get_fixed_windescent(USHORT windescent)
+static inline uint16_t get_fixed_windescent(uint16_t windescent)
 {
-    return abs((SHORT)windescent);
+    return abs((int16_t)windescent);
 }
 
 static int calc_ppem_for_height(Font_Container *font, int height)
 {
-	FT_Face ft_face = font->face;
-	TT_OS2 *pOS2;
-	TT_HoriHeader *pHori;
+	const sfnt::Bytes os2 = font->sfnt->table(sfnt::tag("OS/2"));
+	const sfnt::Bytes hhea = font->sfnt->table(sfnt::tag("hhea"));
+	const long unitsPerEm = font->sfnt->unitsPerEm().value_or(0);
 
 	int ppem;
 	const int MAX_PPEM = (1 << 16) - 1;
-
-	pOS2 = (TT_OS2 *)FT_Get_Sfnt_Table(ft_face, FT_SFNT_OS2);
-	pHori = (TT_HoriHeader *)FT_Get_Sfnt_Table(ft_face, FT_SFNT_HHEA);
 
 	if(height == 0)
 		height = 16;
@@ -504,23 +399,28 @@ static int calc_ppem_for_height(Font_Container *font, int height)
 	 */
 
 	if(height > 0) {
-		USHORT windescent = get_fixed_windescent(pOS2->usWinDescent);
+		const uint16_t winAscent = sfnt::u16(os2, 74).value_or(0);
+		const uint16_t windescent = get_fixed_windescent(sfnt::u16(os2, 76).value_or(0));
 		int units;
 
-		if(pOS2->usWinAscent + windescent == 0)
+		if(winAscent + windescent == 0)
 		{
-			font->yMax = pHori->Ascender;
-			font->yMin = pHori->Descender;
-			units = pHori->Ascender - pHori->Descender;
+			const int16_t ascender = sfnt::s16(hhea, 4).value_or(0);
+			const int16_t descender = sfnt::s16(hhea, 6).value_or(0);
+			font->yMax = ascender;
+			font->yMin = descender;
+			units = ascender - descender;
 		} else {
-			font->yMax = pOS2->usWinAscent;
+			font->yMax = winAscent;
 			font->yMin = -windescent;
-			units = pOS2->usWinAscent + windescent;
+			units = winAscent + windescent;
 		}
-		ppem = (int)FT_MulDiv(ft_face->units_per_EM, height, units);
+		if (units <= 0 || unitsPerEm <= 0) /* no usable vertical metrics */
+			return height;
+		ppem = (int)sfnt::mulDiv(unitsPerEm, height, units);
 
 		/* If rounding ends up getting a font exceeding height, choose a smaller ppem */
-		if(ppem > 1 && FT_MulDiv(units, ppem, ft_face->units_per_EM) > height)
+		if(ppem > 1 && sfnt::mulDiv(units, ppem, unitsPerEm) > height)
 			--ppem;
 
 		if(ppem > MAX_PPEM) {
@@ -608,14 +508,12 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 
 	if (font)
 	{
-			FT_Face face = metrics->face;
-		/* This is should always be true, but we may as well check... */
-		if (FT_IS_SCALABLE( face ))
+		if (metrics->sfnt.valid() && metrics->sfnt.scalable())
 		{
 			if (ppem == 0)
 			{
-				Font_Container c = { 0 };
-				c.face = face;
+				Font_Container c = {};
+				c.sfnt = &metrics->sfnt;
 				c.ppem = load_VDMX(&c, size);
 				if (!c.ppem)
 					c.ppem = calc_ppem_for_height( &c, size );

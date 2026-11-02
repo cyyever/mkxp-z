@@ -170,16 +170,12 @@ if not freetype.found()
         'zlib': 'disabled',
     }
     freetype = subproject('freetype', default_options: freetype_options).get_variable('freetype_dep')
-    freetype_includes = ['-I' + meson.project_source_root() / 'subprojects' / ('freetype-VER-' + freetype.version().replace('.', '-')) / 'include']
-else
-    freetype_includes = ['-I' + (freetype.get_variable(pkgconfig: 'includedir') / 'freetype2')]
 endif
-global_dependencies += freetype
 
 sdl3_ttf = dependency('sdl3_ttf', allow_fallback: false,
     required: get_option('sdl_ttf_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_ttf.found()
-    # Share the same FreeType dependency with SDL_ttf and our font metrics code.
+    # Share the same FreeType dependency with SDL_ttf; the engine itself reads SFNT tables directly.
     if freetype_system
         meson.override_dependency('freetype2', freetype, static: true)
     endif
