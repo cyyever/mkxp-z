@@ -481,11 +481,20 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
     other.guardDisposed();
     if (frame > -2) other.ensureAnimated();
 
+    // Copy the high-res companion too; otherwise the copy (Bitmap#dup/clone)
+    // only has its logical-resolution texture and renders upscaled.
+    Bitmap *hiresBitmap = nullptr;
     if (other.hasHires()) {
-        Debug() << "BUG: High-res Bitmap from animation not implemented";
+        if (other.isAnimated()) {
+            Debug() << "BUG: High-res Bitmap from animation not implemented";
+        } else {
+            hiresBitmap = new Bitmap(*other.p->selfHires, frame);
+            hiresBitmap->setLores(this);
+        }
     }
 
     p = new BitmapPrivate(this);
+    p->selfHires = hiresBitmap;
 
     if (other.isMega())
     {
@@ -496,9 +505,12 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
         try {
             p->gl = shState->texPool().request(other.width(), other.height());
         } catch (const Exception &e) {
+            delete hiresBitmap;
             delete p;
             throw e;
         }
+        if (hiresBitmap)
+            p->gl.selfHires = &hiresBitmap->getRenderTarget();
 
         if (!other.isAnimated() && !other.hasHires()) {
             try {
