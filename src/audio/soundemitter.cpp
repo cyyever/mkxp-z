@@ -26,7 +26,6 @@
 #include "exception.h"
 #include "config.h"
 #include "util.h"
-#include "debugwriter.h"
 
 #include <format>
 
@@ -37,15 +36,14 @@ struct SoundBuffer
 	/* Uniquely identifies this or equal buffer */
 	std::string key;
 
-	/* Fully decoded PCM data and its format */
-	std::vector<uint8_t> pcm;
-	SDL_AudioSpec spec;
+	/* Fully decoded audio; tracks still playing it hold their own reference */
+	MixAudioPtr audio;
+	size_t bytes = 0;
 
 	/* Link into the buffer cache priority list */
 	IntruListLink<SoundBuffer> link;
 
 	SoundBuffer() : link(this) {}
-
 };
 
 /* Before: [a][b][c][d], After (index=1): [a][c][d][b] */
@@ -60,12 +58,6 @@ arrayPushBack(std::vector<size_t> &array, size_t size, size_t index)
 	array[size-1] = v;
 }
 
-static bool isPlaying(SDL_AudioStream *src)
-{
-	return SDL_GetAudioStreamDevice(src) != 0
-	    && (SDL_GetAudioStreamQueued(src) > 0 || SDL_GetAudioStreamAvailable(src) > 0);
-}
-
 SoundEmitter::SoundEmitter(const Config &conf)
     : bufferBytes(0),
       srcCount(conf.SE.sourceCount),
@@ -75,10 +67,9 @@ SoundEmitter::SoundEmitter(const Config &conf)
 {
 	for (size_t i = 0; i < srcCount; ++i)
 	{
-		/* The input format is set per sound in play() */
-		sources[i].reset(SDL_CreateAudioStream(nullptr, nullptr));
+		sources[i].reset(MIX_CreateTrack(audioMixer));
 		if (!sources[i])
-			throw Exception(Exception::SDLError, "SDL_CreateAudioStream: %s", SDL_GetError());
+			throw Exception(Exception::SDLError, "MIX_CreateTrack: %s", SDL_GetError());
 		srcPrio[i] = i;
 	}
 }
@@ -97,7 +88,7 @@ void SoundEmitter::play(const std::string &filename,
 	/* Try to find first free source */
 	size_t i;
 	for (i = 0; i < srcCount; ++i)
-		if (!isPlaying(sources[srcPrio[i]].get()))
+		if (!MIX_TrackPlaying(sources[srcPrio[i]].get()))
 			break;
 
 	/* If we didn't find any, try to find the lowest priority source
@@ -116,32 +107,23 @@ void SoundEmitter::play(const std::string &filename,
 	/* Push the used source to the back of the priority list */
 	arrayPushBack(srcPrio, srcCount, i);
 
-	SDL_AudioStream *src = sources[srcIndex].get();
-	SDL_UnbindAudioStream(src);
-	SDL_ClearAudioStream(src);
+	MIX_Track *src = sources[srcIndex].get();
+	MIX_StopTrack(src, 0);
 
 	sourceKeys[srcIndex] = filename;
 
-	if (!SDL_SetAudioStreamFormat(src, &buffer->spec, nullptr))
-		throw Exception(Exception::SDLError, "SDL_SetAudioStreamFormat: %s", SDL_GetError());
-	/* Binding supplies the output format required before queuing PCM. */
-	if (!SDL_BindAudioStream(audioDevice, src))
-		throw Exception(Exception::SDLError, "SDL_BindAudioStream: %s", SDL_GetError());
-	SDL_SetAudioStreamGain(src, rgssVolumeToGain(_volume));
-	SDL_SetAudioStreamFrequencyRatio(src, _pitch);
-	if (!SDL_PutAudioStreamData(src, buffer->pcm.data(), static_cast<int>(buffer->pcm.size())))
-		throw Exception(Exception::SDLError, "SDL_PutAudioStreamData: %s", SDL_GetError());
-	/* No more data follows; let the resampler emit its tail */
-	SDL_FlushAudioStream(src);
+	if (!MIX_SetTrackAudio(src, buffer->audio.get()))
+		throw Exception(Exception::SDLError, "MIX_SetTrackAudio: %s", SDL_GetError());
+	MIX_SetTrackGain(src, rgssVolumeToGain(_volume));
+	MIX_SetTrackFrequencyRatio(src, _pitch);
+	if (!MIX_PlayTrack(src, 0))
+		throw Exception(Exception::SDLError, "MIX_PlayTrack: %s", SDL_GetError());
 }
 
 void SoundEmitter::stop()
 {
 	for (size_t i = 0; i < srcCount; i++)
-	{
-		SDL_UnbindAudioStream(sources[i].get());
-		SDL_ClearAudioStream(sources[i].get());
-	}
+		MIX_StopTrack(sources[i].get(), 0);
 }
 
 struct SoundOpenHandler : FileSystem::OpenHandler
@@ -151,33 +133,21 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 
 	bool tryRead(SDL_IOStream *ops, const char *)
 	{
-		/* Do all of the decoding in the handler so we don't have
-		 * to keep the source ops around */
-		MixDecoderPtr decoder = openRuntimeDecoder(ops);
-		auto pcm = std::make_unique<SoundBuffer>();
-		bool decoded = decoder && MIX_GetAudioDecoderFormat(decoder.get(), &pcm->spec);
+		/* Decode everything now so we don't have to keep the source ops around */
+		MixAudioPtr audio = loadRuntimeAudio(ops, true, error);
+		if (!audio)
+			return false;
 
-		for (uint8_t chunk[STREAM_BUF_SIZE]; decoded;)
-		{
-			const int got = MIX_DecodeAudio(decoder.get(), chunk, sizeof(chunk), &pcm->spec);
-			if (got <= 0)
-			{
-				decoded = got == 0;
-				break;
-			}
-			pcm->pcm.insert(pcm->pcm.end(), chunk, chunk + got);
-		}
-
-		decoder.reset();
-		SDL_CloseIO(ops);
-
-		if (!decoded)
-		{
+		SDL_AudioSpec spec;
+		const Sint64 frames = MIX_GetAudioDuration(audio.get());
+		if (!MIX_GetAudioFormat(audio.get(), &spec) || frames < 0) {
 			error = SDL_GetError();
 			return false;
 		}
 
-		buffer = std::move(pcm);
+		buffer = std::make_unique<SoundBuffer>();
+		buffer->bytes = static_cast<size_t>(frames) * SDL_AUDIO_FRAMESIZE(spec);
+		buffer->audio = std::move(audio);
 
 		return true;
 	}
@@ -211,7 +181,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		}
 
 		buffer->key = filename;
-		size_t wouldBeBytes = bufferBytes + buffer->pcm.size();
+		size_t wouldBeBytes = bufferBytes + buffer->bytes;
 
 		/* If memory limit is reached, delete lowest priority buffer
 		 * until there is room or no buffers left */
@@ -220,7 +190,7 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 			SoundBuffer *last = buffers.tail();
 			buffers.remove(last->link);
 
-			wouldBeBytes -= last->pcm.size();
+			wouldBeBytes -= last->bytes;
 
 			bufferHash.erase(last->key);
 		}

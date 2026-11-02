@@ -39,11 +39,11 @@ struct SoundEmitter
 	IntruList<SoundBuffer> buffers;
 	BufferHash bufferHash;
 
-	/* Byte count sum of cached PCM data; SDL owns a copy of queued sound data */
+	/* Byte count sum of cached decoded audio; playing tracks keep a reference */
 	size_t bufferBytes;
 
 	const size_t srcCount;
-	std::vector<AudioStreamPtr> sources;
+	std::vector<MixTrackPtr> sources;
 	std::vector<std::string> sourceKeys;
 
 	/* Indices of sources, sorted by priority (lowest first) */

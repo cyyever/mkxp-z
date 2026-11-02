@@ -30,6 +30,7 @@
 #include <cmath>
 #include <initializer_list>
 #include <memory>
+#include <string>
 
 /* Polling interval of the audio worker threads */
 inline constexpr std::chrono::milliseconds AUDIO_SLEEP{10};
@@ -64,6 +65,21 @@ inline float rgssVolumeToGain(float value)
 
 	return std::pow(10.0f, -(35.0f / 20.0f) * (1.0f - value));
 }
+
+/* The SDL_mixer mixer that SE tracks play through; created in main() */
+extern MIX_Mixer *audioMixer;
+
+struct MixAudioDeleter
+{
+	void operator()(MIX_Audio *audio) const { MIX_DestroyAudio(audio); }
+};
+using MixAudioPtr = std::unique_ptr<MIX_Audio, MixAudioDeleter>;
+
+struct MixTrackDeleter
+{
+	void operator()(MIX_Track *track) const { MIX_DestroyTrack(track); }
+};
+using MixTrackPtr = std::unique_ptr<MIX_Track, MixTrackDeleter>;
 
 struct MixDecoderDeleter
 {
@@ -102,6 +118,33 @@ inline MixDecoderPtr openRuntimeDecoder(SDL_IOStream *io)
 		return {};
 	}
 	return decoder;
+}
+
+/* Load 'ops' (always closed) for playback on audioMixer, with the same decoder
+ * policy and loop-tag handling as openRuntimeDecoder(). 'predecode' decodes
+ * everything now; otherwise the encoded file stays in memory and is decoded
+ * while playing. */
+inline MixAudioPtr loadRuntimeAudio(SDL_IOStream *ops, bool predecode, std::string &error)
+{
+	const SDL_PropertiesID props = SDL_CreateProperties();
+	SDL_SetPointerProperty(props, MIX_PROP_AUDIO_LOAD_IOSTREAM_POINTER, ops);
+	SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_CLOSEIO_BOOLEAN, true);
+	SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_PREDECODE_BOOLEAN, predecode);
+	SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN, true);
+	SDL_SetPointerProperty(props, MIX_PROP_AUDIO_LOAD_PREFERRED_MIXER_POINTER, audioMixer);
+	MixAudioPtr audio(MIX_LoadAudioWithProperties(props));
+	SDL_DestroyProperties(props);
+
+	const char *name = audio ? SDL_GetStringProperty(MIX_GetAudioProperties(audio.get()),
+	                                                 MIX_PROP_AUDIO_DECODER_STRING, "") : "";
+	if (audio && !isRuntimeDecoder(name))
+	{
+		SDL_SetError("Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding, not %s", name);
+		audio.reset();
+	}
+	if (!audio)
+		error = SDL_GetError();
+	return audio;
 }
 
 #endif // AUDIOUTIL_H
