@@ -547,7 +547,6 @@ struct TilemapPrivate
 		renderState.scissorTest.pop();
 		renderState.clearColor.pop();
 
-		RenderOps::blitBegin(atlas.gl);
 
 		/* Blit autotiles */
 		for (size_t i = 0; i < atlas.usableATs.size(); ++i)
@@ -556,11 +555,9 @@ struct TilemapPrivate
 			Bitmap *autotile = autotiles[atInd];
 			autotile->ensureNonAnimated();
 
-			RenderOps::blitSource(autotile->getRenderTarget());
-			blitAutotileRects(atInd);
+			blitAutotileRects(atInd, atlas.gl);
 		}
 
-		RenderOps::blitEnd();
 
 		/* Blit tileset */
 		if (tileset->megaSurface())
@@ -623,10 +620,7 @@ struct TilemapPrivate
 		else
 		{
 			/* Regular tileset */
-			RenderOps::blitBegin(atlas.gl);
-			RenderOps::blitSource(tileset->getRenderTarget());
-			blitTilesetRects(blits);
-			RenderOps::blitEnd();
+			blitTilesetRects(blits, atlas.gl);
 		}
 
 		if (wantsHiresAtlas() && ensureHiresAtlas())
@@ -635,10 +629,9 @@ struct TilemapPrivate
 			releaseHiresAtlas();
 	}
 
-	/* Blits autotile 'atInd' from the bound blit source into its
-	 * atlas rows. Rectangles are in logical (low-res) pixels;
-	 * RenderOps scales them to the bound source and target. */
-	void blitAutotileRects(uint8_t atInd)
+	/* Atlas rectangles use logical pixels; each copy selects its explicit
+	 * source and target, including their high-resolution backing textures. */
+	void blitAutotileRects(uint8_t atInd, TEXFBO &target, bool preferHires = false, int scale = 0)
 	{
 		Bitmap *autotile = autotiles[atInd];
 		int atW = autotile->width();
@@ -650,8 +643,8 @@ struct TilemapPrivate
 		{
 			/* Static autotile */
 			for (int j = 0; j < atFrames; ++j)
-				RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
-				                      Vec2i(autotileW*j, atInd*autotileH));
+				RenderOps::blit(target, autotile->getRenderTarget(), IntRect(0, 0, blitW, blitH),
+				                IntRect(autotileW*j, atInd*autotileH, blitW, blitH), preferHires, scale);
 		}
 		else
 		{
@@ -661,24 +654,24 @@ struct TilemapPrivate
 				int frames = atW/32;
 				for (int j = 0; j < atFrames*autotileH/32; ++j)
 				{
-					RenderOps::blitRectangle(IntRect(32*(j % frames), 0, 32, 32),
-					                      Vec2i(autotileW*(j % atFrames), atInd*autotileH + 32*(j / atFrames)));
+					RenderOps::blit(target, autotile->getRenderTarget(), IntRect(32*(j % frames), 0, 32, 32),
+					                IntRect(autotileW*(j % atFrames), atInd*autotileH + 32*(j / atFrames), 32, 32), preferHires, scale);
 				}
 			}
 			else
-				RenderOps::blitRectangle(IntRect(0, 0, blitW, blitH),
-				                      Vec2i(0, atInd*autotileH));
+				RenderOps::blit(target, autotile->getRenderTarget(), IntRect(0, 0, blitW, blitH),
+				                IntRect(0, atInd*autotileH, blitW, blitH), preferHires, scale);
 		}
 	}
 
-	void blitTilesetRects(const TileAtlas::BlitVec &blits)
+	void blitTilesetRects(const TileAtlas::BlitVec &blits, TEXFBO &target, bool preferHires = false, int scale = 0)
 	{
 		for (size_t i = 0; i < blits.size(); ++i)
 		{
 			const TileAtlas::Blit &blitOp = blits[i];
 
-			RenderOps::blitRectangle(IntRect(blitOp.src.x, blitOp.src.y, tsLaneW, blitOp.h),
-			                      blitOp.dst);
+			RenderOps::blit(target, tileset->getRenderTarget(), IntRect(blitOp.src.x, blitOp.src.y, tsLaneW, blitOp.h),
+			                IntRect(blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h), preferHires, scale);
 		}
 	}
 
@@ -751,10 +744,7 @@ struct TilemapPrivate
 
 		const IntRect whole(0, 0, atlas.size.x, atlas.size.y);
 
-		RenderOps::blitBegin(target, true, SameScale);
-		RenderOps::blitSource(logical, SameScale);
-		RenderOps::blitRectangle(whole, whole);
-		RenderOps::blitEnd();
+		RenderOps::blit(target, logical, whole, whole, true, SameScale, false);
 
 		for (size_t i = 0; i < atlas.usableATs.size(); ++i)
 		{
@@ -768,10 +758,7 @@ struct TilemapPrivate
 			const IntRect rect(0, 0, autotile->width(), autotile->height());
 			const int scale = RenderOps::blitScaleIsSpecial(target, true, rect, source, rect);
 
-			RenderOps::blitBegin(target, true, scale);
-			RenderOps::blitSource(source, scale);
-			blitAutotileRects(atInd);
-			RenderOps::blitEnd();
+			blitAutotileRects(atInd, target, true, scale);
 		}
 
 		if (!tileset->megaSurface() && tileset->hasHires())
@@ -780,10 +767,7 @@ struct TilemapPrivate
 			const IntRect rect(0, 0, tileset->width(), tileset->height());
 			const int scale = RenderOps::blitScaleIsSpecial(target, true, rect, source, rect);
 
-			RenderOps::blitBegin(target, true, scale);
-			RenderOps::blitSource(source, scale);
-			blitTilesetRects(blits);
-			RenderOps::blitEnd();
+			blitTilesetRects(blits, target, true, scale);
 		}
 	}
 

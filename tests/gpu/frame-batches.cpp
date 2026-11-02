@@ -1,4 +1,5 @@
 #include "display/gpu-frame.h"
+#include "display/gpu-render-context.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <filesystem>
@@ -15,6 +16,53 @@ static std::vector<Uint8> read(const std::filesystem::path &path) {
     std::ifstream file(path,std::ios::binary);
     require(bool(file),"shader bytecode missing");
     return {std::istreambuf_iterator<char>(file),{}};
+}
+static void nativeBlits(gpu::Device &device, gpu::QuadPipeline &pipelines) {
+    gpu::RenderContext context(device, pipelines, 7, 5);
+    gpu::RenderContext::install(&context);
+    const auto texture = [](int width, int height, const std::vector<Uint8> &pixels) {
+        auto id = TEX::gen();
+        TEX::bind(id);
+        TEX::uploadImage(width, height, pixels.data());
+        return id;
+    };
+    auto source = texture(2, 2, {255,0,0,128, 0,255,0,64, 0,0,255,255, 255,255,255,0});
+    for (bool smooth : {false, true}) {
+        auto native = texture(7, 5, std::vector<Uint8>(7 * 5 * 4));
+        auto shader = texture(7, 5, std::vector<Uint8>(7 * 5 * 4));
+        context.setScissor(std::nullopt);
+        context.blitTexture(source, native, {0,0,2,2}, {1,1,4,3}, gpu::Program::Simple, smooth);
+        // This scissor leaves the copied region intact but requires the shader
+        // path, providing an independent pixel reference for native SDL blits.
+        context.setScissor(SDL_Rect{0,0,6,5});
+        context.blitTexture(source, shader, {0,0,2,2}, {1,1,4,3}, gpu::Program::Simple, smooth);
+        context.flush();
+        const auto a = device.downloadRGBA(native.resource()), b = device.downloadRGBA(shader.resource());
+        for (size_t i = 0; i < a.size(); ++i)
+            require(std::abs(int(a[i]) - int(b[i])) <= (smooth ? 1 : 0),
+                    "native SDL blit differs from shader sampling or alpha overwrite");
+        TEX::del(native); TEX::del(shader);
+    }
+    auto reduced = texture(1, 1, std::vector<Uint8>(4));
+    TEX::bind(source);
+    TEX::setSmooth(true, true);
+    context.setScissor(std::nullopt);
+    context.blitTexture(source, reduced, {0,0,2,2}, {0,0,1,1}, gpu::Program::Simple, true);
+    context.flush();
+    const auto mip = device.downloadRGBA(reduced.resource());
+    const int average[] = {128,128,128,112};
+    for (size_t i = 0; i < mip.size(); ++i)
+        require(std::abs(int(mip[i]) - average[i]) <= 1, "blit ignored mipmap sampling or alpha");
+    TEX::setSmooth(false);
+    TEX::del(reduced);
+    // Releasing a referenced source must flush the queued blit before invalidating it.
+    auto target = texture(7, 5, std::vector<Uint8>(7 * 5 * 4));
+    context.setScissor(std::nullopt);
+    context.blitTexture(source, target, {0,0,2,2}, {0,0,2,2}, gpu::Program::Simple, false);
+    TEX::del(source);
+    const auto pixels = device.downloadRGBA(target.resource());
+    require(pixels[0] == 255 && pixels[3] == 128, "queued blit lost its source lifetime");
+    TEX::del(target);
 }
 int main(int argc,char **argv) {
     SDL_Window *window=nullptr;
@@ -34,6 +82,7 @@ int main(int argc,char **argv) {
             fragments[static_cast<size_t>(gpu::Program::FlatColor)]=flat;
             fragments[static_cast<size_t>(gpu::Program::Simple)]=simple;
             gpu::QuadPipeline pipelines(device.native(),vertex,fragments);
+            nativeBlits(device, pipelines);
             gpu::FrameEncoder encoder(device,pipelines);
             auto target=device.createTexture(4,4);
             auto clearOnly=device.createTexture(2,2);

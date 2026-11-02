@@ -35,7 +35,8 @@ if host_machine.system() == 'windows'
         depends: shaders, timeout: 30)
     frame_tests = executable('gpu-frame-tests',
         'frame-batches.cpp', '../../src/display/gpu-device.cpp', '../../src/display/gpu-shader.cpp',
-        '../../src/display/gpu-frame.cpp',
+        '../../src/display/gpu-frame.cpp', '../../src/display/gpu-render-context.cpp',
+        '../../src/display/gpu-resources.cpp',
         include_directories: include_directories('../../src'),
         dependencies: sdl,
     )

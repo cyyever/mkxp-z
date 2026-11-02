@@ -51,11 +51,22 @@ void FrameEncoder::copy(const Texture &source, const Texture &destination) {
         throw std::invalid_argument("GPU frame copy requires distinct equal-size textures");
     batches.push_back({TextureView(destination), SDL_GPU_LOADOP_DONT_CARE, {}, {}, &source, &destination});
 }
+void FrameEncoder::blit(TextureView destination, const SDL_GPUBlitInfo &info) {
+    if (!info.source.texture || info.destination.texture != destination.native() ||
+        info.source.texture == info.destination.texture || !info.source.w || !info.source.h ||
+        !info.destination.w || !info.destination.h)
+        throw std::invalid_argument("Invalid GPU blit textures or dimensions");
+    if (!batches.empty() && batches.back().target.native() == destination.native() &&
+        batches.back().load == SDL_GPU_LOADOP_LOAD && batches.back().draws.empty() &&
+        !batches.back().copySource && !batches.back().blit)
+        batches.pop_back();
+    batches.push_back({destination, SDL_GPU_LOADOP_LOAD, {}, {}, nullptr, nullptr, info});
+}
 void FrameEncoder::draw(Program program, std::span<const QuadVertex> geometry,
     std::span<const SDL_GPUTextureSamplerBinding> samplers,
     const VertexParameters &vertex, const FragmentParameters &fragment,
     const DrawState &state, const EffectParameters &effects, const TilemapParameters &tilemap) {
-    if (batches.empty() || batches.back().copySource)
+    if (batches.empty() || batches.back().copySource || batches.back().blit)
         throw std::logic_error("beginTarget must precede GPU draws");
     if (geometry.empty() || geometry.size() % 3 || samplers.size() > 3)
         throw std::invalid_argument("GPU draw requires triangles and at most three samplers");
@@ -141,6 +152,10 @@ Fence FrameEncoder::submitCommands(bool acquireFence) {
         SDL_EndGPUCopyPass(copy);
     }
     for (const auto &batch : batches) {
+        if (batch.blit) {
+            device.blit(command, *batch.blit);
+            continue;
+        }
         if (batch.copySource) {
             device.copy(command, *batch.copySource, *batch.copyDestination);
             continue;

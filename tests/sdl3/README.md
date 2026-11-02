@@ -25,7 +25,8 @@ The executable path is the output of your full engine build. Dummy video and
 an Xvfb/OpenGL-only environment are insufficient for this renderer.
 The smoke uses isolated temporary files and bundled assets, and checks image
 loading/saving with the path cache enabled, font cloning/rendering and GC, JSON
-settings, Windows function pointers, an 800x600 resize and screenshot disposal.
+settings, Windows function pointers, repeated resizing, frozen fades/transitions
+and screenshot disposal.
 No game archives or speakers are required. It is not a gameplay test.
 
 Run `python tests/sdl3/hires-snapshot.py PATH_TO_ENGINE tests/sdl3/tilemap-batches.rb`

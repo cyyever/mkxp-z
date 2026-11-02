@@ -22,9 +22,8 @@
 #include "render-ops.h"
 
 #include "sharedstate.h"
-#include "render-state.h"
-#include "quad.h"
-#include "shader.h"
+#include "display/gpu-render-context.h"
+#include "graphics.h"
 #include "config.h"
 #include "etc.h"
 #include "util/exception.h"
@@ -93,211 +92,46 @@ int smoothScalingMethod(int scaleIsSpecial)
 	return shState->config().smoothScaling;
 }
 
-static void _blitBegin(FBO::ID fbo, const Vec2i &size, int scaleIsSpecial)
-{
-
-		FBO::bind(fbo);
-		renderState.viewport.pushSet(IntRect(0, 0, size.x, size.y));
-
-		switch (smoothScalingMethod(scaleIsSpecial))
-		{
-		case Bicubic:
-		{
-			BicubicShader &shader = shState->shaders().bicubic;
-			shader.bind();
-			shader.applyViewportProj();
-			shader.setTranslation(Vec2i());
-			shader.setTexSize(Vec2i(size.x, size.y));
-			shader.setSharpness(shState->config().bicubicSharpness);
-		}
-
-			break;
-		case Lanczos3:
-		{
-			Lanczos3Shader &shader = shState->shaders().lanczos3;
-			shader.bind();
-			shader.applyViewportProj();
-			shader.setTranslation(Vec2i());
-			shader.setTexSize(Vec2i(size.x, size.y));
-		}
-
-			break;
+void blit(TEXFBO &target, TEXFBO &source, const IntRect &srcRect, const IntRect &dstRect,
+          bool preferHires, int scale, bool smooth) {
+    auto &output = preferHires && target.selfHires ? *target.selfHires : target;
+    auto &input = source.selfHires ? *source.selfHires : source;
+    if (target.width <= 0 || target.height <= 0 || source.width <= 0 || source.height <= 0)
+        throw Exception(Exception::ArgumentError, "Blit requires positive texture dimensions");
+    const SDL_Rect src{srcRect.x * input.width / source.width,
+        srcRect.y * input.height / source.height, srcRect.w * input.width / source.width,
+        srcRect.h * input.height / source.height};
+    IntRect dst(dstRect.x * output.width / target.width, dstRect.y * output.height / target.height,
+                dstRect.w * output.width / target.width, dstRect.h * output.height / target.height);
+    FBO::bind(output.fbo);
+    TEX::bind(input.tex);
+    if (smooth) TEX::setSmooth(true);
+    float projectionWidth = float(output.width), projectionHeight = float(output.height);
+    if (shState->config().enableHires && shState->graphics().isPingPongFramebufferActive()) {
+        projectionWidth = float(shState->graphics().width());
+        projectionHeight = float(shState->graphics().height());
+    }
+    const float sx = output.width / projectionWidth, sy = output.height / projectionHeight;
+    const SDL_FRect destination{dst.x * sx, dst.y * sy, dst.w * sx, dst.h * sy};
+    gpu::Program program = gpu::Program::Simple;
+    gpu::EffectParameters effects{};
+    switch (smoothScalingMethod(scale)) {
+    case Bicubic:
+        program = gpu::Program::Bicubic;
+        effects.filterParameters[0] = 1.f - shState->config().bicubicSharpness * .01f;
+        effects.filterParameters[1] = shState->config().bicubicSharpness * .005f;
+        break;
+    case Lanczos3: program = gpu::Program::Lanczos; break;
 #ifdef MKXPZ_HAVE_EXTRA_SHADERS
-		case xBRZ:
-		{
-			XbrzShader &shader = shState->shaders().xbrz;
-			shader.bind();
-			shader.applyViewportProj();
-			shader.setTranslation(Vec2i());
-			shader.setTexSize(Vec2i(size.x, size.y));
-			shader.setTargetScale(Vec2(1., 1.));
-		}
-
-			break;
+    case xBRZ:
+        program = gpu::Program::Xbrz;
+        effects.filterParameters[2] = effects.filterParameters[3] =
+            shState->config().smoothScaling == xBRZ ? float(shState->config().xbrzScalingFactor) : 1.f;
+        break;
 #endif
-		default:
-		{
-			SimpleShader &shader = shState->shaders().simple;
-			shader.bind();
-			shader.applyViewportProj();
-			shader.setTranslation(Vec2i());
-			shader.setTexSize(Vec2i(size.x, size.y));
-		}
-		}
-
+    }
+    gpu::RenderContext::current().blitTexture(input.tex, output.tex, src, destination,
+                                            program, smooth || input.tex.smooth(), effects);
+    if (smooth) TEX::setSmooth(false);
 }
-
-int blitDstWidthLores = 1;
-int blitDstWidthHires = 1;
-int blitDstHeightLores = 1;
-int blitDstHeightHires = 1;
-
-int blitSrcWidthLores = 1;
-int blitSrcWidthHires = 1;
-int blitSrcHeightLores = 1;
-int blitSrcHeightHires = 1;
-
-void blitBegin(TEXFBO &target, bool preferHires, int scaleIsSpecial)
-{
-	blitDstWidthLores = target.width;
-	blitDstHeightLores = target.height;
-
-	if (preferHires && target.selfHires != nullptr) {
-		blitDstWidthHires = target.selfHires->width;
-		blitDstHeightHires = target.selfHires->height;
-		_blitBegin(target.selfHires->fbo, Vec2i(target.selfHires->width, target.selfHires->height), scaleIsSpecial);
-	}
-	else {
-		blitDstWidthHires = blitDstWidthLores;
-		blitDstHeightHires = blitDstHeightLores;
-		_blitBegin(target.fbo, Vec2i(target.width, target.height), scaleIsSpecial);
-	}
-}
-
-void blitBeginScreen(const Vec2i &size, int scaleIsSpecial)
-{
-	blitDstWidthLores = 1;
-	blitDstWidthHires = 1;
-	blitDstHeightLores = 1;
-	blitDstHeightHires = 1;
-
-	_blitBegin(FBO::ID(0), size, scaleIsSpecial);
-}
-
-void blitSource(TEXFBO &source, int scaleIsSpecial)
-{
-	blitSrcWidthLores = source.width;
-	blitSrcHeightLores = source.height;
-	if (source.selfHires != nullptr) {
-		blitSrcWidthHires = source.selfHires->width;
-		blitSrcHeightHires = source.selfHires->height;
-	}
-	else {
-		blitSrcWidthHires = blitSrcWidthLores;
-		blitSrcHeightHires = blitSrcHeightLores;
-	}
-
-
-		switch (smoothScalingMethod(scaleIsSpecial))
-		{
-		case Bicubic:
-		{
-			BicubicShader &shader = shState->shaders().bicubic;
-			shader.bind();
-			shader.setTexSize(Vec2i(blitSrcWidthHires, blitSrcHeightHires));
-		}
-
-			break;
-		case Lanczos3:
-		{
-			Lanczos3Shader &shader = shState->shaders().lanczos3;
-			shader.bind();
-			shader.setTexSize(Vec2i(blitSrcWidthHires, blitSrcHeightHires));
-		}
-
-			break;
-#ifdef MKXPZ_HAVE_EXTRA_SHADERS
-		case xBRZ:
-		{
-			XbrzShader &shader = shState->shaders().xbrz;
-			shader.bind();
-			shader.setTexSize(Vec2i(blitSrcWidthHires, blitSrcHeightHires));
-		}
-
-			break;
-#endif
-		default:
-		{
-			SimpleShader &shader = shState->shaders().simple;
-			shader.bind();
-			shader.setTexSize(Vec2i(blitSrcWidthHires, blitSrcHeightHires));
-		}
-		}
-		if (source.selfHires != nullptr) {
-			TEX::bind(source.selfHires->tex);
-		}
-		else {
-			TEX::bind(source.tex);
-		}
-
-}
-
-void blitRectangle(const IntRect src, const Vec2i &dstPos)
-{
-	blitRectangle(src, IntRect(dstPos.x, dstPos.y, src.w, src.h), false);
-}
-
-void blitRectangle(const IntRect src, const IntRect &dst, bool smooth)
-{
-	// Handle high-res dest
-	int scaledDstX = dst.x * blitDstWidthHires / blitDstWidthLores;
-	int scaledDstY = dst.y * blitDstHeightHires / blitDstHeightLores;
-	int scaledDstWidth = dst.w * blitDstWidthHires / blitDstWidthLores;
-	int scaledDstHeight = dst.h * blitDstHeightHires / blitDstHeightLores;
-	IntRect dstScaled(scaledDstX, scaledDstY, scaledDstWidth, scaledDstHeight);
-
-	// Handle high-res source
-	int scaledSrcX = src.x * blitSrcWidthHires / blitSrcWidthLores;
-	int scaledSrcY = src.y * blitSrcHeightHires / blitSrcHeightLores;
-	int scaledSrcWidth = src.w * blitSrcWidthHires / blitSrcWidthLores;
-	int scaledSrcHeight = src.h * blitSrcHeightHires / blitSrcHeightLores;
-	IntRect srcScaled(scaledSrcX, scaledSrcY, scaledSrcWidth, scaledSrcHeight);
-
-
-#ifdef MKXPZ_HAVE_EXTRA_SHADERS
-		if (shState->config().smoothScaling == xBRZ)
-		{
-			XbrzShader &shader = shState->shaders().xbrz;
-			shader.setTargetScale(Vec2((float)(shState->config().xbrzScalingFactor), (float)(shState->config().xbrzScalingFactor)));
-		}
-#endif
-		if (smooth)
-			TEX::setSmooth(true);
-
-		renderState.blend.pushSet(false);
-		Quad &quad = shState->gpQuad();
-		quad.setTexPosRect(srcScaled, dstScaled);
-		quad.draw();
-		renderState.blend.pop();
-
-		if (smooth)
-			TEX::setSmooth(false);
-
-}
-
-void blitEnd()
-{
-	blitDstWidthLores = 1;
-	blitDstWidthHires = 1;
-	blitDstHeightLores = 1;
-	blitDstHeightHires = 1;
-
-	blitSrcWidthLores = 1;
-	blitSrcWidthHires = 1;
-	blitSrcHeightLores = 1;
-	blitSrcHeightHires = 1;
-
-	renderState.viewport.pop();
-}
-
 }

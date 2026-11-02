@@ -34,6 +34,9 @@ public:
     void setMipmapsEnabled(bool value) { mipmapsEnabled = value; }
     bool mipmapsAllowed() const { return mipmapsEnabled; }
     void copyTexture(const TEX::ID &source, const TEX::ID &destination);
+    void blitTexture(const TEX::ID &source, const TEX::ID &destination,
+                     SDL_Rect sourceRect, SDL_FRect destinationRect, Program, bool smooth,
+                     const EffectParameters & = {});
     void clear();
     void draw(std::span<const QuadVertex>);
     [[nodiscard]] Fence submit();
@@ -46,7 +49,7 @@ public:
 
 private:
     void ensureTarget();
-    SDL_GPUSampler *sampler(const TEX::ID &);
+    SDL_GPUSampler *sampler(const TEX::ID &, bool smooth);
     Device &gpuDevice;
     FrameEncoder encoder;
     const ShaderState *shader = nullptr;

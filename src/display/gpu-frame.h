@@ -56,6 +56,8 @@ public:
     // Discards only recorded CPU commands; submitted work remains unaffected.
     void reset();
 private:
+    friend class RenderContext;
+    void blit(TextureView destination, const SDL_GPUBlitInfo &);
     Fence submitCommands(bool acquireFence);
     struct Draw {
         Program program;
@@ -77,6 +79,7 @@ private:
         std::vector<Draw> draws;
         const Texture *copySource = nullptr;
         const Texture *copyDestination = nullptr;
+        std::optional<SDL_GPUBlitInfo> blit{};
     };
     void ensureBuffer(Uint32 bytes);
     Device &device;
