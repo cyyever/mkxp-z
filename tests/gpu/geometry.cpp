@@ -35,7 +35,7 @@ static void testQuad() {
     quad.setTexRect(FloatRect(2, 3, 8, -2));
     quad.setColor(Vec4(.25f, .5f, .75f, 1));
     quad.draw();
-    check(!quad.vboDirty && submitted.size() == 6, "quad dirty geometry committed");
+    check(submitted.size() == 6, "quad dirty geometry committed");
     constexpr float positions[][2] = {{10,20}, {6,20}, {6,26}, {6,26}, {10,26}, {10,20}};
     for (size_t i = 0; i < 6; ++i) {
         check(submitted[i].position[0] == positions[i][0] &&
@@ -46,9 +46,9 @@ static void testQuad() {
     quad.vert[0].pos.x = 90;
     quad.draw();
     check(submitted[0].position[0] == 10, "direct edits retain committed quad until update");
-    quad.updateBuffer();
+    quad.setPosRect(FloatRect(90, 20, -4, 6));
     quad.draw();
-    check(submitted[0].position[0] == 90, "explicit quad update refreshes snapshot");
+    check(submitted[0].position[0] == 90, "position setter refreshes quad snapshot");
 }
 
 static void testBatch() {

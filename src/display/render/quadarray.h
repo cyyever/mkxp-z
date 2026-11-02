@@ -34,9 +34,6 @@ struct QuadArray
 {
 	std::vector<VertexType> vertices;
 
-	std::vector<gpu::QuadVertex> triangles;
-    size_t quadCount = 0;
-
 	void resize(size_t size)
 	{
         if (size > static_cast<size_t>(std::numeric_limits<uint16_t>::max() - 1) / 6)
@@ -52,8 +49,7 @@ struct QuadArray
 		quadCount = 0;
 	}
 
-	/* This needs to be called after the final 'append()' call
-	 * and previous to the first 'draw()' call. */
+	/* Commit vertex edits before drawing the batch. */
 	void commit()
     {
         if (quadCount > static_cast<size_t>(std::numeric_limits<uint16_t>::max() - 1) / 6 || vertices.size() != quadCount * 4)
@@ -81,6 +77,10 @@ struct QuadArray
 	{
 		return quadCount;
 	}
+
+private:
+	std::vector<gpu::QuadVertex> triangles;
+	size_t quadCount = 0;
 };
 
 typedef QuadArray<Vertex> ColorQuadArray;

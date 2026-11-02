@@ -29,8 +29,6 @@
 struct Quad
 {
 	Vertex vert[4];
-	std::array<gpu::QuadVertex, 6> triangles;
-	bool vboDirty;
 
 	template<typename V>
 	static void setPosRect(V *vert, const FloatRect &r)
@@ -74,11 +72,6 @@ struct Quad
         setColor(Vec4(1, 1, 1, 1));
     }
 
-    void updateBuffer()
-    {
-        expandQuad(vert, triangles.data());
-    }
-
 	void setPosRect(const FloatRect &r)
 	{
 		setPosRect(vert, r);
@@ -109,12 +102,16 @@ struct Quad
 	{
 		if (vboDirty)
 		{
-			updateBuffer();
+			expandQuad(vert, triangles.data());
 			vboDirty = false;
 		}
 
         gpu::drawVertices(triangles);
 	}
+
+private:
+	std::array<gpu::QuadVertex, 6> triangles;
+	bool vboDirty;
 };
 
 #endif // QUAD_H

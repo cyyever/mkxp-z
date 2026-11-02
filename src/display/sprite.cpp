@@ -465,7 +465,7 @@ struct SpritePrivate
         {
             /* Don't do expensive wave bounding box
              * calculations */
-            isVisible = wave.qArray.quadCount != 0;
+            isVisible = wave.qArray.count() != 0;
             return;
         }
         
