@@ -9,20 +9,26 @@
 #include <cstdio>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 MIX_Mixer *audioMixer;
 AudioTestState testState;
 AudioTestState *shState = &testState;
 static std::string fixtures;
+static size_t fileOpens = 0;
 static constexpr int RATE = 48000;
 
 // Like the engine's lookup: the exact name, then with an extension; a missing
 // file throws, an undecodable one leaves the handler empty.
 void FileSystem::openRead(OpenHandler &handler, const char *filename) {
+    // Distinct cache keys share a fixture so eviction can be tested without
+    // checking in megabytes of duplicate audio.
+    if (std::string_view(filename).starts_with("cache-")) filename = "tone.flac";
     for (const char *ext : {"", ".wav"}) {
         const std::string path = fixtures + "/" + filename + ext;
         if (SDL_IOStream *io = SDL_IOFromFile(path.c_str(), "rb")) {
+            ++fileOpens;
             handler.tryRead(io, ext);
             return;
         }
@@ -137,6 +143,24 @@ int main(int argc, char **argv) {
 
             // Destroying the emitter with sounds still playing must be safe.
             se.play("tone", 100, 100);
+        }
+        // Hash-table growth and cache eviction must not invalidate tracks that
+        // still reference decoded audio. A cache hit must avoid reopening it.
+        config.SE.sourceCount = 64;
+        {
+            SoundEmitter se(config);
+            se.play("tone.flac", 100, 100);
+            const size_t opened = fileOpens;
+            se.play("tone.flac", 0, 100);
+            require(fileOpens == opened, "cached SE reopened its file");
+            for (int i = 0; i < 40; ++i)
+                se.play("cache-" + std::to_string(i), 0, 100);
+            require(render(RATE / 10) > .05, "cache eviction stopped a playing SE");
+            const size_t beforeReload = fileOpens;
+            se.play("tone.flac", 0, 100);
+            require(fileOpens == beforeReload + 1, "SE cache never evicted its old audio");
+            se.stop();
+            require(render(RATE / 10) == 0, "evicted SE survived se_stop");
         }
         MIX_DestroyMixer(audioMixer);
         MIX_Quit();

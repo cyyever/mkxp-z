@@ -28,6 +28,7 @@
 #include "sdl-util.h"
 #include "exception.h"
 
+#include <algorithm>
 #include <thread>
 #include <memory>
 #include <string>
@@ -42,9 +43,6 @@ struct AudioPrivate
 	AudioStream me;
 
 	SoundEmitter se;
-
-    
-    float volumeRatio;
 
 	/* The 'MeWatch' is responsible for detecting
 	 * a playing ME, quickly fading out the BGM and
@@ -68,8 +66,7 @@ struct AudioPrivate
 	AudioPrivate(RGSSThreadData &rtData)
 	    : bgs(ALStream::Looped),
 	      me(ALStream::NotLooped),
-	      se(rtData.config),
-          volumeRatio(1)
+	      se(rtData.config)
 	{
         for (int i = 0; i < rtData.config.BGM.trackCount; i++) {
             bgmTracks.push_back(std::make_unique<AudioStream>(ALStream::Looped));
@@ -152,13 +149,9 @@ struct AudioPrivate
                         
                         // check to see if there are any tracks still playing,
                         // and if the last one was ended this round, this branch should exit
-                        std::vector<AudioStream*> playingTracks;
-                        for (const auto &t : bgmTracks)
-                            if (t->stream.queryState() == ALStream::Playing)
-                                playingTracks.push_back(t.get());
-                        
-                        
-                        if (playingTracks.size() <= 0 && !shouldBreak) shouldBreak = true;
+                        shouldBreak = shouldBreak || std::ranges::none_of(bgmTracks, [](const auto &t) {
+                            return t->stream.queryState() == ALStream::Playing;
+                        });
                         continue;
                     }
                     
@@ -214,12 +207,9 @@ struct AudioPrivate
                 for (const auto &track : bgmTracks)
                     trackLocks.push_back(track->lockStream());
 
-				bool anyPlaying = false;
-                for (const auto &track : bgmTracks)
-                    if (track->stream.queryState() == ALStream::Playing)
-                        anyPlaying = true;
-
-				if (!anyPlaying)
+				if (std::ranges::none_of(bgmTracks, [](const auto &track) {
+                    return track->stream.queryState() == ALStream::Playing;
+                }))
 				{
 					/* BGM stopped midway fade in. -> MeNotPlaying */
                     for (const auto &track : bgmTracks)

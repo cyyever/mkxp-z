@@ -19,7 +19,8 @@ meson test -C build/audio-tests --print-errorlogs
 - `mixer-decode`: the decoder set, each format's decoder and length, loop tags
   ignored when requested (needs the patched stb_vorbis decoder).
 - `sound-emitter`: `SE.sourceCount`, source eviction/reuse order, `se_stop`,
-  the RGSS volume curve, pitch, every codec, error types.
+  the RGSS volume curve, pitch, every codec, error types, cache hits and
+  eviction while cached audio is still playing.
 - `audio-stream`: one BGM/BGS/ME track: finite end, offsets, pause/resume,
   stop, offsets past the end, gapless looping, pitch, volume, every codec
   looping over the whole file (loop tags ignored), error types.

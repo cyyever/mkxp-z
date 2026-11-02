@@ -24,7 +24,6 @@
 
 #include "audio-util.h"
 #include "alstream.h"
-#include "sdl-util.h"
 
 #include <atomic>
 #include <mutex>
@@ -125,11 +124,7 @@ struct AudioStream
 	          double offset = 0);
 	void stop();
 	void fadeOut(int duration);
-	void seek(double offset);
 
-	/* Any access to this classes 'stream' member,
-	 * whether state query or modification, must be
-	 * protected by a 'lock'/'unlock' pair */
 	/* Any access to this class's 'stream' member,
 	 * whether state query or modification, must
 	 * hold this lock */
