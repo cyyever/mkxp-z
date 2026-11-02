@@ -92,6 +92,12 @@ begin
     raise 'repeated resolution change failed' unless Graphics.width == width && Graphics.height == height
     3.times { Graphics.update }
     Graphics.freeze
+    sprite.visible = false
+    frozen = Graphics.snap_to_bitmap
+    pixel = frozen.get_pixel(8, 8)
+    raise 'frozen snapshot lost disposed scene' unless [pixel.red, pixel.green, pixel.blue] == [255, 0, 0]
+    frozen.dispose
+    sprite.visible = true
     Graphics.fadeout(1)
     Graphics.fadein(1)
     Graphics.transition(2)

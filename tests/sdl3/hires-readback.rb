@@ -78,6 +78,23 @@ begin
   destination.stretch_blt(destination.rect, plain, plain.rect)
   assert_equal([17, 33, 65, 255], destination.raw_data.bytes.first(4), 'pooled PNG blit')
   [destination, copied, plain].each(&:dispose)
+  # Menu previews are captured after the map sprites have been disposed.
+  scene = Bitmap.new(16, 16)
+  scene.fill_rect(scene.rect, Color.new(41, 82, 123, 255))
+  sprite = Sprite.new
+  sprite.bitmap = scene
+  Graphics.update
+  Graphics.freeze
+  sprite.dispose
+  scene.dispose
+  snapshot = Graphics.snap_to_bitmap
+  assert_equal([41, 82, 123, 255], snapshot.raw_data.bytes.first(4), 'frozen snapshot')
+  snapshot.dispose
+  Graphics.screenshot('frozen.png')
+  preview = Bitmap.new('frozen')
+  assert_equal([41, 82, 123, 255], preview.raw_data.bytes.first(4), 'frozen PNG preview')
+  preview.dispose
+  Graphics.transition(1)
   GC.start
   File.binwrite('result.txt', 'PASS')
 rescue Exception => error
