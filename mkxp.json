@@ -164,7 +164,8 @@
     // "vsync": false,
 
 
-    // Specify the window width on startup. If set to 0,
+    // Specify the window width on startup, before display content scaling.
+    // The scaled size is fitted to 90% of the usable desktop. If set to 0,
     // it will default to the default resolution width
     // specific to the RGSS version (640 in RGSS1, 544
     // in RGSS2 or higher).
@@ -173,7 +174,8 @@
     // "defScreenW": 640,
 
 
-    // Specify the window height on startup. If set to 0,
+    // Specify the window height on startup, before display content scaling.
+    // The scaled size is fitted to 90% of the usable desktop. If set to 0,
     // it will default to the default resolution height
     // specific to the RGSS version (480 in RGSS1, 416
     // in RGSS2 or higher).
