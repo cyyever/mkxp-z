@@ -484,7 +484,7 @@ struct WindowPrivate
 		renderState.viewport.pushSet(IntRect(0, 0, baseTex.width, baseTex.height));
 		renderState.clearColor.pushSet(Vec4());
 
-		SimpleAlphaShader &shader = shState->shaders().simpleAlpha;
+		ShaderBase &shader = shState->shaders().simpleAlpha;
 		shader.bind();
 		shader.applyViewportProj();
 		shader.setTranslation(Vec2i());
@@ -618,7 +618,7 @@ struct WindowPrivate
 		if (size == Vec2i(0, 0))
 			return;
 
-		SimpleAlphaShader &shader = shState->shaders().simpleAlpha;
+		ShaderBase &shader = shState->shaders().simpleAlpha;
 		shader.bind();
 		shader.applyViewportProj();
 		shader.setTranslation(position + sceneOffset);
@@ -666,7 +666,7 @@ struct WindowPrivate
 		renderState.scissorBox.push();
 		renderState.scissorBox.setIntersect(windowRect);
 
-		SimpleAlphaShader &shader = shState->shaders().simpleAlpha;
+		ShaderBase &shader = shState->shaders().simpleAlpha;
 		shader.bind();
 		shader.applyViewportProj();
 

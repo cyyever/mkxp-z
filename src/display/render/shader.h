@@ -25,7 +25,6 @@
 #include "etc-internal.h"
 #include "gpu-shader-state.h"
 
-
 class Shader {
 public:
     void bind();
@@ -45,6 +44,7 @@ public:
     virtual void setTexSize(const Vec2i &);
     void setTranslation(const Vec2i &);
 protected:
+    friend struct ShaderSet;
     explicit ShaderBase(gpu::Program program = gpu::Program::Simple);
     int blurAxis = -1;
 };
@@ -58,31 +58,16 @@ public:
 
 };
 
-class SimpleShader : public ShaderBase
-{
-public:
-	SimpleShader();
-
-};
-
-class SimpleColorShader : public ShaderBase
-{
-public:
-	SimpleColorShader();
-};
-
-class SimpleAlphaShader : public ShaderBase
-{
-public:
-	SimpleAlphaShader();
-};
-
 class SimpleSpriteShader : public ShaderBase
 {
 public:
 	SimpleSpriteShader();
 
 	void setSpriteMat(const float value[16]);
+
+private:
+	friend struct ShaderSet;
+	explicit SimpleSpriteShader(gpu::Program);
 
 };
 
@@ -239,24 +224,10 @@ public:
 	void setSubRect(const FloatRect &value);
 	void setOpacity(float value);
 
-};
+private:
+	friend struct ShaderSet;
+	explicit BltShader(gpu::Program);
 
-class KglInvertShader : public ShaderBase
-{
-public:
-	KglInvertShader();
-};
-
-class KglCompressAlphaShader : public ShaderBase
-{
-public:
-	KglCompressAlphaShader();
-};
-
-class KglSubtractShader : public BltShader
-{
-public:
-	KglSubtractShader();
 };
 
 class KglShadowShaderH : public ShaderBase
@@ -277,43 +248,7 @@ public:
 
 };
 
-class Lanczos3Shader : public SimpleShader
-{
-public:
-	Lanczos3Shader();
-
-
-};
-
-class BicubicShader : public Lanczos3Shader
-{
-public:
-	BicubicShader();
-
-	void setSharpness(int sharpness);
-
-};
-
-#ifdef MKXPZ_HAVE_EXTRA_SHADERS
-class XbrzShader : public Lanczos3Shader
-{
-public:
-	XbrzShader();
-
-	void setTargetScale(const Vec2 &value);
-
-};
-#endif
-
-class Lanczos3SpriteShader : public SimpleSpriteShader
-{
-public:
-	Lanczos3SpriteShader();
-
-
-};
-
-class BicubicSpriteShader : public Lanczos3SpriteShader
+class BicubicSpriteShader : public SimpleSpriteShader
 {
 public:
 	BicubicSpriteShader();
@@ -322,7 +257,7 @@ public:
 
 };
 
-class XbrzSpriteShader : public Lanczos3SpriteShader
+class XbrzSpriteShader : public SimpleSpriteShader
 {
 public:
 	XbrzSpriteShader();
@@ -335,9 +270,9 @@ public:
 struct ShaderSet
 {
 	FlatColorShader flatColor;
-	SimpleShader simple;
-	SimpleColorShader simpleColor;
-	SimpleAlphaShader simpleAlpha;
+	ShaderBase simple{gpu::Program::Simple};
+	ShaderBase simpleColor{gpu::Program::VertexColor};
+	ShaderBase simpleAlpha{gpu::Program::VertexAlpha};
 	SimpleSpriteShader simpleSprite;
 	AlphaSpriteShader alphaSprite;
 	SpriteShader sprite;
@@ -351,17 +286,12 @@ struct ShaderSet
 	BltShader blt;
 	SimpleMatrixShader simpleMatrix;
 	BlurShader blur;
-	KglInvertShader kglInvert;
-	KglCompressAlphaShader kglCompressAlpha;
-	KglSubtractShader kglSubtract;
+	ShaderBase kglInvert{gpu::Program::Invert};
+	ShaderBase kglCompressAlpha{gpu::Program::CompressAlpha};
+	BltShader kglSubtract{gpu::Program::Subtract};
 	KglShadowShaderH kglShadowH;
 	KglShadowShaderV kglShadowV;
-	BicubicShader bicubic;
-	Lanczos3Shader lanczos3;
-#ifdef MKXPZ_HAVE_EXTRA_SHADERS
-	XbrzShader xbrz;
-#endif
-	Lanczos3SpriteShader lanczos3Sprite;
+	SimpleSpriteShader lanczos3Sprite{gpu::Program::Lanczos};
 	BicubicSpriteShader bicubicSprite;
 #ifdef MKXPZ_HAVE_EXTRA_SHADERS
 	XbrzSpriteShader xbrzSprite;

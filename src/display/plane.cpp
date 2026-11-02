@@ -345,7 +345,7 @@ void Plane::draw()
 	}
 	else
 	{
-		SimpleShader &shader = shState->shaders().simple;
+		ShaderBase &shader = shState->shaders().simple;
 
 		shader.bind();
 		shader.applyViewportProj();

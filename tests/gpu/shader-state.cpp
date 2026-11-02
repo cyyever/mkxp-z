@@ -52,9 +52,9 @@ int main(){
         shaders.blur.pass1.setTexSize(Vec2i(10,20));shaders.blur.pass2.setTexSize(Vec2i(10,20));
         near(shaders.blur.pass1.gpuState().effects.blurDirection[0],.1f,"horizontal blur texel spacing lost");
         near(shaders.blur.pass2.gpuState().effects.blurDirection[1],.05f,"vertical blur texel spacing lost");
-        shaders.bicubic.setSharpness(50);
-        near(shaders.bicubic.gpuState().effects.filterParameters[0],.5f,"bicubic B mapping changed");
-        near(shaders.bicubic.gpuState().effects.filterParameters[1],.25f,"bicubic C mapping changed");
+        shaders.bicubicSprite.setSharpness(50);
+        near(shaders.bicubicSprite.gpuState().effects.filterParameters[0],.5f,"bicubic B mapping changed");
+        near(shaders.bicubicSprite.gpuState().effects.filterParameters[1],.25f,"bicubic C mapping changed");
         int frames[]={1,2,3,4,5,6,7};shaders.tilemap.setATFrames(frames);shaders.tilemap.setAniIndex(9);
         require(shaders.tilemap.gpuState().tilemap.autotileFrames1[2]==7&&shaders.tilemap.gpuState().tilemap.animation[0]==9,"autotile state packing changed");
         shaders.kglShadowV.setParams(1,2,3,true,true,40,50,20,25,.125,.25);

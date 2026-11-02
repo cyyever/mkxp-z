@@ -68,9 +68,6 @@ void ShaderBase::setTranslation(const Vec2i &value) {
 }
 #define CONSTRUCTOR(Class,Effect) Class::Class() : ShaderBase(gpu::Program::Effect) {}
 CONSTRUCTOR(FlatColorShader,FlatColor)
-CONSTRUCTOR(SimpleShader,Simple)
-CONSTRUCTOR(SimpleColorShader,VertexColor)
-CONSTRUCTOR(SimpleAlphaShader,VertexAlpha)
 CONSTRUCTOR(SimpleSpriteShader,Simple)
 CONSTRUCTOR(AlphaSpriteShader,UniformAlpha)
 CONSTRUCTOR(TransShader,Transition)
@@ -83,28 +80,20 @@ CONSTRUCTOR(FlashMapShader,FlashMap)
 CONSTRUCTOR(HueShader,Hue)
 CONSTRUCTOR(SimpleMatrixShader,VertexAlpha)
 CONSTRUCTOR(BltShader,BitmapBlend)
-CONSTRUCTOR(KglInvertShader,Invert)
-CONSTRUCTOR(KglCompressAlphaShader,CompressAlpha)
 CONSTRUCTOR(KglShadowShaderH,ShadowHorizontal)
 CONSTRUCTOR(KglShadowShaderV,ShadowVertical)
 #undef CONSTRUCTOR
-Lanczos3Shader::Lanczos3Shader() { state.program=gpu::Program::Lanczos; }
-BicubicShader::BicubicShader() { state.program=gpu::Program::Bicubic; }
-Lanczos3SpriteShader::Lanczos3SpriteShader() { state.program=gpu::Program::Lanczos; }
+SimpleSpriteShader::SimpleSpriteShader(gpu::Program program) : ShaderBase(program) {}
+BltShader::BltShader(gpu::Program program) : ShaderBase(program) {}
 BicubicSpriteShader::BicubicSpriteShader() { state.program=gpu::Program::Bicubic; }
 #ifdef MKXPZ_HAVE_EXTRA_SHADERS
-XbrzShader::XbrzShader() { state.program=gpu::Program::Xbrz; }
 XbrzSpriteShader::XbrzSpriteShader() { state.program=gpu::Program::Xbrz; }
-void XbrzShader::setTargetScale(const Vec2 &value) {
-    state.effects.filterParameters[2]=value.x; state.effects.filterParameters[3]=value.y;
-}
 void XbrzSpriteShader::setTargetScale(const Vec2 &value) {
     state.effects.filterParameters[2]=value.x; state.effects.filterParameters[3]=value.y;
 }
 #endif
 BlurShader::HPass::HPass() : ShaderBase(gpu::Program::Blur) { blurAxis=0; }
 BlurShader::VPass::VPass() : ShaderBase(gpu::Program::Blur) { blurAxis=1; }
-KglSubtractShader::KglSubtractShader() { state.program=gpu::Program::Subtract; }
 #define VEC_SET(Class,Method,Member) void Class::Method(const Vec4 &value) { vector4(state.Member,value); }
 VEC_SET(FlatColorShader,setColor,fragment.color)
 VEC_SET(SpriteShader,setTone,fragment.tone)
@@ -153,7 +142,6 @@ void TilemapShader::setATFrames(int values[7]) {
     std::copy_n(values,4,state.tilemap.autotileFrames0);
     std::copy_n(values+4,3,state.tilemap.autotileFrames1);
 }
-void BicubicShader::setSharpness(int value) { sharpness(state,value); }
 void BicubicSpriteShader::setSharpness(int value) { sharpness(state,value); }
 void SpriteShader::setBushDepth(bool y,bool under,float slope,float intercept) {
     state.effects.spriteFlags[3]=float(y);state.effects.bush[3]=float(under);
