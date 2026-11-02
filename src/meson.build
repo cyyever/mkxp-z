@@ -150,37 +150,6 @@ global_dependencies += sdl3
 
 # SDL3_GPU owns the platform rendering backends.
 
-# Only the offline asset converter still decodes with SDL_sound; the engine
-# uses SDL3_mixer.
-if get_option('asset_conversion_tools')
-    sdl3_sound = dependency('sdl3_sound', allow_fallback: false,
-        required: get_option('sdl_sound_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
-    if not sdl3_sound.found()
-        sound_options = cmake.subproject_options()
-        sound_options.add_cmake_defines(cmake_base_options + {
-            'CMAKE_C_FLAGS': run_command(quotetool, sdl3_includes, check: true).stdout().strip(),
-            'SDLSOUND_BUILD_SHARED': false,
-            'SDLSOUND_BUILD_TEST': false,
-            'SDLSOUND_INSTALL': false,
-            # File decoders only: SDL3's native audio playback backends stay enabled.
-            'SDLSOUND_DECODER_WAV': true,
-            'SDLSOUND_DECODER_FLAC': true,
-            'SDLSOUND_DECODER_VORBIS': true,
-            'SDLSOUND_DECODER_MP3': true,
-            'SDLSOUND_DECODER_AIFF': false,
-            'SDLSOUND_DECODER_AU': false,
-            'SDLSOUND_DECODER_VOC': false,
-            'SDLSOUND_DECODER_RAW': false,
-            'SDLSOUND_DECODER_SHN': false,
-            'SDLSOUND_DECODER_MODPLUG': false,
-            'SDLSOUND_DECODER_MIDI': false,
-            'SDLSOUND_DECODER_COREAUDIO': true,
-        })
-        sdl3_sound = declare_dependency(dependencies: [sdl3,
-            cmake.subproject('sdl3_sound', options: sound_options).dependency('SDL3_sound-static')])
-    endif
-endif
-
 sdl3_mixer = dependency('sdl3_mixer', version: '>=3.2', allow_fallback: false,
     required: get_option('sdl_mixer_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 if not sdl3_mixer.found()

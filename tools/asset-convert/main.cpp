@@ -1,6 +1,6 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
-#include <SDL3_sound/SDL_sound.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include "util/json5pp.hpp"
 
 #include <array>
@@ -20,7 +20,7 @@
 namespace fs = std::filesystem;
 using Surface = std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)>;
 using Stream = std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)>;
-using Sample = std::unique_ptr<Sound_Sample, decltype(&Sound_FreeSample)>;
+using Decoder = std::unique_ptr<MIX_AudioDecoder, decltype(&MIX_DestroyAudioDecoder)>;
 
 static std::string utf8(const fs::path &path) {
     const auto text = path.u8string();
@@ -34,12 +34,6 @@ static void require(bool success, const std::string &message) {
 }
 static void requireSDL(bool success, const char *context) {
     if (!success) throw std::runtime_error(std::string(context) + ": " + SDL_GetError());
-}
-static void requireSound(bool success, const char *context) {
-    if (!success) {
-        const char *error = Sound_GetError();
-        throw std::runtime_error(std::string(context) + ": " + (error ? error : "unknown SDL_sound error"));
-    }
 }
 static std::string extension(const fs::path &path) {
     auto value = utf8(path.extension());
@@ -158,34 +152,55 @@ struct DecodedAudio {
     std::vector<uint8_t> bytes;
     std::string decoder;
 };
+// The WAVE format tag of a RIFF file, or 0.
+static unsigned wavFormatTag(const fs::path &path) {
+    std::ifstream input(path, std::ios::binary);
+    char header[12];
+    if (!input.read(header, 12) || std::memcmp(header, "RIFF", 4) || std::memcmp(header + 8, "WAVE", 4)) return 0;
+    char chunk[8];
+    while (input.read(chunk, 8)) {
+        const uint32_t size = uint8_t(chunk[4]) | uint8_t(chunk[5]) << 8 | uint8_t(chunk[6]) << 16 | uint32_t(uint8_t(chunk[7])) << 24;
+        if (!std::memcmp(chunk, "fmt ", 4)) {
+            unsigned char tag[2];
+            return input.read(reinterpret_cast<char *>(tag), 2) ? unsigned(tag[0] | tag[1] << 8) : 0;
+        }
+        input.seekg(size + size % 2, std::ios::cur);
+    }
+    return 0;
+}
 static DecodedAudio loadAudio(const fs::path &path, bool allowWavFallback = true) {
-    Sample sample(Sound_NewSampleFromFile(utf8(path).c_str(), nullptr, 65536), Sound_FreeSample);
-    if (!sample && allowWavFallback && extension(path) == ".wav") {
-        // SDL_sound's WAV decoder omits A-law, while SDL3's WAV loader supports
-        // it. Keep this fallback explicit in the report and verify its decoded
-        // PCM through SDL_sound after writing an ordinary PCM/float WAV.
+    const unsigned tag = extension(path) == ".wav" ? wavFormatTag(path) : 0;
+    if (allowWavFallback && (tag == 6 || tag == 7)) {
+        // SDL_mixer expands A-law/mu-law to float; SDL3's WAV loader expands
+        // them to their normative signed 16-bit PCM, which keeps the output
+        // small and exact. The WAV written from it is verified through SDL_mixer.
         SDL_AudioSpec spec{};
         Uint8 *bytes = nullptr;
         Uint32 size = 0;
         const bool loaded = SDL_LoadWAV(utf8(path).c_str(), &spec, &bytes, &size);
         std::unique_ptr<void, decltype(&SDL_free)> owned(bytes, SDL_free);
         requireSDL(loaded, "SDL3 WAV fallback decode failed");
-        DecodedAudio result{spec, {}, "SDL3 SDL_LoadWAV fallback (source WAV unsupported by SDL_sound)"};
+        DecodedAudio result{spec, {}, "SDL3 SDL_LoadWAV fallback (A-law/mu-law expanded to 16-bit PCM)"};
         if (size) result.bytes.assign(bytes, bytes + size);
         return result;
     }
-    requireSound(bool(sample), "SDL_sound decode failed");
-    DecodedAudio result{sample->actual, {}, sample->decoder->description};
-    require(sample->desired.format == result.spec.format && sample->desired.freq == result.spec.freq
-        && sample->desired.channels == result.spec.channels, "decoder unexpectedly enabled sample conversion");
-    while (!(sample->flags & SOUND_SAMPLEFLAG_EOF)) {
-        const Uint32 count = Sound_Decode(sample.get());
-        requireSound(!(sample->flags & SOUND_SAMPLEFLAG_ERROR), "SDL_sound read failed");
-        require(count <= sample->buffer_size, "decoder returned an invalid buffer length");
+    // Ogg loop tags must not make the decoder loop forever.
+    const SDL_PropertiesID props = SDL_CreateProperties();
+    SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN, true);
+    Decoder decoder(MIX_CreateAudioDecoder(utf8(path).c_str(), props), MIX_DestroyAudioDecoder);
+    SDL_DestroyProperties(props);
+    requireSDL(bool(decoder), "SDL_mixer decode failed");
+    DecodedAudio result{{}, {}, std::string("SDL_mixer ") + SDL_GetStringProperty(
+        MIX_GetAudioDecoderProperties(decoder.get()), MIX_PROP_AUDIO_DECODER_STRING, "?")};
+    // Decode in the decoder's own format, so SDL performs no sample conversion.
+    requireSDL(MIX_GetAudioDecoderFormat(decoder.get(), &result.spec), "SDL_mixer format query failed");
+    std::vector<uint8_t> chunk(65536);
+    for (;;) {
+        const int count = MIX_DecodeAudio(decoder.get(), chunk.data(), int(chunk.size()), &result.spec);
+        requireSDL(count >= 0, "SDL_mixer read failed");
+        if (count == 0) break;
         require(result.bytes.size() + uint64_t(count) <= UINT32_MAX - 64, "decoded audio exceeds RIFF WAV size limit");
-        const auto *bytes = static_cast<const uint8_t *>(sample->buffer);
-        result.bytes.insert(result.bytes.end(), bytes, bytes + count);
-        require(count != 0 || (sample->flags & SOUND_SAMPLEFLAG_EOF), "audio decoder made no progress before EOF");
+        result.bytes.insert(result.bytes.end(), chunk.begin(), chunk.begin() + count);
     }
     return result;
 }
@@ -230,7 +245,7 @@ static json5pp::value convertAudio(const fs::path &source, const fs::path &desti
         {"frames", double(frames)}, {"sample_bytes", double(dataSize)},
         {"wave_format", floating ? "IEEE_FLOAT" : "PCM"},
         {"decoded_crc32", crcText(SDL_crc32(0, original.bytes.data(), original.bytes.size()))},
-        {"verified", "exact SDL_sound decoded PCM bytes"}});
+        {"verified", "exact SDL_mixer decoded PCM bytes"}});
 }
 
 static int run(std::vector<std::string> arguments) {
@@ -245,12 +260,12 @@ static int run(std::vector<std::string> arguments) {
         return 2;
     }
     int result = 1;
-    bool sound = false;
+    bool mixer = false;
     try {
         requireSDL(SDL_Init(0), "SDL initialization failed");
         if (arguments[1] == "audio") {
-            requireSound(Sound_Init() != 0, "SDL_sound initialization failed");
-            sound = true;
+            requireSDL(MIX_Init(), "SDL_mixer initialization failed");
+            mixer = true;
         }
         const auto source = nativePath(arguments[2]), destination = nativePath(arguments[3]);
         const auto report = arguments[1] == "image" ? convertImage(source, destination) : convertAudio(source, destination);
@@ -259,7 +274,7 @@ static int run(std::vector<std::string> arguments) {
     } catch (const std::exception &error) {
         std::cerr << "mkxp-asset-convert: " << error.what() << '\n';
     }
-    if (sound) Sound_Quit();
+    if (mixer) MIX_Quit();
     SDL_Quit();
     return result;
 }

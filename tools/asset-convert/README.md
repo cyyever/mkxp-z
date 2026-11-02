@@ -8,7 +8,7 @@ meson compile -C build mkxp-asset-convert
 meson test -C build asset-container-conversion --print-errorlogs
 ```
 
-It reuses the engine's selected SDL3, SDL3_image and SDL3_sound libraries and adds
+It reuses the engine's selected SDL3, SDL3_image and SDL3_mixer libraries and adds
 no decoder dependencies. Input decoders must still be enabled in that build.
 
 ```sh
@@ -25,8 +25,8 @@ Each successful invocation emits one JSON object after reloading its output:
 
 - Images: source and reloaded PNG are normalized to ABGR8888 and compared row by
   row, excluding padding. Dimensions and every decoded pixel byte must match.
-- Audio: SDL_sound decodes with a null desired format, so no sample conversion or
-  resampling is requested. The WAV preserves rate, channels and U8, S16LE, S32LE
+- Audio: SDL_mixer decodes in the decoder's own format, so no sample conversion or
+  resampling is requested. Ogg loop tags are ignored, so the whole file is decoded once. The WAV preserves rate, channels and U8, S16LE, S32LE
   or F32LE samples. Float output uses IEEE_FLOAT/WAVEFORMATEX plus a fact chunk.
   Reloaded format, rate, channels and every sample byte must match. Unsupported
   sample formats are rejected rather than quantized. RIFF's 32-bit size limit
@@ -44,27 +44,27 @@ rejects a BMP, the tool uses SDL3's existing `SDL_LoadBMP` loader, reports that
 fallback explicitly, and verifies the new PNG against its normalized pixels.
 The original thumbnail remains read-only.
 
-The vendored JPEG decoder is stb_image through SDL3_image. SDL_sound's MP3
-(dr_mp3) and Ogg/Vorbis (stb_vorbis) decoders return F32, which stays F32 in WAV.
+The vendored JPEG decoder is stb_image through SDL3_image. SDL_mixer's MP3
+(dr_mp3), Ogg/Vorbis (stb_vorbis) and FLAC (dr_flac) decoders return F32, which stays F32 in WAV.
 This preserves the chosen decoder output; it cannot recover detail previously
 lost by JPEG, MP3 or Vorbis compression. It does not preserve container metadata.
 
-When SDL_sound rejects a WAV, the tool tries SDL3's existing `SDL_LoadWAV`
-decoder. This handles the games' A-law WAV files without FFmpeg. Its decoded
-sample format/rate/channels and PCM bits are preserved and verified by reloading
-the resulting ordinary WAV through SDL_sound; the JSON decoder field explicitly
-identifies the fallback. A-law is expanded to its normative signed 16-bit PCM,
-without quantizing those decoded values.
+A-law and mu-law WAVs go through SDL3's existing `SDL_LoadWAV` decoder, which
+expands them to their normative signed 16-bit PCM without quantizing those
+values (SDL_mixer would expand them to float). The result is verified by
+reloading the resulting ordinary WAV through SDL_mixer; the JSON decoder field
+explicitly identifies the fallback. The engine itself plays A-law WAVs directly.
 
 Default engine builds decode PNG images and WAV, FLAC, MP3 and Ogg Vorbis
 audio. Enabling `asset_conversion_tools` additionally builds JPEG decoding for
 this offline tool; runtime Bitmap loading and saving still require PNG.
 The tool's stb_vorbis F32 output is not asserted to be bit-identical to older
-engine versions' libvorbis S16 path.
+engine versions' libvorbis S16 path. FLAC sources now convert to F32 WAVs
+(SDL_sound produced integer PCM).
 Ogg loop tags, explicit filename references and extension collisions require a
 separate game migration audit before replacing assets or disabling decoders.
 The existing WMA-to-PCM16 FFmpeg assembly stage remains necessary for WMA input
-unsupported by SDL_sound; the tool can verify/repackage that staged WAV, without
+unsupported by SDL_mixer; the tool can verify/repackage that staged WAV, without
 claiming to undo the earlier decode/conversion.
 
 The Python regression test generates its own PNG and integer/float WAV fixtures.
