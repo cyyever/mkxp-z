@@ -72,7 +72,7 @@ RB_METHOD(tilemapInitialize) {
     
     /* Get parameters */
     VALUE viewportObj = Qnil;
-    Viewport *viewport = 0;
+    Viewport *viewport = nullptr;
     
     rb_get_args(argc, argv, "|o", &viewportObj RB_ARG_END);
     
@@ -93,7 +93,7 @@ RB_METHOD(tilemapInitialize) {
      * See the comment in setPrivateData for more info. */
     VALUE autotilesObj = rb_iv_get(self, "autotiles");
     if (autotilesObj != Qnil)
-        setPrivateData(autotilesObj, 0);
+        setPrivateData(autotilesObj, nullptr);
     
     wrapProperty(self, &t->getAutotiles(), "autotiles", TilemapAutotilesType);
     

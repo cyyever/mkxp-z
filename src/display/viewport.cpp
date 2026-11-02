@@ -90,7 +90,7 @@ struct ViewportPrivate
 		isOnScreen = SDL_GetRectIntersection(&r1, &r2, &result);
 	}
 
-	bool needsEffectRender(bool flashing)
+	bool needsEffectRender(bool flashing) const
 	{
 		bool rectEffective = !rect->isEmpty();
 		bool colorToneEffective = color->hasEffect() || tone->hasEffect() || flashing;

@@ -34,8 +34,8 @@ struct PlanePrivate;
 class Plane : public ViewportElement, public Disposable
 {
 public:
-	Plane(Viewport *viewport = 0);
-	~Plane();
+	Plane(Viewport *viewport = nullptr);
+	~Plane() override;
 
 	void setBitmap(Bitmap* value);
 	DECL_ATTR( OX,        int     )
@@ -52,11 +52,11 @@ public:
 private:
 	PlanePrivate *p;
 
-	void draw();
-	void onGeometryChange(const Scene::Geometry &);
+	void draw() override;
+	void onGeometryChange(const Scene::Geometry &) override;
 
-	void releaseResources();
-	const char *klassName() const { return "plane"; }
+	void releaseResources() override;
+	const char *klassName() const override { return "plane"; }
 
 	ABOUT_TO_ACCESS_DISP
 };

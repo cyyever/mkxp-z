@@ -27,7 +27,7 @@ void SDLCALL selected(void *userdata, const char *const *files, int) noexcept {
     // destroy callback data while another thread is still notifying the caller.
     std::unique_ptr<std::shared_ptr<Selection>> owner(
         static_cast<std::shared_ptr<Selection> *>(userdata));
-    auto result = *owner;
+    const auto& result = *owner;
     {
         std::lock_guard lock(result->mutex);
         try {

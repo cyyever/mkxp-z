@@ -37,7 +37,7 @@ struct Column
 };
 } // namespace
 
-typedef std::vector<Column> ColumnVec;
+using ColumnVec = std::vector<Column>;
 
 /* Buffer between autotile area and tileset */
 static const int atBuffer = 32;
@@ -87,7 +87,7 @@ static ColumnVec calcSrcCols(int tilesetH)
 	ColumnVec cols;
 	// cols.reserve(2);
 
-	cols.push_back(Column(0, 0, tilesetH));
+	cols.emplace_back(0, 0, tilesetH);
 	// cols.push_back(Column(tsLaneW, 0, tilesetH));
 
 	return cols;
@@ -102,13 +102,13 @@ static ColumnVec calcDstCols(int atlasW, int atlasH)
 	const int underAt = atlasH - atAreaH;
 
 	for (int i = 0; i < underAtLanes; ++i)
-		cols.push_back(Column(i*tsLaneW, atAreaH, underAt));
+		cols.emplace_back(i*tsLaneW, atAreaH, underAt);
 
 	const int remCols = atlasW / tsLaneW - underAtLanes;
 
 	if (remCols > 0)
 		for (int i = 0; i < remCols; ++i)
-			cols.push_back(Column((underAtLanes+i)*tsLaneW, 0, atlasH));
+			cols.emplace_back((underAtLanes+i)*tsLaneW, 0, atlasH);
 
 	return cols;
 }
@@ -121,19 +121,17 @@ static BlitVec calcBlitsInt(ColumnVec &srcCols, ColumnVec &dstCols)
 	 * might decrement dstI while it is zero. */
 	int dstI = 0;
 
-	for (size_t srcI = 0; srcI < srcCols.size(); ++srcI)
+	for (auto & srcCol : srcCols)
 	{
-		Column &srcCol = srcCols[srcI];
-
-		for (; dstI < (int) dstCols.size() && srcCol.h > 0; ++dstI)
+			for (; dstI < (int) dstCols.size() && srcCol.h > 0; ++dstI)
 		{
 			Column &dstCol = dstCols[dstI];
 
 			if (srcCol.h > dstCol.h)
 			{
 				/* srcCol doesn't fully fit into dstCol */
-				blits.push_back(Blit(srcCol.x, srcCol.y,
-				                     dstCol.x, dstCol.y, dstCol.h));
+				blits.emplace_back(srcCol.x, srcCol.y,
+				                     dstCol.x, dstCol.y, dstCol.h);
 
 				srcCol.y += dstCol.h;
 				srcCol.h -= dstCol.h;
@@ -141,8 +139,8 @@ static BlitVec calcBlitsInt(ColumnVec &srcCols, ColumnVec &dstCols)
 			else if (srcCol.h < dstCol.h)
 			{
 				/* srcCol fits into dstCol with space remaining */
-				blits.push_back(Blit(srcCol.x, srcCol.y,
-				                     dstCol.x, dstCol.y, srcCol.h));
+				blits.emplace_back(srcCol.x, srcCol.y,
+				                     dstCol.x, dstCol.y, srcCol.h);
 
 				dstCol.y += srcCol.h;
 				dstCol.h -= srcCol.h;
@@ -155,8 +153,8 @@ static BlitVec calcBlitsInt(ColumnVec &srcCols, ColumnVec &dstCols)
 			else
 			{
 				/* srcCol fits perfectly into dstCol */
-				blits.push_back(Blit(srcCol.x, srcCol.y,
-				                     dstCol.x, dstCol.y, dstCol.h));
+				blits.emplace_back(srcCol.x, srcCol.y,
+				                     dstCol.x, dstCol.y, dstCol.h);
 			}
 		}
 	}

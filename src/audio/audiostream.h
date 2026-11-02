@@ -142,8 +142,8 @@ private:
 	void finiFadeOutInt();
 	void startFadeIn();
 
-	void fadeOutThread(std::stop_token stop);
-	void fadeInThread(std::stop_token stop);
+	void fadeOutThread(const std::stop_token& stop);
+	void fadeInThread(const std::stop_token& stop);
 };
 
 #endif // AUDIOSTREAM_H

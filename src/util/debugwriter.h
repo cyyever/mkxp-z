@@ -58,7 +58,7 @@ public:
 
 	~Debug()
 	{
-		std::cerr << buf.str() << std::endl;
+		std::cerr << buf.str() << '\n';
 	}
 
 private:

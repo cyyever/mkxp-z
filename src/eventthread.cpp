@@ -47,7 +47,7 @@
 
 #include "debugwriter.h"
 
-#include <string.h>
+#include <cstring>
 
 
 uint8_t EventThread::keyStates[];
@@ -81,14 +81,11 @@ bool EventThread::allocUserEvents()
 {
     usrIdStart = SDL_RegisterEvents(EVENT_COUNT);
     
-    if (usrIdStart == 0)
-        return false;
-    
-    return true;
+    return usrIdStart != 0;
 }
 
 EventThread::EventThread()
-: ctrl(0),
+: ctrl(nullptr),
 fullscreen(false),
 showCursor(false)
 {
@@ -99,7 +96,7 @@ static Uint32 cursorTimerCallback(void *param, SDL_TimerID, Uint32 interval)
 {
 	EventThread *ethread = static_cast<EventThread*>(param);
 	hideCursorTimerID = 0;
-	ethread->requestShowCursor(ethread->getShowCursor());
+	EventThread::requestShowCursor(ethread->getShowCursor());
 	return 0;
 }
 void EventThread::cursorTimer()
@@ -134,7 +131,7 @@ void EventThread::process(RGSSThreadData &rtData)
     
     SDL_AddGamepadMappingsFromIO(
         SDL_IOFromConstMem(mkxp_assets_gamecontrollerdb_txt, mkxp_assets_gamecontrollerdb_txt_len),
-    1);
+    true);
     
     int gamepadCount = 0;
     SDL_JoystickID *gamepads = SDL_GetGamepads(&gamepadCount);
@@ -170,7 +167,7 @@ void EventThread::process(RGSSThreadData &rtData)
     // Only the SDL window thread acquires/presents swapchain textures. Keep
     // the last completed snapshot here for expose events and modal repaint.
     std::optional<gpu::CompletedFrame> lastGpuFrame;
-    auto presentGpuFrame = [&]() {
+    auto presentGpuFrame = [&] {
         try {
             if (!rtData.gpuDevice || !rtData.gpuPresentation) return true;
             if (auto next = rtData.gpuPresentation->tryTake()) {
@@ -205,7 +202,7 @@ void EventThread::process(RGSSThreadData &rtData)
 
     // SDL owns native coordinates, capture and button state. Publish one
     // synchronized snapshot so RGSS never reads main-thread mutable fields.
-    auto publishMouse = [&]() {
+    auto publishMouse = [&] {
         MouseState state;
         state.buttons = SDL_GetMouseState(&state.x, &state.y);
         state.inWindow = SDL_GetMouseFocus() == win;
@@ -602,7 +599,7 @@ void EventThread::setFullscreen(SDL_Window *win, bool mode)
 }
 
 void EventThread::updateCursorState(bool inWindow,
-                                    const SDL_Rect &screen)
+                                    const SDL_Rect &screen) const
 {
     float mouseX, mouseY;
     SDL_GetMouseState(&mouseX, &mouseY);
@@ -632,7 +629,7 @@ void EventThread::requestTerminate()
     SDL_PushEvent(&event);
 }
 
-void EventThread::requestFullscreenMode(bool mode)
+void EventThread::requestFullscreenMode(bool mode) const
 {
     if (mode == fullscreen)
         return;
@@ -727,7 +724,7 @@ bool EventThread::getShowCursor() const
 
 bool EventThread::getControllerConnected() const
 {
-    return ctrl != 0;
+    return ctrl != nullptr;
 }
 
 SDL_Gamepad *EventThread::controller() const
@@ -735,7 +732,7 @@ SDL_Gamepad *EventThread::controller() const
     return ctrl;
 }
 
-void EventThread::notifyFrame()
+void EventThread::notifyFrame() const
 {
 #ifdef SDL_PLATFORM_APPLE
     uint32_t frames = round(shState->graphics().averageFrameRate());

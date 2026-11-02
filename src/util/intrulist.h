@@ -30,8 +30,8 @@ struct IntruListLink
 	T *data;
 
 	IntruListLink(T *data)
-	    : prev(0),
-	      next(0),
+	    : prev(nullptr),
+	      next(nullptr),
 	      data(data)
 	{}
 
@@ -52,7 +52,7 @@ class IntruList
 
 public:
 	IntruList()
-	    : root(0)
+	    : root(nullptr)
 	{
 		root.prev = &root;
 		root.next = &root;
@@ -85,8 +85,8 @@ public:
 		node.prev->next = node.next;
 		node.next->prev = node.prev;
 
-		node.prev = 0;
-		node.next = 0;
+		node.prev = nullptr;
+		node.next = nullptr;
 
 	}
 
@@ -102,7 +102,7 @@ public:
 	{
 		IntruListLink<T> *node = root.prev;
 		if (node == &root)
-			return 0;
+			return nullptr;
 
 		return node->data;
 	}

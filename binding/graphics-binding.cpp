@@ -40,8 +40,8 @@ RB_METHOD_GUARD(graphicsUpdate)
     RB_UNUSED_PARAM;
     drop_gvl_guard([](void*) -> void* {
         GFX_GUARD_EXC( shState->graphics().update(); );
-        return 0;
-    }, 0, 0, 0);
+        return nullptr;
+    }, nullptr, nullptr, nullptr);
     return Qnil;
 }
 RB_METHOD_GUARD_END
@@ -61,19 +61,19 @@ RB_METHOD_GUARD(graphicsFreeze)
     
     drop_gvl_guard([](void*) -> void* {
         GFX_GUARD_EXC( shState->graphics().freeze(); );
-        return 0;
-    }, 0, 0, 0);
+        return nullptr;
+    }, nullptr, nullptr, nullptr);
     
     return Qnil;
 }
 RB_METHOD_GUARD_END
 
 namespace {
-typedef struct {
+struct TransitionArgs {
     int duration;
     const char *filename;
     int vague;
-} TransitionArgs;
+};
 } // namespace
 
 RB_METHOD_GUARD(graphicsTransition)
@@ -94,8 +94,8 @@ RB_METHOD_GUARD(graphicsTransition)
                                                       a.filename,
                                                       a.vague
                                                      ); );
-        return 0;
-    }, &args, 0, 0);
+        return nullptr;
+    }, &args, nullptr, nullptr);
     
     return Qnil;
 }
@@ -199,8 +199,8 @@ RB_METHOD_GUARD(graphicsWait)
     rb_get_args(argc, argv, "i", &duration RB_ARG_END);
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().wait(*(int*)d); );
-        return 0;
-    }, (int*)&duration, 0, 0);
+        return nullptr;
+    }, &duration, nullptr, nullptr);
     return Qnil;
 }
 RB_METHOD_GUARD_END
@@ -214,8 +214,8 @@ RB_METHOD_GUARD(graphicsFadeout)
     
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().fadeout(*(int*)d); );
-        return 0;
-    }, (int*)&duration, 0, 0);
+        return nullptr;
+    }, &duration, nullptr, nullptr);
     
     return Qnil;
 }
@@ -230,8 +230,8 @@ RB_METHOD_GUARD(graphicsFadein)
     
     drop_gvl_guard([](void* d) -> void* {
         GFX_GUARD_EXC( shState->graphics().fadein(*(int*)d); );
-        return 0;
-    }, (int*)&duration, 0, 0);
+        return nullptr;
+    }, &duration, nullptr, nullptr);
     
     return Qnil;
 }
@@ -242,7 +242,7 @@ RB_METHOD_GUARD(graphicsSnapToBitmap)
 {
     RB_UNUSED_PARAM;
     
-    Bitmap *result = 0;
+    Bitmap *result = nullptr;
     
     GFX_GUARD_EXC( result = shState->graphics().snapToBitmap(); );
     
@@ -316,8 +316,8 @@ RB_METHOD_GUARD(graphicsScreenshot)
     
     drop_gvl_guard([](void* fn) -> void* {
         graphicsScreenshotInternal((const char*)fn);
-        return 0;
-    }, (void*)RSTRING_PTR(filename), 0, 0);
+        return nullptr;
+    }, (void*)RSTRING_PTR(filename), nullptr, nullptr);
     return Qnil;
 }
 RB_METHOD_GUARD_END

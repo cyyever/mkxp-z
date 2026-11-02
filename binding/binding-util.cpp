@@ -27,13 +27,13 @@
 #include "sharedstate.h"
 #include "src/util/util.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdlib>
 #include <exception>
 #include <new>
 #include <stdexcept>
-#include <stdarg.h>
-#include <string.h>
+#include <cstdarg>
+#include <cstring>
 
 RbData *getRbData() { return static_cast<RbData *>(shState->bindingData()); }
 
@@ -44,8 +44,8 @@ struct {
     {MKXP, "MKXPError"}, {PHYSFS, "PHYSFSError"}, {SDL, "SDLError"}};
 
 RbData::RbData() {
-  for (size_t i = 0; i < std::size(customExc); ++i)
-    exc[customExc[i].id] = rb_define_class(customExc[i].name, rb_eException);
+  for (auto & i : customExc)
+    exc[i.id] = rb_define_class(i.name, rb_eException);
 
   exc[RGSS] = rb_define_class("RGSSError", rb_eStandardError);
   exc[Reset] =
@@ -60,7 +60,7 @@ RbData::RbData() {
   exc[RuntimeError] = rb_eRuntimeError;
 }
 
-RbData::~RbData() {}
+RbData::~RbData() = default;
 
 /* Indexed with Exception::Type */
 const RbException excToRbExc[] = {
@@ -138,7 +138,7 @@ void raiseDisposedAccess(VALUE self) {
 }
 
 int rb_get_args(int argc, VALUE *argv, const char *format, ...) {
-  Exception *exc = 0;
+  Exception *exc = nullptr;
   try{
     char c;
     VALUE *arg = argv;
@@ -361,11 +361,11 @@ int rb_get_args(int argc, VALUE *argv, const char *format, ...) {
 #include <ruby/thread.h>
 
 namespace {
-typedef struct gvl_guard_args {
+struct gvl_guard_args {
 	std::exception_ptr exc;
 	void *(*func)(void *);
 	void *args;
-} gvl_guard_args;
+};
 } // namespace
 
 static void *gvl_guard(void *args) {
@@ -375,7 +375,7 @@ static void *gvl_guard(void *args) {
 	} catch (...) {
 		gvl_args->exc = std::current_exception();
 	}
-	return 0;
+	return nullptr;
 }
 
 void *drop_gvl_guard(void *(*func)(void *), void *args,

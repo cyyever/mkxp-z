@@ -79,7 +79,7 @@ private:
         std::vector<Draw> draws;
         const Texture *copySource = nullptr;
         const Texture *copyDestination = nullptr;
-        std::optional<SDL_GPUBlitInfo> blit{};
+        std::optional<SDL_GPUBlitInfo> blit;
     };
     void ensureBuffer(Uint32 bytes);
     Device &device;

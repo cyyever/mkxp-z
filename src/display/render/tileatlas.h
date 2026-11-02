@@ -46,7 +46,7 @@ struct Blit
 	{}
 };
 
-typedef std::vector<Blit> BlitVec;
+using BlitVec = std::vector<Blit>;
 
 /* Calculates the minimum atlas size required to hold
  * a tileset of height 'tilesetH'. If the required dimensions

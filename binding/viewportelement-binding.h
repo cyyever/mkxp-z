@@ -49,7 +49,7 @@ RB_METHOD_GUARD(viewportElementSetViewport)
 	ViewportElement *ve = getPrivateData<C>(self);
 
 	VALUE viewportObj = Qnil;
-	Viewport *viewport = 0;
+	Viewport *viewport = nullptr;
 
 	rb_get_args(argc, argv, "o", &viewportObj RB_ARG_END);
 
@@ -70,7 +70,7 @@ viewportElementInitialize(int argc, VALUE *argv, VALUE self)
 {
 	/* Get parameters */
 	VALUE viewportObj = Qnil;
-	Viewport *viewport = 0;
+	Viewport *viewport = nullptr;
 
 	rb_get_args(argc, argv, "|o", &viewportObj RB_ARG_END);
 

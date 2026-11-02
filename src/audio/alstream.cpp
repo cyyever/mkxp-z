@@ -64,7 +64,7 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 	MixAudioPtr audio;
 	std::string errorMsg;
 
-	bool tryRead(SDL_IOStream *ops, const char *)
+	bool tryRead(SDL_IOStream *ops, const char *) override
 	{
 		/* The encoded file stays in memory and is decoded while playing */
 		audio = loadRuntimeAudio(ops, false, errorMsg);

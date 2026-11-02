@@ -54,12 +54,7 @@ bool INIConfiguration::load (std::istream& is)
 
 	}
 
-	if (is.bad())
-	{
-		return false;
-	}
-
-	return true;
+	return !is.bad();
 }
 
 

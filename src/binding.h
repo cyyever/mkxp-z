@@ -28,17 +28,17 @@ struct ScriptBinding
 	 * loading the compressed scripts and executing them.
 	 * This function returns as soon as the scripts finish
 	 * execution or an error is encountered */
-	void (*execute) (void);
+	void (*execute) ();
 
 	/* Instructs the binding
 	 * to immediately terminate script execution. This
 	 * function will perform a longjmp instead of returning,
 	 * so be careful about any variables with local storage */
-	void (*terminate) (void);
+	void (*terminate) ();
 
 	/* Instructs the binding to issue a game reset.
 	 * Same conditions as for terminate apply */
-	void (*reset) (void);
+	void (*reset) ();
 };
 
 /* VTable defined in the binding source */

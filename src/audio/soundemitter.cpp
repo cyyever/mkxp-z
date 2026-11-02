@@ -116,7 +116,7 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 	std::unique_ptr<SoundBuffer> buffer;
 	std::string error;
 
-	bool tryRead(SDL_IOStream *ops, const char *)
+	bool tryRead(SDL_IOStream *ops, const char *) override
 	{
 		/* Decode everything now so we don't have to keep the source ops around */
 		MixAudioPtr audio = loadRuntimeAudio(ops, true, error);
@@ -152,8 +152,8 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 
 		return buffer;
 	}
-	else
-	{
+	
+	
 		/* Buffer not in cache, needs to be loaded */
 		SoundOpenHandler handler;
 		shState->fileSystem().openRead(handler, filename.c_str());
@@ -183,5 +183,5 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 		bufferBytes = wouldBeBytes;
 
 		return buffers.front().get();
-	}
+	
 }

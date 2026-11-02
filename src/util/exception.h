@@ -61,7 +61,7 @@ struct Exception
 		va_start(ap, format);
 
 		msg.resize(512);
-		vsnprintf(&msg[0], msg.size(), format, ap);
+		vsnprintf(msg.data(), msg.size(), format, ap);
 
 		va_end(ap);
 	}

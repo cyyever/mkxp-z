@@ -1,5 +1,5 @@
 #include "miniffi.h"
-#include <assert.h>
+#include <cassert>
 
 mffi_value miniffi_call_intern(MINIFFI_FUNC target, MiniFFIFuncArgs *p, int nparams) {
     assert(nparams <= MINIFFI_MAX_ARGS);

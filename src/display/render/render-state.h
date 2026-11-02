@@ -62,6 +62,6 @@ public:
     explicit RenderState(const Config &);
 private:
     void updateScissor();
-    void updateBlend();
+    void updateBlend() const;
 };
 #endif

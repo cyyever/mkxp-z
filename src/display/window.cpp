@@ -133,10 +133,10 @@ struct QuadChunk
 	int count; /* In quads */
 
 	QuadChunk()
-	    : vert(0), count(0)
+	    : vert(nullptr), count(0)
 	{}
 
-	void setAlpha(float value)
+	void setAlpha(float value) const
 	{
 		for (int i = 0; i < count*4; ++i)
 			vert[i].color.w = value;
@@ -220,14 +220,14 @@ struct WindowPrivate
 		WindowPrivate *p;
 
 		WindowControls(WindowPrivate *p,
-		               Viewport *viewport = 0)
+		               Viewport *viewport = nullptr)
 		    : ViewportElement(viewport),
 		      p(p)
 		{
 			setZ(2);
 		}
 
-		void draw()
+		void draw() override
 		{
 			p->drawControls();
 		}
@@ -262,10 +262,10 @@ struct WindowPrivate
 
 	bool contentsVisible;
 
-	WindowPrivate(Viewport *viewport = 0)
-	    : windowskin(0),
-	      contents(0),
-	      realContents(0),
+	WindowPrivate(Viewport *viewport = nullptr)
+	    : windowskin(nullptr),
+	      contents(nullptr),
+	      realContents(nullptr),
 	      bgStretch(true),
 	      cursorRect(&tmp.rect),
 	      active(true),
@@ -304,7 +304,7 @@ struct WindowPrivate
 
 	void windowskinDisposal()
 	{
-		windowskin = 0;
+		windowskin = nullptr;
 		windowskinDispCon.disconnect();
 	}
 
@@ -314,7 +314,7 @@ struct WindowPrivate
 		{
 			delete contents;
 		}
-		realContents = contents = 0;
+		realContents = contents = nullptr;
 		contentsDispCon.disconnect();
 	}
 
@@ -788,7 +788,7 @@ void Window::setWindowskin(Bitmap *value)
 
 	if (nullOrDisposed(value))
 	{
-		p->windowskin = 0;
+		p->windowskin = nullptr;
 		return;
 	}
 
@@ -815,7 +815,7 @@ void Window::setContents(Bitmap *value)
 
 	if (nullOrDisposed(value))
 	{
-		p->realContents = p->contents = 0;
+		p->realContents = p->contents = nullptr;
 		return;
 	}
 

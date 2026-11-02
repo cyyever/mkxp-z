@@ -75,18 +75,18 @@ struct PingPong {
     
     PingPong(int screenW, int screenH)
     : srcInd(0), dstInd(1), screenW(screenW), screenH(screenH) {
-        for (int i = 0; i < 2; ++i) {
-            TEXFBO::init(rt[i]);
-            TEXFBO::allocEmpty(rt[i], screenW, screenH);
-            TEXFBO::linkFBO(rt[i]);
+        for (auto & i : rt) {
+            TEXFBO::init(i);
+            TEXFBO::allocEmpty(i, screenW, screenH);
+            TEXFBO::linkFBO(i);
             gpu::RenderContext::current().setClearColor({0, 0, 0, 1});
             FBO::clear();
         }
     }
     
     ~PingPong() {
-        for (int i = 0; i < 2; ++i)
-            TEXFBO::fini(rt[i]);
+        for (auto & i : rt)
+            TEXFBO::fini(i);
     }
     
     TEXFBO &backBuffer() { return rt[srcInd]; }
@@ -98,8 +98,8 @@ struct PingPong {
         screenW = width;
         screenH = height;
         
-        for (int i = 0; i < 2; ++i)
-            TEXFBO::allocEmpty(rt[i], width, height);
+        for (auto & i : rt)
+            TEXFBO::allocEmpty(i, width, height);
     }
     
     void startRender() { bind(); }
@@ -113,8 +113,8 @@ struct PingPong {
     void clearBuffers() {
         renderState.clearColor.pushSet(Vec4(0, 0, 0, 1));
         
-        for (int i = 0; i < 2; ++i) {
-            FBO::bind(rt[i].fbo);
+        for (auto & i : rt) {
+            FBO::bind(i.fbo);
             FBO::clear();
         }
         
@@ -134,7 +134,7 @@ public:
         brightnessQuad.setColor(Vec4());
     }
     
-    void composite() {
+    void composite() override {
         const int w = geometry.rect.w;
         const int h = geometry.rect.h;
         
@@ -158,7 +158,7 @@ public:
         }
     }
     
-    void requestViewportRender(const Vec4 &c, const Vec4 &f, const Vec4 &t) {
+    void requestViewportRender(const Vec4 &c, const Vec4 &f, const Vec4 &t) override {
         const IntRect &viewpRect = renderState.scissorBox.get();
         const IntRect &screenRect = geometry.rect;
         
@@ -471,7 +471,7 @@ struct GraphicsPrivate {
         TEXFBO::fini(integerScaleBuffer);
     }
     
-    void updateScreenResoRatio(RGSSThreadData *rtData) {
+    void updateScreenResoRatio(RGSSThreadData *rtData) const {
         Vec2 &ratio = rtData->sizeResoRatio;
         ratio.x = (float)scRes.x / scSize.x * backingScaleFactor;
         ratio.y = (float)scRes.y / scSize.y * backingScaleFactor;
@@ -579,7 +579,7 @@ struct GraphicsPrivate {
             updateScreenResoRatio(threadData);
             
             SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
-            threadData->ethread->notifyGameScreenChange(screen);
+            EventThread::notifyGameScreenChange(screen);
         }
     }
     
@@ -588,7 +588,7 @@ struct GraphicsPrivate {
         shState->checkReset();
     }
     
-    void shutdown() {
+    void shutdown() const {
         threadData->rqTermAck = true;
         shState->texPool().disable();
         
@@ -763,7 +763,7 @@ void Graphics::update(bool checkForShutdown) {
     }
     
     if (checkForShutdown)
-        p->checkShutDownReset();
+        GraphicsPrivate::checkShutDownReset();
     
     
     
@@ -778,10 +778,10 @@ void Graphics::update(bool checkForShutdown) {
             p->threadData->ethread->notifyFrame();
             
             return;
-        } else {
+        } 
             /* Just reset frame adjust counter */
             p->fpsLimiter.resetFrameAdjust();
-        }
+        
     }
     
     p->checkResize();
@@ -791,7 +791,7 @@ void Graphics::update(bool checkForShutdown) {
 void Graphics::freeze() {
     p->frozen = true;
     
-    p->checkShutDownReset();
+    GraphicsPrivate::checkShutDownReset();
     p->checkResize();
     
     /* Capture scene into frozen buffer */
@@ -804,7 +804,7 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         return;
     
     vague = clamp(vague, 1, 256);
-    Bitmap *transMap = *filename ? new Bitmap(filename) : 0;
+    Bitmap *transMap = *filename ? new Bitmap(filename) : nullptr;
     
     setBrightness(255);
     
@@ -931,7 +931,7 @@ double Graphics::averageFrameRate() {
 
 void Graphics::wait(int duration) {
     for (int i = 0; i < duration; ++i) {
-        p->checkShutDownReset();
+        GraphicsPrivate::checkShutDownReset();
         p->redrawScreen();
     }
 }
@@ -1110,7 +1110,7 @@ void Graphics::center() {
     if (getFullscreen())
         return;
     
-    p->threadData->ethread->requestWindowCenter();
+    EventThread::requestWindowCenter();
 }
 
 bool Graphics::getFullscreen() const {
@@ -1126,7 +1126,7 @@ bool Graphics::getShowCursor() const {
 }
 
 void Graphics::setShowCursor(bool value) {
-    p->threadData->ethread->requestShowCursor(value);
+    EventThread::requestShowCursor(value);
 }
 
 bool Graphics::getFixedAspectRatio() const

@@ -7,7 +7,7 @@
 
 #include "config.h"
 #include <SDL3/SDL_filesystem.h>
-#include <assert.h>
+#include <cassert>
 
 #include <algorithm>
 #include <ranges>
@@ -61,7 +61,7 @@ static bool copyObject(json::value &dest, json::value src, const char *objectNam
     auto &srcVec = src.as_object();
     auto &destVec = dest.as_object();
     
-    for (auto it : srcVec) {
+    for (const auto& it : srcVec) {
         // Specifically processs this object later.
         if (it.second.is_object() && destVec[it.first].is_object())
             continue;
@@ -88,7 +88,7 @@ static bool getEnvironmentBool(const char *env, bool defaultValue) {
     
     if (!strcmp(e, "0"))
         return false;
-    else if (!strcmp(e, "1"))
+    if (!strcmp(e, "1"))
         return true;
     
     return defaultValue;
@@ -122,7 +122,7 @@ static json::value readConfFile(const char *path) {
 
 #define CONF_FILE "mkxp.json"
 
-Config::Config() {}
+Config::Config() = default;
 
 void Config::read(int argc, char *argv[]) {
     auto optsJ = json::object({
@@ -221,7 +221,7 @@ try { exp } catch (...) {}
         
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "debug"))
-                launchArgs.push_back(argv[i]);
+                launchArgs.emplace_back(argv[i]);
         }
     }
     
@@ -359,7 +359,7 @@ static void setupScreenSize(Config &conf) {
 }
 
 bool Config::fontIsSolid(const char *fontName) const {
-    for (std::string solidfont : solidFonts)
+    for (const std::string& solidfont : solidFonts)
         if (!strcmp(solidfont.c_str(), fontName)) return true;
     
     return false;
@@ -367,7 +367,7 @@ bool Config::fontIsSolid(const char *fontName) const {
 
 void Config::readGameINI() {
     if (!customScript.empty()) {
-        game.title = customScript.c_str();
+        game.title = customScript;
         
         if (rgssVersion == 0)
             rgssVersion = 1;
@@ -428,7 +428,7 @@ void Config::readGameINI() {
         
         if (!game.scripts.empty()) {
             const char *p = &game.scripts[game.scripts.size()];
-            const char *head = &game.scripts[0];
+            const char *head = game.scripts.data();
             
             while (--p != head)
                 if (*p == '.')

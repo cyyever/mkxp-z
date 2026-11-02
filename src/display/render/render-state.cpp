@@ -41,7 +41,7 @@ void RenderState::updateScissor() {
     gpu::RenderContext::current().setScissor(SDL_Rect{int(std::lround(scale*value.x)),int(std::lround(scale*value.y)),
                                                     int(std::lround(scale*value.w)),int(std::lround(scale*value.h))});
 }
-void RenderState::updateBlend() {
+void RenderState::updateBlend() const {
     gpu::Blend result=gpu::Blend::Disabled;
     if(blend.get()) switch(blendMode.get()) {
         case BlendNormal: result=gpu::Blend::Normal; break;

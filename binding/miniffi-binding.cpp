@@ -41,7 +41,7 @@ DEF_TYPE_CUSTOMFREE(MiniFFI, MiniFFI_Unload);
 
 static SDL_FunctionPointer MiniFFI_GetFunctionHandle(SDL_SharedObject *libhandle, const char *func) {
     if (!libhandle)
-        return 0;
+        return nullptr;
     return SDL_LoadFunction(libhandle, func);
 }
 
@@ -121,11 +121,11 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
 RB_METHOD_GUARD_END
 
 namespace {
-typedef struct {
+struct MFFICallCBArgs {
     MINIFFI_FUNC function;
     MiniFFIFuncArgs *args;
     int nparams;
-} MFFICallCBArgs;
+};
 } // namespace
 
 static void* miniffi_call_cb(void *args) {
@@ -183,7 +183,7 @@ RB_METHOD_GUARD(MiniFFI_call) {
         params[i] = lParam;
     }
     MFFICallCBArgs cb_args {ApiFunction, &param, nimport};
-    mffi_value ret = (mffi_value)rb_thread_call_without_gvl(miniffi_call_cb, &cb_args, 0, 0);
+    mffi_value ret = (mffi_value)rb_thread_call_without_gvl(miniffi_call_cb, &cb_args, nullptr, nullptr);
     
     switch (FIX2INT(own_exports)) {
         case _T_NUMBER:

@@ -27,6 +27,7 @@
 #include <cassert>
 
 #include <thread>
+#include <utility>
 #include <SDL3/SDL_timer.h>
 
 AudioStream::AudioStream(ALStream::LoopMode loopMode)
@@ -37,8 +38,8 @@ AudioStream::AudioStream(ALStream::LoopMode loopMode)
 	current.volume = 1.0f;
 	current.pitch = 1.0f;
 
-	for (size_t i = 0; i < VolumeTypeCount; ++i)
-		volumes[i] = 1.0f;
+	for (float & volume : volumes)
+		volume = 1.0f;
 
 
 }
@@ -173,7 +174,7 @@ void AudioStream::fadeOut(int duration)
 	fade.reqFini = false;
 	fade.startTicks = SDL_GetTicks();
 
-	fade.thread = std::jthread([this](std::stop_token stop) { fadeOutThread(stop); });
+	fade.thread = std::jthread([this](std::stop_token stop) { fadeOutThread(std::move(stop)); });
 }
 
 void AudioStream::setVolume(VolumeType type, float value)
@@ -197,8 +198,8 @@ void AudioStream::updateVolume()
 {
 	float vol = 1.0f;
 
-	for (size_t i = 0; i < VolumeTypeCount; ++i)
-		vol *= volumes[i];
+	for (float volume : volumes)
+		vol *= volume;
 
 	stream.setVolume(vol);
 }
@@ -226,10 +227,10 @@ void AudioStream::startFadeIn()
 	fadeIn.rqFini = false;
 	fadeIn.startTicks = SDL_GetTicks();
 
-	fadeIn.thread = std::jthread([this](std::stop_token stop) { fadeInThread(stop); });
+	fadeIn.thread = std::jthread([this](std::stop_token stop) { fadeInThread(std::move(stop)); });
 }
 
-void AudioStream::fadeOutThread(std::stop_token stop)
+void AudioStream::fadeOutThread(const std::stop_token& stop)
 {
 	while (true)
 	{
@@ -264,7 +265,7 @@ void AudioStream::fadeOutThread(std::stop_token stop)
 	fade.active = false;
 }
 
-void AudioStream::fadeInThread(std::stop_token stop)
+void AudioStream::fadeInThread(const std::stop_token& stop)
 {
 	while (true)
 	{

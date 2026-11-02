@@ -222,7 +222,7 @@ public:
 
     const CachedEntry *cachedEntry(const std::filesystem::path &name) const {
         if (!valid(name)) return nullptr;
-        const auto find = [&]() -> const CachedEntry * {
+        const auto find = [&] -> const CachedEntry * {
             const auto &directory = cachedList(name.parent_path());
             const auto entry = directory.find(key(paths::toUtf8(name.filename().u8string())));
             return entry == directory.end() ? nullptr : &entry->second;

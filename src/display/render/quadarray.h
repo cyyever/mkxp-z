@@ -83,7 +83,7 @@ private:
 	size_t quadCount = 0;
 };
 
-typedef QuadArray<Vertex> ColorQuadArray;
-typedef QuadArray<SVertex> SimpleQuadArray;
+using ColorQuadArray = QuadArray<Vertex>;
+using SimpleQuadArray = QuadArray<SVertex>;
 
 #endif // QUADARRAY_H

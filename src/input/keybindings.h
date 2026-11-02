@@ -94,7 +94,7 @@ struct BindingDesc
 	Input::ButtonCode target;
 };
 
-typedef std::vector<BindingDesc> BDescVec;
+using BDescVec = std::vector<BindingDesc>;
 struct Config;
 
 BDescVec genDefaultBindings(const Config &conf);

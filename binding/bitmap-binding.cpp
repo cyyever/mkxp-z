@@ -19,6 +19,8 @@
  ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
+
 #include "binding-types.h"
 #include "binding-util.h"
 #include "binding-init.h"
@@ -35,7 +37,7 @@ void bitmapInitProps(Bitmap *b, VALUE self) {
     /* Wrap properties */
     VALUE fontKlass = rb_const_get(rb_cObject, rb_intern("Font"));
     VALUE fontObj = rb_obj_alloc(fontKlass);
-    rb_obj_call_init(fontObj, 0, 0);
+    rb_obj_call_init(fontObj, 0, nullptr);
     
     Font *font = getPrivateData<Font>(fontObj);
     
@@ -48,7 +50,7 @@ void bitmapInitProps(Bitmap *b, VALUE self) {
             wrapProperty(self, b->getHires(), "hires", BitmapType);
         
             VALUE hiresFontObj = rb_obj_alloc(fontKlass);
-            rb_obj_call_init(hiresFontObj, 0, 0);
+            rb_obj_call_init(hiresFontObj, 0, nullptr);
             Font *hiresFont = getPrivateData<Font>(hiresFontObj);
             rb_iv_set(rb_iv_get(self, "hires"), "font", hiresFontObj);
             b->getHires()->setInitFont(hiresFont);
@@ -59,7 +61,7 @@ void bitmapInitProps(Bitmap *b, VALUE self) {
 }
 
 RB_METHOD_GUARD(bitmapInitialize) {
-    Bitmap *b = 0;
+    Bitmap *b = nullptr;
     
     if (argc == 1) {
         char *filename;
@@ -623,7 +625,7 @@ RB_METHOD_GUARD(bitmapAddFrame){
     int pos = -1;
     if (position != Qnil) {
         pos = NUM2INT(position);
-        if (pos < 0) pos = 0;
+        pos = std::max(pos, 0);
     }
     
     int ret;
@@ -646,7 +648,7 @@ RB_METHOD_GUARD(bitmapRemoveFrame){
     int pos = -1;
     if (position != Qnil) {
         pos = NUM2INT(position);
-        if (pos < 0) pos = 0;
+        pos = std::max(pos, 0);
     }
     
     GFX_GUARD_EXC(b->removeFrame(pos););
@@ -761,7 +763,7 @@ RB_METHOD_GUARD(bitmapSnapToBitmap) {
     
     Bitmap *b = getPrivateData<Bitmap>(self);
     
-    Bitmap *newbitmap = 0;
+    Bitmap *newbitmap = nullptr;
     int pos = (position == RUBY_Qnil) ? -1 : NUM2INT(position);
     
     GFX_GUARD_EXC(newbitmap = new Bitmap(*b, pos););
@@ -791,7 +793,7 @@ RB_METHOD_GUARD(bitmapInitializeCopy) {
         return self;
     
     Bitmap *orig = getPrivateData<Bitmap>(origObj);
-    Bitmap *b = 0;
+    Bitmap *b = nullptr;
     
     GFX_GUARD_EXC(b = new Bitmap(*orig););
     

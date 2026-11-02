@@ -33,6 +33,7 @@
 #include <thread>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 
@@ -74,7 +75,7 @@ struct AudioPrivate
         }
         
 		meWatch.state = MeNotPlaying;
-		meWatch.thread = std::jthread([this](std::stop_token stop) { meWatchFun(stop); });
+		meWatch.thread = std::jthread([this](std::stop_token stop) { meWatchFun(std::move(stop)); });
 	}
 
 	~AudioPrivate()
@@ -84,14 +85,14 @@ struct AudioPrivate
 	}
     
     AudioStream *getTrackByIndex(int index) {
-        if (index < 0) index = 0;
+        index = std::max(index, 0);
         if (index > (int)(bgmTracks.size()) - 1) {
             throw Exception(Exception::MKXPError, "requested BGM track %d out of range (max: %d)", index, bgmTracks.size() - 1);
         }
         return bgmTracks[index].get();
     }
 
-	void meWatchFun(std::stop_token stop)
+	void meWatchFun(const std::stop_token& stop)
 	{
 		/* Fade by the time that actually passed: sleep_for may oversleep
 		 * (by ~6 ms per 10 ms on default Windows timers), and fixed per-tick
@@ -144,8 +145,8 @@ struct AudioPrivate
                 
                 bool shouldBreak = false;
                 
-                for (int i = 0; i < (int)(bgmTracks.size()); i++) {
-                    AudioStream *track = bgmTracks[i].get();
+                for (const auto & bgmTrack : bgmTracks) {
+                    AudioStream *track = bgmTrack.get();
                     
                     auto trackLock = track->lockStream();
                     

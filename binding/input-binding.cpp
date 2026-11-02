@@ -174,10 +174,10 @@ RB_METHOD_GUARD(inputPressEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isPressedEx(num, 0));
+        return rb_bool_new(shState->input().isPressedEx(num, false));
     }
     
-    return rb_bool_new(shState->input().isPressedEx(NUM2INT(button), 1));
+    return rb_bool_new(shState->input().isPressedEx(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -189,10 +189,10 @@ RB_METHOD_GUARD(inputTriggerEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isTriggeredEx(num, 0));
+        return rb_bool_new(shState->input().isTriggeredEx(num, false));
     }
     
-    return rb_bool_new(shState->input().isTriggeredEx(NUM2INT(button), 1));
+    return rb_bool_new(shState->input().isTriggeredEx(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -204,10 +204,10 @@ RB_METHOD_GUARD(inputRepeatEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isRepeatedEx(num, 0));
+        return rb_bool_new(shState->input().isRepeatedEx(num, false));
     }
     
-    return rb_bool_new(shState->input().isRepeatedEx(NUM2INT(button), 1));
+    return rb_bool_new(shState->input().isRepeatedEx(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -219,10 +219,10 @@ RB_METHOD_GUARD(inputReleaseEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_bool_new(shState->input().isReleasedEx(num, 0));
+        return rb_bool_new(shState->input().isReleasedEx(num, false));
     }
     
-    return rb_bool_new(shState->input().isReleasedEx(NUM2INT(button), 1));
+    return rb_bool_new(shState->input().isReleasedEx(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -234,10 +234,10 @@ RB_METHOD_GUARD(inputCountEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return UINT2NUM(shState->input().repeatcount(num, 0));
+        return UINT2NUM(shState->input().repeatcount(num, false));
     }
     
-    return UINT2NUM(shState->input().repeatcount(NUM2INT(button), 1));
+    return UINT2NUM(shState->input().repeatcount(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -249,10 +249,10 @@ RB_METHOD_GUARD(inputRepeatTimeEx) {
     
     if (SYMBOL_P(button)) {
         int num = getScancodeArg(&button);
-        return rb_float_new(shState->input().repeatTimeEx(num, 0));
+        return rb_float_new(shState->input().repeatTimeEx(num, false));
     }
     
-    return rb_float_new(shState->input().repeatTimeEx(NUM2INT(button), 1));
+    return rb_float_new(shState->input().repeatTimeEx(NUM2INT(button), true));
 }
 RB_METHOD_GUARD_END
 
@@ -613,9 +613,9 @@ void inputBindingInit() {
     _rb_define_module_function(module, "clipboard", inputGetClipboard);
     _rb_define_module_function(module, "clipboard=", inputSetClipboard);
     
-    for (size_t i = 0; i < buttonCodesN; ++i) {
-        ID sym = rb_intern(buttonCodes[i].str);
-        VALUE val = INT2FIX(buttonCodes[i].val);
+    for (auto & buttonCode : buttonCodes) {
+        ID sym = rb_intern(buttonCode.str);
+        VALUE val = INT2FIX(buttonCode.val);
         
         rb_const_set(module, sym, val);
     }

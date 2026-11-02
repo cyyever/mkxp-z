@@ -23,6 +23,7 @@
 
 #include "bitmap.h"
 
+#include <algorithm>
 #include <memory>
 #include <exception>
 #include <format>
@@ -63,7 +64,6 @@
 
 #include "util/engine-signal.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -136,7 +136,7 @@ struct BitmapPrivate
         int lastFrame;
         double startTime, playTime;
 
-        inline unsigned int currentFrameIRaw() {
+        unsigned int currentFrameIRaw() const {
             if (fps <= 0) return lastFrame;
             return floor(lastFrame + (playTime / (1 / fps)));
         }
@@ -147,22 +147,22 @@ struct BitmapPrivate
             return (loop) ? fmod(i, frames.size()) : (i > (int)frames.size() - 1) ? (int)frames.size() - 1 : i;
         }
 
-        inline TEXFBO &currentFrame() {
+        TEXFBO &currentFrame() {
             int i = currentFrameI();
             return frames[i];
         }
 
-        inline void play() {
+        void play() {
             playing = true;
             needsReset = true;
         }
 
-        inline void stop() {
+        void stop() {
             lastFrame = currentFrameI();
             playing = false;
         }
 
-        inline void seek(int frame) {
+        void seek(int frame) {
             lastFrame = clamp(frame, 0, (int)frames.size());
         }
 
@@ -176,8 +176,7 @@ struct BitmapPrivate
             }
 
             playTime = shState->runTime() - startTime;
-            return;
-        }
+                   }
     } animation;
 
     SignalConnection prepareCon;
@@ -218,11 +217,11 @@ struct BitmapPrivate
 
     BitmapPrivate(Bitmap *self)
     : self(self),
-    megaSurface(0),
-    selfHires(0),
-    selfLores(0),
-    surface(0),
-    pChild(0),
+    megaSurface(nullptr),
+    selfHires(nullptr),
+    selfLores(nullptr),
+    surface(nullptr),
+    pChild(nullptr),
     assumingRubyGC(false)
     {
         format = SDL_GetPixelFormatDetails(SDL_PIXELFORMAT_ABGR8888);
@@ -371,7 +370,7 @@ struct BitmapPrivate
         if (surface && freeSurface)
         {
             SDL_DestroySurface(surface);
-            surface = 0;
+            surface = nullptr;
         }
 
         auto &target = animation.enabled && !animation.frames.empty() ? animation.currentFrame() : gl;
@@ -385,7 +384,7 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
 {
     SDL_Surface *surface = nullptr;
 
-    bool tryRead(SDL_IOStream *ops, const char *)
+    bool tryRead(SDL_IOStream *ops, const char *) override
     {
         surface = SDL_LoadPNG_IO(ops, true);
         return surface != nullptr;
@@ -418,7 +417,7 @@ Bitmap::Bitmap(const char *filename)
                             filename, SDL_GetError());
         }
     } catch (const Exception &e) {
-        if (hiresBitmap)
+        
             delete hiresBitmap;
         throw e;
     }
@@ -460,13 +459,13 @@ Bitmap::Bitmap(int width, int height, bool isHires)
         try {
             tex = shState->texPool().request(width, height);
         } catch (const Exception &e) {
-            if (hiresBitmap)
+            
                 delete hiresBitmap;
             throw e;
         }
 
         p = new BitmapPrivate(this);
-        p->gl = tex;
+        p->gl = std::move(tex);
         p->selfHires = hiresBitmap;
         if (p->selfHires != nullptr) {
             p->gl.selfHires = &p->selfHires->getRenderTarget();
@@ -623,7 +622,7 @@ void Bitmap::initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool for
         }
         catch (const Exception &e)
         {
-            if (hiresBitmap)
+            
                 delete hiresBitmap;
             SDL_DestroySurface(imgSurf);
             throw e;
@@ -631,7 +630,7 @@ void Bitmap::initFromSurface(SDL_Surface *imgSurf, Bitmap *hiresBitmap, bool for
 
         p = new BitmapPrivate(this);
         p->selfHires = hiresBitmap;
-        p->gl = tex;
+        p->gl = std::move(tex);
         if (p->selfHires != nullptr) {
             p->gl.selfHires = &p->selfHires->getRenderTarget();
         }
@@ -710,7 +709,7 @@ struct ChildPrivate
         dirty = true;
     }
 
-    void parentDisposed()
+    void parentDisposed() const
     {
         self->dispose();
     }
@@ -751,7 +750,7 @@ ChildPublic *Bitmap::getChildInfo()
 {
     if (p->pChild)
         return &p->pChild->shared;
-    return 0;
+    return nullptr;
 }
 
 void Bitmap::childUpdate()
@@ -1116,22 +1115,22 @@ void Bitmap::childUpdate()
         if (pChild->shared.wrap && baseRect.w < selfWidth)
         {
             locNum *= 2;
-            subrects.push_back(IntRect(0, baseRect.y,
+            subrects.emplace_back(0, baseRect.y,
                                                 selfWidth - baseRect.w,
-                                                baseRect.h));
+                                                baseRect.h);
         }
         if (pChild->shared.wrap && baseRect.h < selfHeight)
         {
             locNum *= 2;
-            subrects.push_back(IntRect(baseRect.x, 0,
+            subrects.emplace_back(baseRect.x, 0,
                                                 baseRect.w,
-                                                selfHeight - baseRect.h));
+                                                selfHeight - baseRect.h);
         }
         if (locNum == 4)
         {
-            subrects.push_back(IntRect(0, 0,
+            subrects.emplace_back(0, 0,
                                                 selfWidth - baseRect.w,
-                                                selfHeight - baseRect.h));
+                                                selfHeight - baseRect.h);
         }
 
         clear();
@@ -1423,7 +1422,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         return;
 
     SDL_Surface *srcSurf = source.megaSurface();
-    SDL_Surface *blitTemp = 0;
+    SDL_Surface *blitTemp = nullptr;
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> ownedBlitTemp(nullptr, SDL_DestroySurface);
     bool touchesTaintedArea = mode != NORMAL || opacity < 255 || p->touchesTaintedArea(destRect);
 
@@ -1480,7 +1479,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         if (source.p->animation.enabled && source.p->surface)
         {
             SDL_DestroySurface(source.p->surface);
-            source.p->surface = 0;
+            source.p->surface = nullptr;
         }
     }
     else if (!srcSurf && !touchesTaintedArea)
@@ -1533,7 +1532,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                                         : ((uint32_t *)srcSurf->pixels)[(size_t)srcSurf->w * ((size_t)srcRect.y + src_r0 + 1) + ((size_t)srcRect.x + src_c0)];
                                     double src_11 = src_c0 + 1 >= (size_t)srcRect.w
                                         ? src_10
-                                        : (size_t)src_r0 + 1 >= (size_t)srcRect.h
+                                        : src_r0 + 1 >= (size_t)srcRect.h
                                         ? src_01
                                         : ((uint32_t *)srcSurf->pixels)[(size_t)srcSurf->w * ((size_t)srcRect.y + src_r0 + 1) + ((size_t)srcRect.x + src_c0 + 1)];
                                     uint32_t &dst_pixel = ((uint32_t *)blitTemp->pixels)[(size_t)blitTemp->w * r + c];
@@ -1657,9 +1656,9 @@ void Bitmap::stretchBlt(IntRect destRect,
             if (smooth)
                 TEX::setSmooth(true);
 
-            p->blitQuad(quad);
+            BitmapPrivate::blitQuad(quad);
 
-            p->popViewport();
+            BitmapPrivate::popViewport();
 
             if (smooth)
                 TEX::setSmooth(false);
@@ -1810,9 +1809,9 @@ void Bitmap::gradientFillRect(const IntRect &rect,
         p->bindFBO();
         p->pushSetViewport(shader);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
     }
 
     p->addTaintedArea(rect);
@@ -2053,7 +2052,7 @@ void Bitmap::radialBlur(int angle, int divisions)
         qArray.draw();
     }
 
-    p->popViewport();
+    BitmapPrivate::popViewport();
 
     TEX::setSmooth(false);
 
@@ -2061,7 +2060,7 @@ void Bitmap::radialBlur(int angle, int divisions)
     renderState.clearColor.pop();
 
     shState->texPool().release(p->gl);
-    p->gl = newTex;
+    p->gl = std::move(newTex);
 
     p->onModified();
 }
@@ -2414,14 +2413,14 @@ void Bitmap::hueChange(int hue)
         p->pushSetViewport(shader);
         p->bindTexture(shader, false);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
 
         TEX::unbind();
 
         shState->texPool().release(p->gl);
-        p->gl = newTex;
+        p->gl = std::move(newTex);
     }
 
     p->onModified();
@@ -2442,9 +2441,9 @@ static std::string fixupString(const char *str)
      * but since we might have accidentally converted CRs
      * to LFs when editing scripts on a Unix OS, treat them
      * as white space too */
-    for (size_t i = 0; i < s.size(); ++i)
-        if (s[i] == '\r' || s[i] == '\n')
-            s[i] = ' ';
+    for (char & i : s)
+        if (i == '\r' || i == '\n')
+            i = ' ';
 
     return s;
 }
@@ -2531,7 +2530,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
         throw Exception(Exception::SDLError, "Error creating text: %s",
                         SDL_GetError());
 
-    txtSurf = p->ensureFormat(std::move(txtSurf), SDL_PIXELFORMAT_ABGR8888);
+    txtSurf = BitmapPrivate::ensureFormat(std::move(txtSurf), SDL_PIXELFORMAT_ABGR8888);
 
     int alignX = rect.x;
 
@@ -2550,8 +2549,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
             break;
     }
 
-    if (alignX < rect.x)
-        alignX = rect.x;
+    alignX = std::max(alignX, rect.x);
 
     int alignY = rect.y + ((rect.h - alignmentHeight) / 2);
 
@@ -2653,7 +2651,7 @@ IntRect Bitmap::textSize(const char *str)
     /* For cursive characters, returning the advance
      * as width yields better results */
     if (p->font->getItalic() && *endPtr == '\0')
-        TTF_GetGlyphMetrics(sdlFont, ucs2, 0, 0, 0, 0, &w);
+        TTF_GetGlyphMetrics(sdlFont, ucs2, nullptr, nullptr, nullptr, nullptr, &w);
 
     if (shState->config().fontHeightReporting == 0) {
         if(!w) {
@@ -2862,7 +2860,7 @@ int Bitmap::addFrame(Bitmap &source, int position)
         if (p->surface)
         {
             SDL_DestroySurface(p->surface);
-            p->surface = 0;
+            p->surface = nullptr;
         }
         p->gl = TEXFBO();
     }
@@ -2871,7 +2869,7 @@ int Bitmap::addFrame(Bitmap &source, int position)
         TEX::bind(newframe.tex);
         TEX::uploadImage(source.width(), source.height(), source.surface()->pixels, SDL_PIXELFORMAT_RGBA32);
         SDL_DestroySurface(p->surface);
-        p->surface = 0;
+        p->surface = nullptr;
     }
     else {
         RenderOps::blit(newframe, source.getRenderTarget(), rect(), rect(), false, SameScale, false);
@@ -3060,14 +3058,14 @@ void Bitmap::kglInvert()
         p->pushSetViewport(shader);
         p->bindTexture(shader, false);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
 
         TEX::unbind();
 
         shState->texPool().release(p->gl);
-        p->gl = newTex;
+        p->gl = std::move(newTex);
     }
 
     p->onModified();
@@ -3107,14 +3105,14 @@ void Bitmap::kglCompressAlpha()
         p->pushSetViewport(shader);
         p->bindTexture(shader, false);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
 
         TEX::unbind();
 
         shState->texPool().release(p->gl);
-        p->gl = newTex;
+        p->gl = std::move(newTex);
     }
 
     p->onModified();
@@ -3223,14 +3221,14 @@ int Bitmap::kglShadowShaderH(int x1, int x2, int y, bool soft)
         p->pushSetViewport(shader);
         p->bindTexture(shader, false);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
 
         TEX::unbind();
 
         shState->texPool().release(p->gl);
-        p->gl = newTex;
+        p->gl = std::move(newTex);
     }
 
     p->onModified();
@@ -3341,14 +3339,14 @@ int Bitmap::kglShadowShaderV(int y1, int y2, int x, bool wall, bool soft)
         p->pushSetViewport(shader);
         p->bindTexture(shader, false);
 
-        p->blitQuad(quad);
+        BitmapPrivate::blitQuad(quad);
 
-        p->popViewport();
+        BitmapPrivate::popViewport();
 
         TEX::unbind();
 
         shState->texPool().release(p->gl);
-        p->gl = newTex;
+        p->gl = std::move(newTex);
     }
 
     p->onModified();
@@ -3406,10 +3404,10 @@ void Bitmap::releaseResources()
     else
         shState->texPool().release(p->gl);
 
-    if (p->pChild)
-    {
+    
+    
         delete p->pChild;
-    }
+    
 
     delete p;
 }

@@ -28,10 +28,10 @@
 
 #include <list>
 #include <utility>
-#include <assert.h>
-#include <string.h>
+#include <cassert>
+#include <cstring>
 
-typedef std::pair<uint16_t, uint16_t> Size;
+using Size = std::pair<uint16_t, uint16_t>;
 
 static uint32_t byteCount(Size &s)
 {
@@ -51,7 +51,7 @@ struct CacheNode
 };
 } // namespace
 
-typedef std::list<CacheNode> CNodeList;
+using CNodeList = std::list<CacheNode>;
 
 struct TexPoolPrivate
 {
