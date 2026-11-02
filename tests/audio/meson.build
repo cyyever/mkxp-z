@@ -6,3 +6,7 @@ stream_tests = executable('audio-stream-tests',
     dependencies: sdl,
 )
 test('audio-stream', stream_tests, env: {'SDL_AUDIO_DRIVER': 'dummy'}, timeout: 15)
+
+mixer = dependency('SDL3_mixer', version: '>=3.2', method: 'cmake', modules: ['SDL3_mixer::SDL3_mixer'])
+mixer_decode_tests = executable('mixer-decode-tests', 'mixer-decode.cpp', dependencies: [sdl, mixer])
+test('mixer-decode', mixer_decode_tests, args: meson.current_source_dir() / 'fixtures', timeout: 15)

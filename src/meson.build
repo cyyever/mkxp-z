@@ -178,6 +178,13 @@ if not sdl3_sound.found()
 endif
 global_dependencies += sdl3_sound
 
+sdl3_mixer = dependency('sdl3_mixer', version: '>=3.2', allow_fallback: false,
+    required: get_option('sdl_mixer_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
+if not sdl3_mixer.found()
+    sdl3_mixer = subproject('sdl3_mixer', default_options: meson_base_options).get_variable('sdl3_mixer_dep')
+endif
+global_dependencies += sdl3_mixer
+
 freetype = dependency('freetype2', allow_fallback: false, method: 'pkg-config', required: get_option('freetype_system').disable_auto_if(default_system_disabled).enable_auto_if(default_system_enabled))
 freetype_system = freetype.found()
 if not freetype.found()
@@ -477,3 +484,4 @@ if host_system == 'darwin'
 endif
 
 global_sources += main_source
+
