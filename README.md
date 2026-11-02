@@ -74,7 +74,7 @@ The desktop target policy above does not imply those renderer paths are ready.
 Existing RGSS logical coordinates, high-resolution bitmap APIs and scaling
 options remain available independently of the physical window size.
 
-Runtime images use PNG and audio uses WAV/FLAC. The optional
+Runtime images use PNG and audio uses WAV, FLAC, MP3 or Ogg Vorbis. The optional
 [asset converter](tools/asset-convert/README.md) can rebuild legacy assets before
 launch; it does not recover information lost by lossy source compression.
 

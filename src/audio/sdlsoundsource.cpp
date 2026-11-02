@@ -50,7 +50,7 @@ struct SDLSoundSource : ALDataSource
         if (!isRuntimeAudio(sample)) {
             Sound_FreeSample(sample);
             SDL_CloseIO(srcOps);
-            throw Exception(Exception::SDLError, "Audio assets must use WAV or FLAC decoding");
+            throw Exception(Exception::SDLError, "Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding");
         }
 	}
 

@@ -74,6 +74,15 @@ begin
   Audio.se_play('tone-mono', 100, 100)
   3.times { Graphics.update }
   Audio.se_stop
+  Audio.bgm_play('music', 80, 100)
+  Audio.bgs_play('ambience', 80, 100)
+  Audio.se_play('chime')
+  Audio.se_play('music')
+  Audio.me_play('ambience')
+  10.times { Graphics.update }
+  raise 'MP3 BGM did not advance' unless Audio.bgm_pos > 0
+  raise 'Ogg BGS did not advance' unless Audio.bgs_pos > 0
+  Audio.__reset__
   expected = { 'text' => "\u96e8\u8840\0ok", 'integer' => 42, 'array' => [true, nil, 1.5] }
   CFG['migration_smoke'] = expected
   raise 'JSON settings roundtrip' unless CFG['migration_smoke'] == expected

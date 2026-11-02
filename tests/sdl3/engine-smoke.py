@@ -49,6 +49,10 @@ def run_case(binary, path_cache):
                 silence = b'\x80' if sample_width == 1 else b'\x00\x00'
                 output.writeframes(silence * channels * rate * 2)
         (fixture / 'invalid.wav').write_bytes(b'not a WAV file')
+        # Games ship their original compressed audio; play each runtime codec.
+        audio_fixtures = repository / 'tests' / 'audio' / 'fixtures'
+        for source, name in [('tone.mp3', 'music.mp3'), ('tone.ogg', 'ambience.ogg'), ('tone.flac', 'chime.flac')]:
+            shutil.copy2(audio_fixtures / source, fixture / name)
         (fixture / 'mkxp.json').write_text(json.dumps(configuration), encoding='utf-8')
         # Config reads the INI before applying customScript; avoid unrelated diagnostics.
         (fixture / 'Game.ini').write_text('[Game]\nTitle=SDL3 smoke\n', encoding='utf-8')
