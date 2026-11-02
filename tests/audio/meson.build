@@ -1,4 +1,24 @@
 project('mkxp-audio-tests', 'cpp', default_options: {'cpp_std': 'c++26,c++latest'})
+cpp = meson.get_compiler('cpp')
+# libc++ before LLVM 20 (e.g. FreeBSD 15's base clang 19) ships std::jthread and
+# std::stop_token only behind -fexperimental-library. Probe the feature rather than
+# the platform, and fall back to that flag only when the plain build cannot link it.
+jthread_probe = '''#include <stop_token>
+#include <thread>
+int main() { std::jthread t([](std::stop_token) {}); }
+'''
+jthread_args = []
+if not cpp.links(jthread_probe, dependencies: dependency('threads'), name: 'std::jthread')
+    if cpp.get_argument_syntax() == 'gcc' and cpp.links(jthread_probe,
+            args: '-fexperimental-library', dependencies: dependency('threads'),
+            name: 'std::jthread with -fexperimental-library')
+        jthread_args = ['-fexperimental-library']
+    else
+        error('The C++ standard library does not provide std::jthread.')
+    endif
+endif
+add_project_arguments(jthread_args, language: 'cpp')
+add_project_link_arguments(jthread_args, language: 'cpp')
 sdl = dependency('SDL3', version: '>=3.4', method: 'cmake', modules: ['SDL3::SDL3'])
 mixer = dependency('SDL3_mixer', version: '>=3.2', method: 'cmake', modules: ['SDL3_mixer::SDL3_mixer'])
 stream_tests = executable('audio-stream-tests',
