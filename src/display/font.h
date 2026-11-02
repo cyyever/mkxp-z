@@ -49,7 +49,7 @@ public:
 	                   const std::string &filename);
 
 	MKXPZ_TTF_FONT *getFont(std::string family,
-	                   int size, float hiresMult, int outline_size = 0);
+	                   int size, float hiresMult);
 
 	bool fontPresent(std::string family) const;
 
@@ -84,17 +84,11 @@ public:
 	DECL_ATTR( Bold,     bool   )
 	DECL_ATTR( Italic,   bool   )
 	DECL_ATTR( Color,    Color& )
-	DECL_ATTR( Shadow,   bool   )
-	DECL_ATTR( Outline,  bool   )
-	DECL_ATTR( OutColor, Color& )
 
 	DECL_ATTR_STATIC( DefaultSize,     int    )
 	DECL_ATTR_STATIC( DefaultBold,     bool   )
 	DECL_ATTR_STATIC( DefaultItalic,   bool   )
 	DECL_ATTR_STATIC( DefaultColor,    Color& )
-	DECL_ATTR_STATIC( DefaultShadow,   bool   )
-	DECL_ATTR_STATIC( DefaultOutline,  bool   )
-	DECL_ATTR_STATIC( DefaultOutColor, Color& )
 
 	/* There is no point in providing getters for these,
 	 * as the bindings will always return the stored native
@@ -118,7 +112,7 @@ public:
 	static void initDefaults(const SharedFontState &sfs);
 
 	/* internal */
-	MKXPZ_TTF_FONT *getSdlFont(int outline_size);
+	MKXPZ_TTF_FONT *getSdlFont();
 
 private:
 	std::unique_ptr<FontPrivate> p;

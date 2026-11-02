@@ -93,8 +93,6 @@ throw Exception(Exception::MKXPError, \
 "Operation not supported for static bitmaps"); \
 }
 
-#define OUTLINE_SIZE 1
-
 #ifndef INT16_MAX
 #define INT16_MAX 32767
 #endif
@@ -2590,184 +2588,6 @@ static std::string fixupString(const char *str)
     return s;
 }
 
-static void applyShadow(SurfacePtr &in, const SDL_PixelFormatDetails &fm, const SDL_Color &c, int offset)
-{
-    SurfacePtr out(SDL_CreateSurface(in->w+offset, in->h+offset, fm.format), SDL_DestroySurface);
-    if (!out)
-        throw Exception(Exception::SDLError, "Error creating text shadow: %s", SDL_GetError());
-
-    float fr = c.r / 255.0f;
-    float fg = c.g / 255.0f;
-    float fb = c.b / 255.0f;
-
-    /* We allocate an output surface one pixel wider and higher than the input,
-     * (implicitly) blit a copy of the input with RGB values set to black into
-     * it with x/y offset by 1, then blend the input surface over it at origin
-     * (0,0) using the bitmap blit equation (see shader/bitmapBlit.frag) */
-
-    for (int y = 0; y < in->h+offset; ++y)
-        for (int x = 0; x < in->w+offset; ++x)
-        {
-            /* src: input pixel, shd: shadow pixel */
-            uint32_t src = 0, shd = 0;
-
-            /* Output pixel location */
-            uint32_t *outP = ((uint32_t*) ((uint8_t*) out->pixels + y*out->pitch)) + x;
-
-            if (y < in->h && x < in->w)
-                src = ((uint32_t*) ((uint8_t*) in->pixels + y*in->pitch))[x];
-
-            if (y >= offset && x >= offset)
-                shd = ((uint32_t*) ((uint8_t*) in->pixels + (y-offset)*in->pitch))[x-offset];
-
-            /* Set shadow pixel RGB values to 0 (black) */
-            shd &= fm.Amask;
-
-            if (x < offset || y < offset)
-            {
-                *outP = src;
-                continue;
-            }
-
-            if (x >= in->w || y >= in->h)
-            {
-                *outP = shd;
-                continue;
-            }
-
-            /* Input and shadow alpha values */
-            uint8_t srcA, shdA;
-            srcA = (src & fm.Amask) >> fm.Ashift;
-            shdA = (shd & fm.Amask) >> fm.Ashift;
-
-            if (srcA == 255 || shdA == 0)
-            {
-                *outP = src;
-                continue;
-            }
-
-            if (srcA == 0 && shdA == 0)
-            {
-                *outP = 0;
-                continue;
-            }
-
-            float fSrcA = srcA / 255.0f;
-            float fShdA = shdA / 255.0f;
-
-            /* Because opacity == 1, co1 == fSrcA */
-            float co2 = fShdA * (1.0f - fSrcA);
-            /* Result alpha */
-            float fa = fSrcA + co2;
-            /* Temp value to simplify arithmetic below */
-            float co3 = fSrcA / fa;
-
-            /* Result colors */
-            uint8_t r, g, b, a;
-
-            r = clamp<float>(fr * co3, 0, 1) * 255.0f;
-            g = clamp<float>(fg * co3, 0, 1) * 255.0f;
-            b = clamp<float>(fb * co3, 0, 1) * 255.0f;
-            a = clamp<float>(fa, 0, 1) * 255.0f;
-
-            *outP = SDL_MapRGBA(&fm, nullptr, r, g, b, a);
-        }
-
-    in = std::move(out);
-}
-
-/* An implementation of the bitmap blit equation (see shader/bitmapBlit.frag),
- * modified for combining text with its outline. */
-static inline void blendText(SDL_Surface *txtSrf, const SDL_Rect &inRect, const SDL_Color &inColor,
-                           SDL_Surface *outSrf, const SDL_Rect &outRect, const SDL_Color &outColor, bool hasShadow)
-{
-    size_t offset = (inRect.x * SDL_GetPixelFormatDetails(txtSrf->format)->bytes_per_pixel) + (inRect.y * txtSrf->pitch);
-    uint8_t *txtStart = (uint8_t*)txtSrf->pixels + offset;
-    offset = (outRect.x * SDL_GetPixelFormatDetails(outSrf->format)->bytes_per_pixel) + (outRect.y * outSrf->pitch);
-    uint8_t *outStart = (uint8_t*)outSrf->pixels + offset;
-
-    // SDL_TTF sets every pixel to the same RGB value and just adjusts the alpha
-    float txtR = inColor.r;
-    float txtG = inColor.g;
-    float txtB = inColor.b;
-    float outR = outColor.r;
-    float outG = outColor.g;
-    float outB = outColor.b;
-
-    /* SDL_ttf blends the glyphs together, which causes overlapping
-     * transparent pixels to get too opaque. RGSS probably does it, too,
-     * and you'd probably have to zoom in to see it, but if you do see it
-     * then it looks kind of ugly so we'll fix it.
-     * I don't know if it can actually happen for non-outline text,
-     * but we'll handle it, too, just in case.
-     * We don't do it for non-outline text if there's a shadow, because I'm not sure how to do this workaround with shadows. */
-    uint32_t fullTxtPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, inColor.r, inColor.g, inColor.b, inColor.a);
-    uint32_t fullOutPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, outColor.r, outColor.g, outColor.b, outColor.a);
-
-    for (int i=0; i < inRect.h; ++i)
-    {
-        uint32_t *txtPixel = (uint32_t*)(txtStart + i*txtSrf->pitch);
-        uint32_t *outPixel = (uint32_t*)(outStart + i*outSrf->pitch);
-        for (int j=0; j < inRect.w; ++j)
-        {
-            uint8_t txtA = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Ashift) & 0xFF;
-            uint8_t outA = (*outPixel >> SDL_GetPixelFormatDetails(outSrf->format)->Ashift) & 0xFF;
-
-            if (txtA >= inColor.a)
-            {
-                if (hasShadow)
-                {
-                    *outPixel = *txtPixel;
-                }
-                else
-                {
-                    *outPixel = fullTxtPixel;
-                }
-            } else if (outA == 0) {
-                *outPixel = *txtPixel;
-            } else if (txtA != 0) {
-                /* Use the full text opacity instead of 255. */
-                int32_t co1 = (int)txtA * inColor.a;
-                int32_t co2 = (int)std::min(outA, outColor.a) * (inColor.a - txtA);
-
-                /* Result alpha */
-                int32_t fa = co1 + co2;
-
-                /* Result colors */
-                uint8_t r, g, b, a;
-
-                float faInv = 1.0f / fa;
-                float co3 = co1 * faInv;
-                float co4 = co2 * faInv;
-
-                if (hasShadow)
-                {
-                    txtR = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Rshift) & 0xFF;
-                    txtG = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Gshift) & 0xFF;
-                    txtB = (*txtPixel >> SDL_GetPixelFormatDetails(txtSrf->format)->Bshift) & 0xFF;
-                }
-
-                // Adding a small number to combat floating point errors.
-                r = std::min<int>((txtR * co3 + outR * co4) + 0.001f, 255);
-                g = std::min<int>((txtG * co3 + outG * co4) + 0.001f, 255);
-                b = std::min<int>((txtB * co3 + outB * co4) + 0.001f, 255);
-
-                /* RGSS seems to not round, but our blit shader seemingly does. */
-                a = fa / inColor.a;
-
-                *outPixel = SDL_MapRGBA(SDL_GetPixelFormatDetails(outSrf->format), nullptr, r, g, b, a);
-            } else if (outA > outColor.a) {
-                /* SDL_ttf blends the glyphs together, which causes overlapping
-                 * transparent pixels to get too opaque. */
-                *outPixel = fullOutPixel;
-            }
-
-            ++txtPixel;
-            ++outPixel;
-        }
-    }
-}
-
 void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 {
     guardDisposed();
@@ -2802,86 +2622,13 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
     if (str[0] == ' ' && str[1] == '\0')
         return;
 
-    TTF_Font *sdlFont = p->font->getSdlFont(0);
+    TTF_Font *sdlFont = p->font->getSdlFont();
     const Color &fontColor = p->font->getColor();
-    const Color &outColor = p->font->getOutColor();
 
     SDL_Color c = fontColor.toSDLColor();
 
     if (c.a == 0)
         return;
-
-    // RGSS crops the the text slightly if there's an outline
-    int scaledOutlineSize = 0;
-    SDL_Color co;
-    if (p->font->getOutline()) {
-        // Handle high-res for outline.
-        if (p->selfLores) {
-            scaledOutlineSize = OUTLINE_SIZE * width() / p->selfLores->width();
-        } else {
-            scaledOutlineSize = OUTLINE_SIZE;
-        }
-
-        /* RGSS's outline is drawn by blitting a complete set of text four times, offset diagonally.
-         * However, this looks very ugly in hires mode, so instead we'll fake the effect by
-         * precomputing the final outline and text colors. */
-        co = outColor.toSDLColor();
-
-        if (c.a != 255) {
-            Debug() << "BUG: Bitmap drawText with outline and translucent text is broken";
-        }
-
-        if (c.a != 255 || co.a != 255) {
-            /* Step 1: Compute the outline alpha by layering it onto itself */
-            uint8_t out_alpha = ((int)co.a * (int)c.a) / 255;
-
-            int co1 = out_alpha * 255;
-            int co2 = out_alpha * (255 - out_alpha);
-            int fa = co1 + co2;
-            co.a = (fa + 1 + (fa >> 8)) >> 8;
-            /* Use this instead if we decide we want to round
-             * RGSS seems to not round, but our blit shader seemingly does. */
-            //co.a = (fa + 128 + ((fa + 128) >> 8)) >> 8;
-
-            if (c.a != 255) {
-                /* Step 2: Compute the opacity of the outline that would have been drawn behind the text.
-                 * In RGSS, there's a 1 pixel wide region at the edge of the text that only has
-                 * 2 layers of outline instead of the 4 layers that's behind most of the text,
-                 * which combined with the outlines having less opaque corners from how they're drawn
-                 * slightly affects the appearance of the text. We can't replicate this in a way that
-                 * looks nice in hires mode, however, this will have to be good enough. */
-                uint8_t out_alpha_full = co.a; // compute outline alpha - 4 layers
-                for (int i = 0; i < 2; ++i) {
-                    int co1 = out_alpha * 255;
-                    int co2 = out_alpha_full * (255 - out_alpha);
-                    int fa = co1 + co2;
-                    out_alpha_full = (fa + 1 + (fa >> 8)) >> 8;
-                    /* Use this instead if we decide we want to round
-                     * RGSS seems to not round, but our blit shader seemingly does. */
-                    //out_alpha_full = (fa + 128 + ((fa + 128) >> 8)) >> 8;
-                }
-
-                /* Step 3: Calculate the text color using out_alpha_full in place of co.a. */
-                int co1 = c.a * 255;
-                int co2 = out_alpha_full * (255 - c.a);
-                int fa = co1 + co2;
-
-                float faInv = 1.0f / fa;
-                float co3 = co1 * faInv;
-                float co4 = co2 * faInv;
-                // Adding a small number to combat floating point errors.
-                c.r = std::min<int>((c.r * co3 + co.r * co4) + 0.001f, 255);
-                c.g = std::min<int>((c.g * co3 + co.g * co4) + 0.001f, 255);
-                c.b = std::min<int>((c.b * co3 + co.g * co4) + 0.001f, 255);
-
-                c.a = (fa + 1 + (fa >> 8)) >> 8;
-                /* Use this instead if we decide we want to round
-                 * RGSS seems to not round, but our blit shader seemingly does. */
-                //c.a = (fa + 128 + ((fa + 128) >> 8)) >> 8;
-            }
-        }
-    }
-    int doubleOutlineSize = scaledOutlineSize * 2;
 
     // Use the output of textSize to determine squeezing, since textSize tends to be used to determine
     // rect dimensions.
@@ -2925,16 +2672,6 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
     txtSurf = p->ensureFormat(std::move(txtSurf), SDL_PIXELFORMAT_ABGR8888);
 
-    if (p->font->getShadow())
-    {
-        int scaledShadowSize = 1;
-        if (p->selfLores) {
-            scaledShadowSize = scaledShadowSize * width() / p->selfLores->width();
-        }
-
-        applyShadow(txtSurf, *p->format, c, scaledShadowSize);
-    }
-
     int alignX = rect.x;
 
     switch (align)
@@ -2944,20 +2681,18 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
             break;
 
         case Center :
-            // Yes, half of the outline size.
-            alignX += (rect.w - (alignmentWidth + scaledOutlineSize)) / 2;
+            alignX += (rect.w - alignmentWidth) / 2;
             break;
 
         case Right :
-            // I don't know why it's double the outline size, but it is.
-            alignX += rect.w - alignmentWidth - doubleOutlineSize;
+            alignX += rect.w - alignmentWidth;
             break;
     }
 
     if (alignX < rect.x)
         alignX = rect.x;
 
-    int alignY = rect.y + ((rect.h - alignmentHeight) / 2) - scaledOutlineSize;
+    int alignY = rect.y + ((rect.h - alignmentHeight) / 2);
 
     alignY = std::max(alignY, rect.y);
 
@@ -2968,41 +2703,6 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
 
     squeeze = clamp(squeeze, squeezeLimit, 1.0f);
 
-    if (scaledOutlineSize)
-    {
-        TTF_Font *sdlOutline = p->font->getSdlFont(scaledOutlineSize);
-        SurfacePtr outline(p->font->isSolid()
-            ? TTF_RenderText_Solid(sdlOutline, str, 0, co)
-            : TTF_RenderText_Blended(sdlOutline, str, 0, co), SDL_DestroySurface);
-
-        if (!outline)
-            throw Exception(Exception::SDLError, "Error creating text outline: %s",
-                            SDL_GetError());
-
-        outline = p->ensureFormat(std::move(outline), SDL_PIXELFORMAT_ABGR8888);
-
-        // Enterbrain's runtime crops the top row and left column of the text
-        // when blitting it onto the outline. We allow the user to optionally
-        // disable this cropping, since it's arguably quite ugly.
-        int outlineCropUndo = shState->config().fontOutlineCrop ? 0 : scaledOutlineSize;
-
-        /* outline should always be at least doubleOutlineSize bigger than txtSurf,
-         * but we may as well validate it here anyway. */
-        SDL_Rect inRect = {scaledOutlineSize - outlineCropUndo, scaledOutlineSize - outlineCropUndo,
-                           std::min<int>({(int)(rect.w / squeeze) - doubleOutlineSize,
-                                          txtSurf->w - scaledOutlineSize,
-                                          outline->w - doubleOutlineSize
-                                         }) + outlineCropUndo,
-                           std::min<int>({rect.h - doubleOutlineSize,
-                                          txtSurf->h - scaledOutlineSize,
-                                          outline->h - doubleOutlineSize
-                                         }) + outlineCropUndo};
-        SDL_Rect outRect = {doubleOutlineSize - outlineCropUndo, doubleOutlineSize - outlineCropUndo, 0, 0};
-
-        blendText(txtSurf.get(), inRect, c, outline.get(), outRect, co, p->font->getShadow());
-        txtSurf = std::move(outline);
-    }
-
     IntRect destRect(alignX, alignY,
                     std::min(rect.w, (int)(txtSurf->w * squeeze)),
                     std::min(rect.h, txtSurf->h));
@@ -3010,7 +2710,7 @@ void Bitmap::drawText(const IntRect &rect, const char *str, int align)
     destRect.w = std::min(destRect.w, width() - destRect.x);
     destRect.h = std::min(destRect.h, height() - destRect.y);
 
-    IntRect sourceRect(scaledOutlineSize, scaledOutlineSize, destRect.w / squeeze, destRect.h);
+    IntRect sourceRect(0, 0, destRect.w / squeeze, destRect.h);
 
     Bitmap txtBitmap(txtSurf.release(), nullptr, true);
     bool smooth = squeeze != 1.0f;
@@ -3070,7 +2770,7 @@ IntRect Bitmap::textSize(const char *str)
     // TODO: High-res Bitmap textSize not implemented, but I think it's the same as low-res?
     // Need to double-check this.
 
-    TTF_Font *sdlFont = p->font->getSdlFont(0);
+    TTF_Font *sdlFont = p->font->getSdlFont();
 
     // freetype sometimes treats the last character of the string as being
     // a pixel wider than it should be. Adding a space at the end and then

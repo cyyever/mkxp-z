@@ -116,7 +116,6 @@ struct Config {
     bool fontKerning;
     int fontHinting;
     int fontHeightReporting;
-    bool fontOutlineCrop;
     
     std::vector<std::string> rubyLoadpaths;
 
