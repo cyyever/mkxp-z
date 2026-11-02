@@ -2,7 +2,6 @@
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 #include <memory>
-#include <ft2build.h>
-#include FT_FREETYPE_H
+#include "sfnt.h"
 
 @IMPLEMENTATION@

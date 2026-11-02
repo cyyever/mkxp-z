@@ -107,7 +107,7 @@ void exercise(std::span<const Uint8> font) {
     valid.unknownSize = unknown;
     auto input = open(valid);
     metrics = loadFontMetrics(input.get());
-    check(metrics && metrics->face && metrics->face->family_name,
+    check(metrics && metrics->sfnt.valid() && metrics->sfnt.unitsPerEm(),
           "Valid font metrics rejected");
     check(valid.position == valid.start && valid.restores == 1,
           "Success did not restore source offset");
