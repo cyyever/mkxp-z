@@ -228,7 +228,6 @@ public:
     void setLooping(bool loop);
     bool getLooping() const;
 
-    void ensureNotPlaying() const;
 
     void kglInvert();
     void kglCompressAlpha();

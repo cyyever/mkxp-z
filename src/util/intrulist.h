@@ -60,16 +60,6 @@ public:
 		root.next = &root;
 	}
 
-	void prepend(IntruListLink<T> &node)
-	{
-		root.next->prev = &node;
-		node.prev = &root;
-		node.next = root.next;
-		root.next = &node;
-
-		size++;
-	}
-
 	void append(IntruListLink<T> &node)
 	{
 		root.prev->next = &node;
@@ -131,11 +121,6 @@ public:
 	IntruListLink<T> *end()
 	{
 		return &root;
-	}
-
-	bool isEmpty() const
-	{
-		return root.next == &root;
 	}
 
 	int getSize() const

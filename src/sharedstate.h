@@ -57,7 +57,6 @@ struct SharedState
 	SDL_Window *sdlWindow() const;
 
 	Scene *screen() const;
-	void setScreen(Scene &screen);
 
 	FileSystem &fileSystem() const;
 

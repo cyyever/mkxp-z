@@ -84,10 +84,6 @@ struct SourceDesc
 		}
 	}
 
-	bool operator!=(const SourceDesc &o) const
-	{
-		return !(*this == o);
-	}
 };
 
 #define JAXIS_THRESHOLD 0x4000

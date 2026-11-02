@@ -61,7 +61,6 @@ public:
     double getDelta();
 	void update();
     
-    std::vector<std::string> getBindings(ButtonCode code);
     
 	bool isPressed(int button);
 	bool isTriggered(int button);

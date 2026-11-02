@@ -779,10 +779,6 @@ double Graphics::getDelta() {
     return shState->runTime() - p->last_update;
 }
 
-double Graphics::lastUpdate() {
-    return p->last_update;
-}
-
 void Graphics::update(bool checkForShutdown) {
     p->threadData->rqWindowAdjust.wait(true);
     p->last_update = shState->runTime();
@@ -1028,20 +1024,8 @@ int Graphics::width() const { return p->scResLores.x; }
 
 int Graphics::height() const { return p->scResLores.y; }
 
-int Graphics::widthHires() const { return p->scRes.x; }
-
-int Graphics::heightHires() const { return p->scRes.y; }
-
 bool Graphics::isPingPongFramebufferActive() const {
     return p->screen.getPP().frontBuffer().fbo == FBO::boundFramebufferID || p->screen.getPP().backBuffer().fbo == FBO::boundFramebufferID;
-}
-
-int Graphics::displayContentWidth() const {
-    return p->scSize.x;
-}
-
-int Graphics::displayContentHeight() const {
-    return p->scSize.y;
 }
 
 int Graphics::displayWidth() const {
