@@ -1,0 +1,12 @@
+--- a/src/decoder_stb_vorbis.c
++++ b/src/decoder_stb_vorbis.c
+@@ -170,7 +170,8 @@
+     MIX_ParseOggComments(props, spec->freq, vc.vendor, (const char * const *) vc.comment_list, vc.comment_list_length, &adata->loop);
+ 
+     const Sint64 full_length = (Sint64) stb_vorbis_stream_length_in_samples(vorbis);
+-    if (adata->loop.end > full_length) {
++    const bool ignore_loops = SDL_GetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN, false);
++    if (ignore_loops || (adata->loop.end > full_length)) {
+         adata->loop.active = false;
+     }
+     stb_vorbis_close(vorbis);  // done with this instance. Tracks will maintain their own stb_vorbis object.

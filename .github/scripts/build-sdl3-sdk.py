@@ -30,9 +30,9 @@ def source(repository: Path, build: Path, name: str) -> Path:
     sources.mkdir(parents=True, exist_ok=True)
     folder = sources / spec["directory"]
     # The focused SDK uses upstream CMake, so image/font Meson overlays must
-    # not be applied here. SDL GPU correctness patches are shared with runtime.
+    # not be applied here. SDL GPU and SDL_mixer decoder fixes are shared with runtime.
     patches = []
-    if name == "sdl3":
+    if name in ("sdl3", "sdl3_mixer"):
         for entry in spec.get("diff_files", "").split(","):
             if entry.strip():
                 patches.append(repository / "subprojects" / "packagefiles" / entry.strip())
@@ -108,8 +108,18 @@ def main() -> None:
     install("sdl3_ttf", ["-DSDLTTF_SAMPLES=OFF", "-DSDLTTF_INSTALL=ON",
                          "-DSDLTTF_INSTALL_CPACK=OFF", "-DSDLTTF_VENDORED=OFF",
                          "-DSDLTTF_HARFBUZZ=OFF", "-DSDLTTF_PLUTOSVG=OFF"])
+    # Only the header-only decoders the engine plays: no codec libraries or DLLs.
+    mixer_options = ["-DSDLMIXER_TESTS=OFF", "-DSDLMIXER_EXAMPLES=OFF", "-DSDLMIXER_INSTALL=ON",
+                     "-DSDLMIXER_INSTALL_CPACK=OFF", "-DSDLMIXER_VENDORED=OFF",
+                     "-DSDLMIXER_WAVE=ON", "-DSDLMIXER_FLAC=ON", "-DSDLMIXER_FLAC_DRFLAC=ON",
+                     "-DSDLMIXER_MP3=ON", "-DSDLMIXER_MP3_DRMP3=ON", "-DSDLMIXER_VORBIS_STB=ON"]
+    mixer_options += [f"-DSDLMIXER_{backend}=OFF" for backend in
+                      ("AIFF", "VOC", "AU", "FLAC_LIBFLAC", "GME", "MOD", "MP3_MPG123", "MIDI",
+                       "OPUS", "VORBIS_VORBISFILE", "VORBIS_TREMOR", "WAVPACK")]
+    install("sdl3_mixer", mixer_options)
     print(f"SDL3 test SDK installed in {prefix}")
 
 
 if __name__ == "__main__":
     main()
+
