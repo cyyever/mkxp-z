@@ -177,10 +177,7 @@ public:
                 
                 int scaleIsSpecial = RenderOps::blitScaleIsSpecial(pp.frontBuffer(), false, geometry.rect, pp.backBuffer(), geometry.rect);
 
-                RenderOps::blitBegin(pp.frontBuffer(), false, scaleIsSpecial);
-                RenderOps::blitSource(pp.backBuffer(), scaleIsSpecial);
-                RenderOps::blitRectangle(geometry.rect, Vec2i());
-                RenderOps::blitEnd();
+                RenderOps::blit(pp.frontBuffer(), pp.backBuffer(), geometry.rect, IntRect(0, 0, geometry.rect.w, geometry.rect.h), false, scaleIsSpecial, false);
                 
                 renderState.scissorTest.pop();
             }
@@ -631,35 +628,24 @@ private:
         }
     }
 
-    template <typename... Args> void swapScreenBufferImpl(const Vec2i &, TEXFBO &source, int scaleIsSpecial, Args... args) {
+public:
+    void swapScreenBuffer(TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial,
+                          bool forceNearestNeighbor = false) {
         fpsLimiter.delay();
         if (ensureWindowCanvas()) {
-            RenderOps::blitBeginScreen(winSize, scaleIsSpecial);
-            RenderOps::blitSource(source, scaleIsSpecial);
+            FBO::bind(windowCanvas.fbo);
             renderState.clearColor.pushSet(Vec4(0, 0, 0, 1));
             FBO::clear();
             renderState.clearColor.pop();
-            blitScreenScaled(args...);
-            RenderOps::blitEnd();
+            RenderOps::blit(windowCanvas, source, IntRect(0, 0, sourceSize.x, sourceSize.y),
+                IntRect(scOffset.x, scOffset.y, scSize.x, scSize.y), false, scaleIsSpecial,
+                !forceNearestNeighbor && RenderOps::smoothScalingMethod(scaleIsSpecial) == Bilinear);
             publishWindowCanvas();
         }
         ++frameCount;
         threadData->ethread->notifyFrame();
     }
 
-public:
-    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, int scaleIsSpecial) {
-        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, scaleIsSpecial);
-    }
-
-    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial) {
-        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial);
-    }
-
-    void swapScreenBuffer(const Vec2i &screenSize, TEXFBO &source, const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor) {
-        swapScreenBufferImpl(screenSize, source, scaleIsSpecial, sourceSize, scaleIsSpecial, forceNearestNeighbor);
-    }
-    
     void compositeToBuffer(TEXFBO &buffer) {
         compositeToBufferScaled(buffer, scRes.x, scRes.y);
     }
@@ -669,22 +655,9 @@ public:
         
         int scaleIsSpecial = RenderOps::blitScaleIsSpecial(buffer, false, IntRect(0, 0, destWidth, destHeight), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
-        RenderOps::blitBegin(buffer, false, scaleIsSpecial);
-        RenderOps::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
-        RenderOps::blitRectangle(IntRect(0, 0, scRes.x, scRes.y), IntRect(0, 0, destWidth, destHeight));
-        RenderOps::blitEnd();
+        RenderOps::blit(buffer, screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y), IntRect(0, 0, destWidth, destHeight), false, scaleIsSpecial, false);
     }
     
-    void blitScreenScaled(int scaleIsSpecial) {
-        blitScreenScaled(scRes, scaleIsSpecial);
-    }
-
-    void blitScreenScaled(const Vec2i &sourceSize, int scaleIsSpecial, bool forceNearestNeighbor=false) {
-        RenderOps::blitRectangle(IntRect(0, 0, sourceSize.x, sourceSize.y),
-                              IntRect(scOffset.x, scOffset.y, scSize.x, scSize.y),
-                              !forceNearestNeighbor && RenderOps::smoothScalingMethod(scaleIsSpecial) == Bilinear);
-    }
-
     void redrawScreen() {
         screen.composite();
         
@@ -693,7 +666,7 @@ public:
         {
             int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
-            swapScreenBuffer(winSize, screen.getPP().frontBuffer(), scRes, scaleIsSpecial, true);
+            swapScreenBuffer(screen.getPP().frontBuffer(), scRes, scaleIsSpecial, true);
             updateAvgFPS();
             return;
         }
@@ -703,14 +676,7 @@ public:
             int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height), screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y));
 
             assert(integerScaleBuffer.tex != TEX::ID(0));
-            RenderOps::blitBegin(integerScaleBuffer, false, scaleIsSpecial);
-            RenderOps::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
-            
-            RenderOps::blitRectangle(IntRect(0, 0, scRes.x, scRes.y),
-                                  IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height),
-                                  false);
-            
-            RenderOps::blitEnd();
+            RenderOps::blit(integerScaleBuffer, screen.getPP().frontBuffer(), IntRect(0, 0, scRes.x, scRes.y), IntRect(0, 0, integerScaleBuffer.width, integerScaleBuffer.height), false, scaleIsSpecial, false);
         }
         
 
@@ -727,7 +693,7 @@ public:
 
         int scaleIsSpecial = RenderOps::blitScaleIsSpecial(integerScaleBuffer, false, IntRect(0, 0, scSize.x, scSize.y), integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), IntRect(0, 0, sourceSize.x, sourceSize.y));
 
-        swapScreenBuffer(winSize, integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), sourceSize, scaleIsSpecial);
+        swapScreenBuffer(integerScaleActive ? integerScaleBuffer : screen.getPP().frontBuffer(), sourceSize, scaleIsSpecial);
         
         updateAvgFPS();
     }
@@ -922,7 +888,7 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         
         int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), transBuffer, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-        p->swapScreenBuffer(p->winSize, transBuffer, scaleIsSpecial);
+        p->swapScreenBuffer(transBuffer, p->scRes, scaleIsSpecial);
         /* Call this manually, as redrawScreen() is not called during this loop. */
         p->updateAvgFPS();
     }
@@ -978,7 +944,7 @@ void Graphics::fadeout(int duration) {
         if (p->frozen) {
             int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-            p->swapScreenBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
+            p->swapScreenBuffer(p->frozenScene, p->scRes, scaleIsSpecial);
         } else {
             update();
         }
@@ -997,7 +963,7 @@ void Graphics::fadein(int duration) {
         if (p->frozen) {
             int scaleIsSpecial = RenderOps::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
 
-            p->swapScreenBuffer(p->scSize, p->frozenScene, scaleIsSpecial);
+            p->swapScreenBuffer(p->frozenScene, p->scRes, scaleIsSpecial);
         } else {
             update();
         }

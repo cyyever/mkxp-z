@@ -91,6 +91,10 @@ begin
     Graphics.resize_screen(width, height)
     raise 'repeated resolution change failed' unless Graphics.width == width && Graphics.height == height
     3.times { Graphics.update }
+    Graphics.freeze
+    Graphics.fadeout(1)
+    Graphics.fadein(1)
+    Graphics.transition(2)
     frame = Graphics.snap_to_bitmap
     [[8, 8, [255, 0, 0]], [24, 8, [0, 255, 0]],
      [8, 24, [0, 0, 255]], [24, 24, [255, 255, 255]]].each do |x, y, expected|

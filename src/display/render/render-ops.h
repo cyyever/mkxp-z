@@ -31,22 +31,17 @@
 namespace RenderOps
 {
 
-/* EXT_unpack_subimage */
+/* Upload a surface region without changing its pixel format. */
 void subRectImageUpload(int srcX, int srcY,
                         int dstX, int dstY, int dstW, int dstH,
                         SDL_Surface *src);
 
 
-/* EXT_framebuffer_blit */
+/* Texture copies use RGSS high-resolution coordinate rules. */
 int blitScaleIsSpecial(TEXFBO &target, bool targetPreferHires, const IntRect &targetRect, TEXFBO &source, const IntRect &sourceRect);
 int smoothScalingMethod(int scaleIsSpecial);
-void blitBegin(TEXFBO &target, bool preferHires = false, int scaleIsOne = 0);
-void blitBeginScreen(const Vec2i &size, int scaleIsOne = 0);
-void blitSource(TEXFBO &source, int scaleIsOne = 0);
-void blitRectangle(const IntRect src, const Vec2i &dstPos);
-void blitRectangle(const IntRect src, const IntRect &dst,
-                   bool smooth = false);
-void blitEnd();
+void blit(TEXFBO &target, TEXFBO &source, const IntRect &sourceRect, const IntRect &targetRect,
+          bool preferHires = false, int scale = 0, bool smooth = false);
 
 }
 

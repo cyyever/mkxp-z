@@ -1,5 +1,6 @@
 #include "gpu-render-context.h"
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -85,12 +86,68 @@ void RenderContext::copyTexture(const TEX::ID &source, const TEX::ID &destinatio
     recording = true;
     targetNeedsBegin = true;
 }
-SDL_GPUSampler *RenderContext::sampler(const TEX::ID &texture) {
-    const auto index = size_t(texture.repeat()) | (size_t(texture.smooth()) << 1) |
+void RenderContext::blitTexture(const TEX::ID &source, const TEX::ID &destination,
+    SDL_Rect src, SDL_FRect dst, Program program, bool smooth, const EffectParameters &effects) {
+    if (!std::isfinite(dst.x) || !std::isfinite(dst.y) || !std::isfinite(dst.w) || !std::isfinite(dst.h))
+        throw std::invalid_argument("Non-finite GPU blit rectangle");
+    if (!src.w || !src.h || !dst.w || !dst.h) return;
+    TEX::prepareSampling(source);
+    const auto &input = source.resource();
+    const auto &output = destination.resource();
+    if (input.native() == output.native())
+        throw std::invalid_argument("GPU blit cannot sample its destination");
+    pendingResources.try_emplace(input.native(), source);
+    pendingResources.try_emplace(output.native(), destination);
+    const bool noScissor = !state.scissor || (state.scissor->x == 0 && state.scissor->y == 0 &&
+        state.scissor->w == int(output.width()) && state.scissor->h == int(output.height()));
+    const auto integral = [](float value) { return std::isfinite(value) && std::trunc(value) == value; };
+    if (program == Program::Simple && noScissor && !source.repeat() && !source.mipmaps() &&
+        src.x >= 0 && src.y >= 0 && src.w > 0 && src.h > 0 &&
+        Sint64(src.x) + src.w <= input.width() && Sint64(src.y) + src.h <= input.height() &&
+        dst.x >= 0 && dst.y >= 0 && dst.w > 0 && dst.h > 0 &&
+        integral(dst.x) && integral(dst.y) && integral(dst.w) && integral(dst.h) &&
+        double(dst.x) + dst.w <= output.width() && double(dst.y) + dst.h <= output.height()) {
+        SDL_GPUBlitInfo info{};
+        info.source = {input.native(), 0, 0, Uint32(src.x), Uint32(src.y), Uint32(src.w), Uint32(src.h)};
+        info.destination = {output.native(), 0, 0, Uint32(dst.x), Uint32(dst.y), Uint32(dst.w), Uint32(dst.h)};
+        info.load_op = SDL_GPU_LOADOP_LOAD;
+        info.filter = smooth ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+        encoder.blit(TextureView(output), info);
+    } else {
+        // Fractional/clipped/mirrored regions and custom filters retain exact
+        // shader sampling; only ordinary bounded blits use SDL's native path.
+        const float x = dst.x, y = dst.y, r = x + dst.w, b = y + dst.h;
+        const float u = float(src.x), v = float(src.y), ur = u + src.w, vb = v + src.h;
+        const QuadVertex quad[] = {
+            {{x,y},{u,v},{1,1,1,1}}, {{r,y},{ur,v},{1,1,1,1}}, {{r,b},{ur,vb},{1,1,1,1}},
+            {{r,b},{ur,vb},{1,1,1,1}}, {{x,b},{u,vb},{1,1,1,1}}, {{x,y},{u,v},{1,1,1,1}},
+        };
+        VertexParameters vp{};
+        vp.projection[0] = 2.f / output.width(); vp.projection[5] = -2.f / output.height();
+        vp.projection[12] = -1; vp.projection[13] = vp.projection[15] = 1;
+        for (int i = 0; i < 4; ++i) vp.transform[i * 5] = 1;
+        vp.textureScaleTranslation[0] = 1.f / input.width();
+        vp.textureScaleTranslation[1] = 1.f / input.height();
+        auto parameters = effects;
+        parameters.filterSize[0] = float(input.width()); parameters.filterSize[1] = float(input.height());
+        parameters.filterSize[2] = 1.f / input.width(); parameters.filterSize[3] = 1.f / input.height();
+        const SDL_GPUTextureSamplerBinding texture{input.native(), sampler(source, smooth)};
+        DrawState drawState;
+        drawState.blend = Blend::Disabled;
+        drawState.scissor = state.scissor;
+        encoder.beginTarget(TextureView(output), SDL_GPU_LOADOP_LOAD);
+        encoder.draw(program, quad, std::span(&texture, 1), vp, {}, drawState, parameters);
+    }
+    TEX::markModified(destination);
+    recording = true;
+    targetNeedsBegin = true;
+}
+SDL_GPUSampler *RenderContext::sampler(const TEX::ID &texture, bool smooth) {
+    const auto index = size_t(texture.repeat()) | (size_t(smooth) << 1) |
                        (size_t(texture.mipmaps()) << 2);
     if (!samplers[index]) {
         SDL_GPUSamplerCreateInfo info{};
-        info.min_filter = info.mag_filter = texture.smooth() ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+        info.min_filter = info.mag_filter = smooth ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
         info.mipmap_mode = texture.mipmaps() ? SDL_GPU_SAMPLERMIPMAPMODE_LINEAR : SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
         info.address_mode_u = info.address_mode_v = info.address_mode_w = texture.repeat() ?
             SDL_GPU_SAMPLERADDRESSMODE_REPEAT : SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
@@ -113,7 +170,7 @@ void RenderContext::draw(std::span<const QuadVertex> vertices) {
     for (size_t i = 0; i < count; ++i) {
         const auto &texture = shader->textures[i].empty() ? primaryTexture : shader->textures[i];
         if (!texture.valid()) throw std::invalid_argument("Draw references an unavailable GPU texture");
-        textures[i] = {texture.native(), sampler(texture)};
+        textures[i] = {texture.native(), sampler(texture, texture.smooth())};
         pendingResources.try_emplace(texture.native(), texture);
     }
     ensureTarget();

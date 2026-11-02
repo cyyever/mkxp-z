@@ -36,6 +36,11 @@ meson test -C build/gpu-tests --print-errorlogs
 shared-handle invalidation, pixel transfer and mipmap
 refresh after uploads and render-target clears.
 
+The frame tests compare native SDL GPU blits with shader sampling (nearest and
+linear, including alpha overwrite), and check mipmap sampling and queued-source
+lifetime. Ordinary bounded copies use SDL blits; clipping, mirroring, fractional
+destinations and custom filters use the shader path.
+
 SDL API requirements:
 - https://wiki.libsdl.org/SDL3/SDL_WaitAndAcquireGPUSwapchainTexture
 - https://wiki.libsdl.org/SDL3/SDL_CancelGPUCommandBuffer

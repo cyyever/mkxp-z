@@ -642,17 +642,12 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
                 throw Exception(Exception::SDLError, "%s", error.what());
             }
         } else {
-            RenderOps::blitBegin(p->gl, false, SameScale);
-            // Blit just the current frame of the other animated bitmap
-            if (!other.isAnimated() || frame == -1) {
-                RenderOps::blitSource(other.getRenderTarget(), SameScale);
-            }
-            else {
+            auto *source = &other.getRenderTarget();
+            if (other.isAnimated() && frame != -1) {
                 auto &frames = other.getFrames();
-                RenderOps::blitSource(frames[clamp(frame, 0, (int)frames.size() - 1)], SameScale);
+                source = &frames[clamp(frame, 0, (int)frames.size() - 1)];
             }
-            RenderOps::blitRectangle(rect(), rect());
-            RenderOps::blitEnd();
+            RenderOps::blit(p->gl, *source, rect(), rect(), false, SameScale);
         }
     }
     else {
@@ -674,10 +669,7 @@ Bitmap::Bitmap(const Bitmap &other, int frame)
                 throw e;
             }
 
-            RenderOps::blitBegin(newframe, false, SameScale);
-            RenderOps::blitSource(sourceframe, SameScale);
-            RenderOps::blitRectangle(rect(), rect());
-            RenderOps::blitEnd();
+            RenderOps::blit(newframe, sourceframe, rect(), rect(), false, SameScale, false);
 
             p->animation.frames.push_back(newframe);
         }
@@ -723,10 +715,7 @@ Bitmap::Bitmap(TEXFBO &other)
     // The logical bitmap is also read directly by get_pixel and saveToFile.
     // A snapshot source may only have storage in its high-resolution child.
     const int scale = RenderOps::blitScaleIsSpecial(p->gl, false, rect(), other, rect());
-    RenderOps::blitBegin(p->gl, false, scale);
-    RenderOps::blitSource(other, scale);
-    RenderOps::blitRectangle(rect(), rect());
-    RenderOps::blitEnd();
+    RenderOps::blit(p->gl, other, rect(), rect(), false, scale, false);
 
     if (width() > INT16_MAX || height() > INT16_MAX)
     {
@@ -1652,10 +1641,7 @@ void Bitmap::stretchBlt(IntRect destRect,
     {
         /* Fast blit */
         // TODO: Use bitmapSmoothScaling/bitmapSmoothScalingDown configs for this.
-        RenderOps::blitBegin(getRenderTarget());
-        RenderOps::blitSource(source.getRenderTarget());
-        RenderOps::blitRectangle(sourceRect, destRect, smooth);
-        RenderOps::blitEnd();
+        RenderOps::blit(getRenderTarget(), source.getRenderTarget(), sourceRect, destRect, false, 0, smooth);
     }
     else
     {
@@ -1763,10 +1749,7 @@ void Bitmap::stretchBlt(IntRect destRect,
                     RenderOps::subRectImageUpload(sourceRect.x, sourceRect.y,
                         0, 0, sourceRect.w, sourceRect.h, srcSurf);
                     sourceRect.x = sourceRect.y = 0;
-                    RenderOps::blitBegin(getRenderTarget());
-                    RenderOps::blitSource(temporary);
-                    RenderOps::blitRectangle(sourceRect, destRect, smooth);
-                    RenderOps::blitEnd();
+                    RenderOps::blit(getRenderTarget(), temporary, sourceRect, destRect, false, 0, smooth);
                 }
             }
         }
@@ -1779,10 +1762,7 @@ void Bitmap::stretchBlt(IntRect destRect,
             TEXFBO &gpTex = shState->gpTexFBO(abs(destRect.w), abs(destRect.h));
             Vec2i gpTexSize;
 
-            RenderOps::blitBegin(gpTex, false, SameScale);
-            RenderOps::blitSource(getRenderTarget(), SameScale);
-            RenderOps::blitRectangle(destRect, IntRect(0, 0, abs(destRect.w), abs(destRect.h)));
-            RenderOps::blitEnd();
+            RenderOps::blit(gpTex, getRenderTarget(), destRect, IntRect(0, 0, abs(destRect.w), abs(destRect.h)), false, SameScale, false);
 
             int sourceWidth, sourceHeight;
             FloatRect bltSubRect;
@@ -2302,10 +2282,7 @@ void Bitmap::createSurface() const
     // logical target only when a CPU consumer needs it, using configured filters.
     if (p->selfHires) {
         const int scale = RenderOps::blitScaleIsSpecial(p->gl, false, rect(), p->gl, rect());
-        RenderOps::blitBegin(p->gl, false, scale);
-        RenderOps::blitSource(p->gl, scale);
-        RenderOps::blitRectangle(rect(), rect());
-        RenderOps::blitEnd();
+        RenderOps::blit(p->gl, p->gl, rect(), rect(), false, scale, false);
     }
     const auto &target = p->getRenderTarget();
     std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> surface(
@@ -3389,10 +3366,7 @@ int Bitmap::addFrame(Bitmap &source, int position)
         p->surface = 0;
     }
     else {
-        RenderOps::blitBegin(newframe, false, SameScale);
-        RenderOps::blitSource(source.getRenderTarget(), SameScale);
-        RenderOps::blitRectangle(rect(), rect());
-        RenderOps::blitEnd();
+        RenderOps::blit(newframe, source.getRenderTarget(), rect(), rect(), false, SameScale, false);
     }
 
     int ret;
