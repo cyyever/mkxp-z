@@ -29,6 +29,7 @@
 #include "exception.h"
 
 #include <algorithm>
+#include <chrono>
 #include <thread>
 #include <memory>
 #include <string>
@@ -92,14 +93,24 @@ struct AudioPrivate
 
 	void meWatchFun(std::stop_token stop)
 	{
-		const float fadeOutStep = 1.f / (std::chrono::milliseconds{200}  / AUDIO_SLEEP);
-		const float fadeInStep  = 1.f / (std::chrono::milliseconds{1000} / AUDIO_SLEEP);
+		/* Fade by the time that actually passed: sleep_for may oversleep
+		 * (by ~6 ms per 10 ms on default Windows timers), and fixed per-tick
+		 * steps would stretch the 200 ms fade-out and 1 s fade-in by that much */
+		using clock = std::chrono::steady_clock;
+		using fsec = std::chrono::duration<float>;
+		auto lastTick = clock::now();
 
 		while (true)
 		{
 
 			if (stop.stop_requested())
 				return;
+
+			const auto now = clock::now();
+			const float elapsed = fsec(now - lastTick).count();
+			lastTick = now;
+			const float fadeOutStep = elapsed / 0.2f;
+			const float fadeInStep  = elapsed / 1.0f;
 
 			switch (meWatch.state)
 			{
