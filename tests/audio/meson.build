@@ -17,3 +17,10 @@ source_tests = executable('mixer-source-tests',
     dependencies: [sdl, mixer],
 )
 test('mixer-source', source_tests, args: meson.current_source_dir() / 'fixtures', timeout: 30)
+
+emitter_tests = executable('sound-emitter-tests',
+    'sound-emitter.cpp', '../../src/audio/soundemitter.cpp',
+    include_directories: include_directories('support', '../../src/audio', '../../src/util'),
+    dependencies: [sdl, mixer],
+)
+test('sound-emitter', emitter_tests, args: meson.current_source_dir() / 'fixtures', timeout: 30)
