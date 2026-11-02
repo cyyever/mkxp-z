@@ -5,8 +5,9 @@ source_filename = SDL3_mixer-3.2.4.tar.gz
 source_hash = 182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901
 patch_directory = sdl3_mixer
 
-# Upstream's stb_vorbis decoder ignores MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN.
-diff_files = sdl3_mixer-stb-vorbis-ignore-loops.patch, end-of-diff-files.patch
+# Upstream's stb_vorbis decoder ignores MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN,
+# and its A-law/mu-law WAV expansion writes past the end of its buffer.
+diff_files = sdl3_mixer-stb-vorbis-ignore-loops.patch, sdl3_mixer-wav-xlaw-overflow.patch, end-of-diff-files.patch
 
 [provide]
 sdl3_mixer = sdl3_mixer_dep

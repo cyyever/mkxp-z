@@ -19,7 +19,6 @@
 ** along with mkxp.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "runtime-codecs.h"
 #include "soundemitter.h"
 
 #include "sharedstate.h"
@@ -29,7 +28,6 @@
 #include "util.h"
 #include "debugwriter.h"
 
-#include <SDL3_sound/SDL_sound.h>
 #include <format>
 
 #define SE_CACHE_MEM (10*1024*1024) // 10 MB
@@ -151,35 +149,35 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 	std::unique_ptr<SoundBuffer> buffer;
 	std::string error;
 
-	bool tryRead(SDL_IOStream *ops, const char *ext)
+	bool tryRead(SDL_IOStream *ops, const char *)
 	{
-		std::unique_ptr<Sound_Sample, decltype(&Sound_FreeSample)> sample(
-			Sound_NewSample(ops, ext, nullptr, STREAM_BUF_SIZE), Sound_FreeSample);
-
-        if (!sample) {
-            error = Sound_GetError();
-            return false;
-        }
-
-        if (!isRuntimeAudio(sample.get())) {
-            error = "Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding";
-            return false;
-        }
-
 		/* Do all of the decoding in the handler so we don't have
 		 * to keep the source ops around */
-		uint32_t decBytes = Sound_DecodeAll(sample.get());
-		const auto *data = static_cast<const uint8_t *>(sample->buffer);
+		MixDecoderPtr decoder = openRuntimeDecoder(ops);
+		auto pcm = std::make_unique<SoundBuffer>();
+		bool decoded = decoder && MIX_GetAudioDecoderFormat(decoder.get(), &pcm->spec);
 
-        if (sample->flags & SOUND_SAMPLEFLAG_ERROR) {
-            error = Sound_GetError();
-            return false;
-        }
+		for (uint8_t chunk[STREAM_BUF_SIZE]; decoded;)
+		{
+			const int got = MIX_DecodeAudio(decoder.get(), chunk, sizeof(chunk), &pcm->spec);
+			if (got <= 0)
+			{
+				decoded = got == 0;
+				break;
+			}
+			pcm->pcm.insert(pcm->pcm.end(), chunk, chunk + got);
+		}
 
-		buffer = std::make_unique<SoundBuffer>();
-		buffer->spec = sample->actual;
-		buffer->pcm.assign(data, data + decBytes);
+		decoder.reset();
+		SDL_CloseIO(ops);
 
+		if (!decoded)
+		{
+			error = SDL_GetError();
+			return false;
+		}
+
+		buffer = std::move(pcm);
 
 		return true;
 	}

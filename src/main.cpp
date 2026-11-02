@@ -31,7 +31,7 @@
 #include "audio-util.h"
 
 #include <SDL3/SDL.h>
-#include <SDL3_sound/SDL_sound.h>
+#include <SDL3_mixer/SDL_mixer.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include <cassert>
@@ -229,8 +229,8 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    if (Sound_Init() == 0) {
-      showInitError(std::format("Audio decoder initialization failed: {}", Sound_GetError()));
+    if (!MIX_Init()) {
+      showInitError(std::format("Audio decoder initialization failed: {}", SDL_GetError()));
       TTF_Quit();
       SDL_Quit();
 
@@ -316,7 +316,7 @@ int main(int argc, char *argv[]) {
         gpuDevice.reset();
         SDL_CloseAudioDevice(audioDevice);
         SDL_DestroyWindow(win);
-        Sound_Quit(); TTF_Quit(); SDL_Quit();
+        MIX_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
     gpu::FrameHandoff gpuPresentation;
@@ -396,7 +396,7 @@ int main(int argc, char *argv[]) {
     SDL_DestroyWindow(win);
 
 
-    Sound_Quit();
+    MIX_Quit();
     TTF_Quit();
     SDL_Quit();
 

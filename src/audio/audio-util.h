@@ -23,10 +23,12 @@
 #define AUDIOUTIL_H
 
 #include <SDL3/SDL_audio.h>
+#include <SDL3_mixer/SDL_mixer.h>
 
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <initializer_list>
 #include <memory>
 
 /* Polling interval of the audio worker threads */
@@ -61,6 +63,45 @@ inline float rgssVolumeToGain(float value)
 		return 0;
 
 	return std::pow(10.0f, -(35.0f / 20.0f) * (1.0f - value));
+}
+
+struct MixDecoderDeleter
+{
+	void operator()(MIX_AudioDecoder *decoder) const { MIX_DestroyAudioDecoder(decoder); }
+};
+using MixDecoderPtr = std::unique_ptr<MIX_AudioDecoder, MixDecoderDeleter>;
+
+/* SDL_mixer decoder names for WAV, FLAC, MP3 and Ogg Vorbis. The vendored
+ * build has only the header-only ones; a system SDL_mixer may use the libraries.
+ * Inspect the selected decoder, never the filename hint. */
+inline bool isRuntimeDecoder(const char *decoder)
+{
+	for (const char *runtime : {"WAV", "DRFLAC", "FLAC", "DRMP3", "MPG123", "STBVORBIS", "VORBIS"})
+		if (SDL_strcmp(decoder, runtime) == 0)
+			return true;
+	return false;
+}
+
+/* Open a runtime decoder on 'io', which the caller keeps owning. Loop tags such
+ * as Ogg LOOPSTART are ignored: the engine always plays or loops the whole file.
+ * Returns null with SDL's error set on failure. */
+inline MixDecoderPtr openRuntimeDecoder(SDL_IOStream *io)
+{
+	const SDL_PropertiesID props = SDL_CreateProperties();
+	SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN, true);
+	MixDecoderPtr decoder(MIX_CreateAudioDecoder_IO(io, false, props));
+	SDL_DestroyProperties(props);
+	if (!decoder)
+		return {};
+
+	const char *name = SDL_GetStringProperty(MIX_GetAudioDecoderProperties(decoder.get()),
+	                                         MIX_PROP_AUDIO_DECODER_STRING, "");
+	if (!isRuntimeDecoder(name))
+	{
+		SDL_SetError("Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding, not %s", name);
+		return {};
+	}
+	return decoder;
 }
 
 #endif // AUDIOUTIL_H

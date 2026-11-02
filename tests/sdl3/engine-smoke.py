@@ -40,7 +40,7 @@ def run_case(binary, path_cache):
         }
         write_png(fixture / 'Graphics/cache/Hero.png', (255, 0, 0, 255))
         write_png(fixture / 'rtp/Graphics/cache/Hero.png', (0, 255, 0, 255))
-        # Exercise the Ruby audio API through filesystem lookup, SDL_sound and SDL3.
+        # Exercise the Ruby audio API through filesystem lookup, SDL_mixer and SDL3.
         for name, channels, rate, sample_width in [('tone', 2, 48000, 2), ('tone-mono', 1, 22050, 1)]:
             with wave.open(str(fixture / (name + '.wav')), 'wb') as output:
                 output.setnchannels(channels)

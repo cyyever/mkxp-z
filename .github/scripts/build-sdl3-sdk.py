@@ -34,7 +34,8 @@ def source(repository: Path, build: Path, name: str) -> Path:
     patches = []
     if name in ("sdl3", "sdl3_mixer"):
         for entry in spec.get("diff_files", "").split(","):
-            if entry.strip():
+            # end-of-diff-files.patch only exists for wrap syntax; it adds a dummy file.
+            if entry.strip() and entry.strip() != "end-of-diff-files.patch":
                 patches.append(repository / "subprojects" / "packagefiles" / entry.strip())
     source_state = spec["source_hash"]
     if patches:
