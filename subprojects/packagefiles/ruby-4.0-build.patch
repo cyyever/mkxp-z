@@ -20,6 +20,18 @@ index d09571d..0729d3b 100644
  		--make-flags="$(MAKEFLAGS)"
  EXTMK_ARGS    =	$(SCRIPT_ARGS) --extension $(EXTS) --extstatic $(EXTSTATIC) \
  		--make-flags="V=$(V) MINIRUBY='$(MINIRUBY)'" \
+@@ -293,6 +293,11 @@ all: $(SHOWFLAGS) main
+ main: $(SHOWFLAGS) exts $(ENCSTATIC:static=lib)encs
+ 	@$(NULLCMD)
+ 
++# mkxp-z: with static extensions, exts.mk runs `enc.mk libencs` itself while
++# linking. The libenc/libtrans submakes below must not run concurrently with
++# it under make -j, or both remove and re-archive enc/libenc.a at once.
++$(ENCSTATIC:static=lib)enc $(ENCSTATIC:static=lib)trans: exts
++
+ .PHONY: showflags
+ exts enc trans: $(SHOWFLAGS)
+ showflags:
 diff --git a/configure.ac b/configure.ac
 index b4dc31c..eae9eb2 100644
 --- a/configure.ac

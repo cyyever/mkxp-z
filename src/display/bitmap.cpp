@@ -2255,6 +2255,9 @@ Color Bitmap::getPixel(int x, int y) const
 
     GUARD_ANIMATED;
 
+    if (x < 0 || y < 0 || x >= width() || y >= height())
+        return Vec4();
+
     if (hasHires()) {
 
         int xHires = x * p->selfHires->width() / width();
@@ -2288,17 +2291,16 @@ Color Bitmap::getPixel(int x, int y) const
                 }
             }
 
-            double rAvg = rSum / (double)rgbCount;
-            double gAvg = gSum / (double)rgbCount;
-            double bAvg = bSum / (double)rgbCount;
-            double aAvg = aSum / (double)aCount;
+            // A block with no visible samples has no colour to average:
+            // read it back as transparent black instead of dividing by 0.
+            const auto average = [](double sum, long long count) {
+                return count ? sum / (double)count : 0.;
+            };
 
-            return Color(rAvg, gAvg, bAvg, aAvg);
+            return Color(average(rSum, rgbCount), average(gSum, rgbCount),
+                         average(bSum, rgbCount), average(aSum, aCount));
         }
     }
-
-    if (x < 0 || y < 0 || x >= width() || y >= height())
-        return Vec4();
 
     SDL_Surface *surf = nullptr;
     if (p->megaSurface)

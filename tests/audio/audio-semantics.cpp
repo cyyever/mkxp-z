@@ -44,10 +44,18 @@ static void require(bool condition, const std::string &message) {
 }
 
 // Mix 'ms' of audio, let the engine threads see the same time pass, return RMS.
+// Sleep until an absolute deadline on the mixed-audio clock instead of a fixed
+// sleep_for: per-call oversleep (large on loaded CI runners) would otherwise
+// accumulate, making the engine's wall-clock fades run ahead of the mixed audio
+// and stretching the test's run time without bound.
 static double advance(int ms) {
+    static auto audioClock = std::chrono::steady_clock::now();
     std::vector<float> pcm(size_t(RATE) * ms / 1000 * 2);
     require(MIX_Generate(audioMixer, pcm.data(), int(pcm.size() * sizeof(float))) >= 0, SDL_GetError());
-    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    audioClock += std::chrono::milliseconds(ms);
+    const auto now = std::chrono::steady_clock::now();
+    if (now > audioClock + std::chrono::milliseconds(250)) audioClock = now; // fell far behind: resync
+    std::this_thread::sleep_until(audioClock);
     double energy = 0;
     for (float sample : pcm) energy += double(sample) * sample;
     return std::sqrt(energy / pcm.size());
@@ -219,6 +227,7 @@ int main(int argc, char **argv) {
         // An ME pauses every playing BGM track; when it ends, each one fades back
         // in to its prior volume, like the single-track case, whichever tracks
         // are unused or stopped.
+        // Returns the level once the fade-in has finished.
         auto meCycle = [&](const char *what, double prior) {
             multi.mePlay("tone.flac", 100, 100);
             advanceFor(1060);
@@ -226,21 +235,35 @@ int main(int argc, char **argv) {
             const double after = advanceFor(1700);
             std::printf("%s: level %.4f before the ME, %.4f fading in, %.4f after\n", what, prior, early, after);
             require(early < after * .8, std::string(what) + ": no fade-in after the ME");
-            require(std::abs(after - prior) < .005, std::string(what) + ": not back at its prior volume");
+            return after;
         };
         multi.bgmPlay("tone.ogg", 100, 100, 0, 0);
-        meCycle("track 0 of 2", advanceFor(200));
+        const double trackZeroLevel = advanceFor(200);
+        require(std::abs(meCycle("track 0 of 2", trackZeroLevel) - trackZeroLevel) < .005,
+                "track 0 of 2: not back at its prior volume");
         multi.bgmStop();
         multi.bgmPlay("tone.ogg", 80, 100, 0, 1);
         const double trackOneLevel = advanceFor(200);
-        meCycle("track 1 of 2", trackOneLevel);
+        require(std::abs(meCycle("track 1 of 2", trackOneLevel) - trackOneLevel) < .005,
+                "track 1 of 2: not back at its prior volume");
+        // Both tracks play the same 440 Hz tone, so the level of their sum depends
+        // on their relative phase, which legitimately shifts by however long the
+        // tracks' pause/resume instants differ. Check each track's volume alone.
         multi.bgmPlay("tone.ogg", 100, 100, 0, 0);
         meCycle("tracks 0 and 1", advanceFor(200));
         const double pos0 = multi.bgmPos(0), pos1 = multi.bgmPos(1);
         advance(60);
         require(multi.bgmPos(0) != pos0 && multi.bgmPos(1) != pos1, "a BGM track did not resume after the ME");
+        const int trackOneVolume = multi.bgmGetVolume(1);
+        multi.bgmSetVolume(0, 1);
+        const double zeroAlone = advanceFor(200);
+        multi.bgmSetVolume(trackOneVolume, 1);
+        std::printf("after the ME: track 0 alone %.4f, track 1 alone ", zeroAlone);
+        require(std::abs(zeroAlone - trackZeroLevel) < .005, "track 0 lost its volume over the ME");
         multi.bgmStop(0);
-        require(std::abs(advanceFor(200) - trackOneLevel) < .005, "track 1 lost its volume over the ME");
+        const double oneAlone = advanceFor(200);
+        std::printf("%.4f\n", oneAlone);
+        require(std::abs(oneAlone - trackOneLevel) < .005, "track 1 lost its volume over the ME");
 
         multiState.reset();
 

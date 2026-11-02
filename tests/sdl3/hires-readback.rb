@@ -20,6 +20,11 @@ begin
   check(target, [10, 20, 30, 128], 'child mutation')
   target.hires.clear
   check(target, [0, 0, 0, 0], 'clear alpha')
+  # Averaging a fully transparent HiRes block must not divide by zero (NaN).
+  pixel = target.get_pixel(1, 1)
+  assert_equal([0.0, 0.0, 0.0, 0.0], [pixel.red, pixel.green, pixel.blue, pixel.alpha], 'transparent get_pixel')
+  pixel = target.get_pixel(target.width, 0)
+  assert_equal([0.0, 0.0, 0.0, 0.0], [pixel.red, pixel.green, pixel.blue, pixel.alpha], 'out-of-range get_pixel')
   target.hires.fill_rect(0, 0, 12, 12, Color.new(255, 0, 0, 255))
   target.hue_change(120)
   check(target, [0, 255, 0, 255], 'hue')
