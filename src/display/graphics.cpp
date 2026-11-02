@@ -971,19 +971,21 @@ void Graphics::fadein(int duration) {
 }
 
 Bitmap *Graphics::snapToBitmap() {
-    p->screen.composite();
+    if (!p->frozen)
+        p->screen.composite();
+    auto &source = p->frozen ? p->frozenScene : p->screen.getPP().frontBuffer();
 
     if (shState->config().enableHires) {
         // TODO: Maybe don't reconstruct this struct every time?
         TEXFBO tf;
         tf.width = width();
         tf.height = height();
-        tf.selfHires = &p->screen.getPP().frontBuffer();
+        tf.selfHires = &source;
 
         return new Bitmap(tf);
     }
 
-    return new Bitmap(p->screen.getPP().frontBuffer());
+    return new Bitmap(source);
 }
 
 int Graphics::width() const { return p->scResLores.x; }
