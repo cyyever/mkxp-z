@@ -21,8 +21,7 @@
 
 #include <algorithm>
 #include <format>
-#include <fstream>
-#include <iterator>
+#include <memory>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -31,6 +30,7 @@
 
 #include "config.h"
 #include "paths.h"
+#include <SDL3/SDL_iostream.h>
 
 struct KbBindingData
 {
@@ -173,9 +173,11 @@ struct Header
 
 static_assert(std::is_trivially_copyable_v<Header> && std::is_trivially_copyable_v<BindingDesc>);
 
-static std::filesystem::path buildPath(const std::string &dir, uint32_t rgssVersion)
+using BindingFile = std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)>;
+
+static std::string buildPath(const std::string &dir, uint32_t rgssVersion)
 {
-    return paths::fromUtf8(dir) / std::format("keybindings.mkxp{}", rgssVersion);
+    return paths::toUtf8((paths::fromUtf8(dir) / std::format("keybindings.mkxp{}", rgssVersion)).u8string());
 }
 
 static bool writeBindings(const BDescVec &bindings, const std::string &dir,
@@ -184,16 +186,14 @@ static bool writeBindings(const BDescVec &bindings, const std::string &dir,
     if (dir.empty() || !std::in_range<uint32_t>(bindings.size()))
         return false;
 
-    std::ofstream file(buildPath(dir, rgssVersion), std::ios::binary);
+    BindingFile file(SDL_IOFromFile(buildPath(dir, rgssVersion).c_str(), "wb"), SDL_CloseIO);
     const Header header{FormatVersion, rgssVersion, static_cast<uint32_t>(bindings.size())};
-    if (!file.write(reinterpret_cast<const char *>(&header), sizeof(header)))
+    if (!file || SDL_WriteIO(file.get(), &header, sizeof(header)) != sizeof(header))
         return false;
     const auto bytes = std::as_bytes(std::span(bindings));
-    if (!bytes.empty() && !file.write(reinterpret_cast<const char *>(bytes.data()),
-                                     static_cast<std::streamsize>(bytes.size())))
+    if (!bytes.empty() && SDL_WriteIO(file.get(), bytes.data(), bytes.size()) != bytes.size())
         return false;
-    file.close();
-    return bool(file);
+    return SDL_CloseIO(file.release());
 }
 
 void storeBindings(const BDescVec &d, const Config &conf)
@@ -242,16 +242,15 @@ static bool readBindings(BDescVec &out, const std::string &dir,
     if (dir.empty())
         return false;
 
-    std::ifstream file(buildPath(dir, rgssVersion), std::ios::binary);
+    BindingFile file(SDL_IOFromFile(buildPath(dir, rgssVersion).c_str(), "rb"), SDL_CloseIO);
     Header header{};
-    if (!file.read(reinterpret_cast<char *>(&header), sizeof(header)) ||
+    if (!file || SDL_ReadIO(file.get(), &header, sizeof(header)) != sizeof(header) ||
         header.formVer != FormatVersion || header.rgssVer != rgssVersion || header.count > 1024)
         return false;
 
     BDescVec bindings(header.count);
     const auto bytes = std::as_writable_bytes(std::span(bindings));
-    if ((!bytes.empty() && !file.read(reinterpret_cast<char *>(bytes.data()),
-                                     static_cast<std::streamsize>(bytes.size()))) ||
+    if ((!bytes.empty() && SDL_ReadIO(file.get(), bytes.data(), bytes.size()) != bytes.size()) ||
         !std::ranges::all_of(bindings, verifyDesc))
         return false;
     out = std::move(bindings);

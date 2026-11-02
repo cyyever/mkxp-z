@@ -3,14 +3,11 @@ project('mkxp-sdl3-migration', 'cpp', meson_version: '>=1.10.0',
 
 sdl = dependency('SDL3', version: '>=3.4.14', method: 'cmake', modules: ['SDL3::SDL3'])
 image = dependency('SDL3_image', version: '>=3.2.4', method: 'cmake', modules: ['SDL3_image::SDL3_image'])
-ttf = dependency('SDL3_ttf', version: '>=3.2.2', method: 'cmake', modules: ['SDL3_ttf::SDL3_ttf'])
 
 migration_tests = executable('sdl3-migration-tests', 'migration.cpp',
     include_directories: include_directories('../../src'),
-    dependencies: [sdl, image, ttf])
-test('SDL3 image, IO, font and window migration', migration_tests,
-    args: files('../../assets/liberation.ttf'),
-    env: {'SDL_VIDEO_DRIVER': 'dummy', 'SDL_AUDIO_DRIVER': 'dummy'}, timeout: 30)
+    dependencies: [sdl, image])
+test('SDL3 PNG policy and borrowed IO', migration_tests, timeout: 30)
 
 # Compile the actual helper with only the dialog entrypoint replaced; no UI is opened.
 folder_dialog_tests = executable('sdl3-folder-dialog-tests',
@@ -20,3 +17,9 @@ folder_dialog_tests = executable('sdl3-folder-dialog-tests',
     cpp_args: '-DSDL_ShowFileDialogWithProperties=TestShowFileDialogWithProperties')
 test('SDL3 folder dialog callbacks and main-thread event pumping', folder_dialog_tests,
     env: {'SDL_VIDEO_DRIVER': 'dummy'}, timeout: 30)
+
+keybinding_tests = executable('sdl3-keybinding-tests',
+    'keybindings.cpp', '../../src/input/keybindings.cpp',
+    include_directories: include_directories('../../src', '../../src/util'),
+    dependencies: sdl)
+test('SDL3 keybinding persistence and legacy binary compatibility', keybinding_tests)

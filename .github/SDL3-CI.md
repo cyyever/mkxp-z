@@ -1,14 +1,15 @@
 # SDL3 CI
 
 The SDL3 migration workflow builds the source versions and verifies the SHA-256
-hashes recorded in the SDL3, SDL3_image, SDL3_ttf and FreeType wraps. It installs
-a shared native SDK with SDL native PNG, optional stb JPEG and static FreeType.
-JPEG is enabled in this API-test SDK for converter coverage; production runtime
-images remain PNG-only. Other optional
-image codecs and font-shaping dependencies are disabled for this focused suite.
+hashes recorded in the SDL3, SDL3_image and SDL3_mixer wraps. It installs
+a shared native SDK with SDL native PNG, optional stb JPEG and the engine's
+header-only audio decoders. JPEG supplies a non-PNG fixture for the runtime's
+PNG-only policy check. SDL3_ttf and FreeType are not needed by this focused suite;
+the full engine still builds them for its font implementation.
 
-The jobs compile and run the real SDL APIs used by `tests/sdl3` and the production
-audio state machine in `tests/audio`. Linux also tests the production Ruby IO
+The jobs test PNG policy, borrowed streams, folder dialog callbacks and production
+keybinding persistence in `tests/sdl3`, plus the production audio state machine
+in `tests/audio`. Linux also tests the production Ruby IO
 bindings in `tests/io` with Ruby >= 4.0. These focused tests use dummy drivers
 and do not validate SDL_GPU rendering. The full engine smoke and native GPU
 pixel checks require a working GPU backend, such as Windows Direct3D 12.
@@ -41,7 +42,7 @@ meson test -C build/sdl3 --print-errorlogs
 
 Add `build/sdk/bin` to `PATH` for Windows DLL loading. Unix installations may
 require `build/sdk/lib` in `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH`. The tests use
-generated fixtures and bundled fonts, so they do not require game archives,
+generated fixtures, so they do not require game archives,
 speakers or a GPU. Full-engine smoke is separate: see
 [engine smoke instructions](../tests/sdl3/README.md) and
 [native GPU checks](../tests/gpu/README.md).
