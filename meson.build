@@ -84,10 +84,11 @@ jthread_probe = '''#include <stop_token>
 #include <thread>
 int main() { std::jthread t([](std::stop_token) {}); }
 '''
+threads = dependency('threads')
 jthread_args = []
-if not compilers['cpp'].links(jthread_probe, dependencies: dependency('threads'), name: 'std::jthread')
+if not compilers['cpp'].links(jthread_probe, dependencies: threads, name: 'std::jthread')
     if compilers['cpp'].get_argument_syntax() == 'gcc' and compilers['cpp'].links(jthread_probe,
-            args: '-fexperimental-library', dependencies: dependency('threads'),
+            args: '-fexperimental-library', dependencies: threads,
             name: 'std::jthread with -fexperimental-library')
         jthread_args = ['-fexperimental-library']
     else
@@ -97,6 +98,7 @@ endif
 global_cpp_args += jthread_args
 global_objcpp_args += jthread_args
 global_link_args += jthread_args
+global_dependencies += threads
 
 global_args += '-DMKXPZ_VERSION="@0@"'.format(meson.project_version())
 
