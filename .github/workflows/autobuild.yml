@@ -107,7 +107,10 @@ jobs:
           meson compile -C build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/sdl3/engine-smoke.py build/mkxp-z.x86_64.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/sdl3/mouse-input.py build/mkxp-z.x86_64.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tests/sdl3/regressions.py build/mkxp-z.x86_64.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/ruby/script-names.py build/mkxp-z.x86_64.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -201,6 +204,9 @@ jobs:
 
       - name: Smoke test the real SDL3 engine
         run: xvfb-run -a python3 tests/sdl3/engine-smoke.py build/mkxp-z.x86_64
+
+      - name: Run engine regression scripts
+        run: xvfb-run -a python3 tests/sdl3/regressions.py build/mkxp-z.x86_64
 
       - name: Prepare artifact
         run: |
