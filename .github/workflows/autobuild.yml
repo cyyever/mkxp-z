@@ -107,6 +107,7 @@ jobs:
           meson compile -C build
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/sdl3/engine-smoke.py build/mkxp-z.x86_64.exe
+          python tests/sdl3/mouse-input.py build/mkxp-z.x86_64.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tests/ruby/script-names.py build/mkxp-z.x86_64.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

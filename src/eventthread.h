@@ -55,9 +55,9 @@ public:
 
 	struct MouseState
 	{
-		int x, y;
-		bool inWindow;
-		bool buttons[32];
+		float x = 0, y = 0;
+		bool inWindow = false;
+		SDL_MouseButtonFlags buttons = 0;
 	};
 
 	struct FingerState
@@ -73,7 +73,6 @@ public:
 
 	static uint8_t keyStates[SDL_SCANCODE_COUNT];
     static ControllerState controllerState;
-	static MouseState mouseState;
 	static TouchState touchState;
     static std::atomic<int> verticalScrollDistance;
     
@@ -214,6 +213,8 @@ struct RGSSThreadData
 
 	EventThread *ethread;
     UnidirMessage<WindowGeometry> windowGeometryMsg;
+    UnidirMessage<EventThread::MouseState> mouseStateMsg;
+    std::atomic<SDL_MouseButtonFlags> mousePresses{0};
 	UnidirMessage<BDescVec> bindingUpdateMsg;
 
 	const char *argv0;

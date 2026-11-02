@@ -553,17 +553,15 @@ struct CtrlAxisBinding : public Binding
 /* Mouse button binding */
 struct MsBinding : public Binding
 {
-    MsBinding() = default;
-    
     MsBinding(int buttonIndex,
-              Input::ButtonCode target)
+              Input::ButtonCode target, const EventThread::MouseState &state)
     : Binding(target),
-    index(buttonIndex)
+    index(buttonIndex), mouse(state)
     {}
     
     bool sourceActive() const override
     {
-        return EventThread::mouseState.buttons[index];
+        return (mouse.buttons & SDL_BUTTON_MASK(index)) != 0;
     }
     
     bool sourceRepeatable() const override
@@ -572,6 +570,7 @@ struct MsBinding : public Binding
     }
     
     int index;
+    const EventThread::MouseState &mouse;
 };
 
 /* Not rebindable */
@@ -671,8 +670,7 @@ struct InputPrivate
     
     // Gamepad axes & mouse coordinates
     int16_t axisStateArray[SDL_GAMEPAD_AXIS_COUNT]{};
-    int mousePos[2]{};
-    bool mouseInWindow = false;
+    EventThread::MouseState mouseState;
     
     Input::ButtonCode repeating;
     int rawRepeating = -1;
@@ -965,14 +963,11 @@ struct InputPrivate
     
     void initMsBindings()
     {
-        msBindings.resize(5);
-        
-        size_t i = 0;
-        msBindings[i++] = MsBinding(SDL_BUTTON_LEFT,   Input::MouseLeft);
-        msBindings[i++] = MsBinding(SDL_BUTTON_MIDDLE, Input::MouseMiddle);
-        msBindings[i++] = MsBinding(SDL_BUTTON_RIGHT,  Input::MouseRight);
-        msBindings[i++] = MsBinding(SDL_BUTTON_X1, Input::MouseX1);
-        msBindings[i++] = MsBinding(SDL_BUTTON_X2, Input::MouseX2);
+        msBindings.emplace_back(SDL_BUTTON_LEFT, Input::MouseLeft, mouseState);
+        msBindings.emplace_back(SDL_BUTTON_MIDDLE, Input::MouseMiddle, mouseState);
+        msBindings.emplace_back(SDL_BUTTON_RIGHT, Input::MouseRight, mouseState);
+        msBindings.emplace_back(SDL_BUTTON_X1, Input::MouseX1, mouseState);
+        msBindings.emplace_back(SDL_BUTTON_X2, Input::MouseX2, mouseState);
     }
     
     void pollBindings(Input::ButtonCode &repeatCand)
@@ -1189,17 +1184,17 @@ void Input::update()
     
     ButtonCode repeatCand = None;
     
+    // Snapshot coordinates and native SDL button masks once per RGSS frame.
+    auto &rtData = shState->rtData();
+    rtData.mouseStateMsg.get(p->mouseState);
+    p->mouseState.buttons |= rtData.mousePresses.exchange(0);
+
     /* Poll all bindings */
     p->pollBindings(repeatCand);
     
     // Update raw keys, controller buttons and axes
     p->updateRaw();
     p->updateControllerRaw();
-    
-    // Record mouse positions
-    p->mousePos[0] = shState->eThread().mouseState.x;
-    p->mousePos[1] = shState->eThread().mouseState.y;
-    p->mouseInWindow = shState->eThread().mouseState.inWindow;
     
     /* Fetch new cumulative scroll distance and reset counter */
     p->vScrollDistance = EventThread::verticalScrollDistance.exchange(0);
@@ -1368,7 +1363,7 @@ short Input::getControllerAxisValue(SDL_GamepadAxis axis) {
 }
 
 bool Input::mouseInWindow() {
-    return p->mouseInWindow;
+    return p->mouseState.inWindow;
 }
 
 int Input::dir4Value()
@@ -1385,7 +1380,7 @@ int Input::mouseX()
 {
     RGSSThreadData &rtData = shState->rtData();
 
-    int hiresResult = (p->mousePos[0] - rtData.screenOffset.x) * rtData.sizeResoRatio.x;
+    int hiresResult = (p->mouseState.x - rtData.screenOffset.x) * rtData.sizeResoRatio.x;
 
     if (shState->config().enableHires) {
         double framebufferScalingFactor = shState->config().framebufferScalingFactor;
@@ -1399,7 +1394,7 @@ int Input::mouseY()
 {
     RGSSThreadData &rtData = shState->rtData();
 
-    int hiresResult = (p->mousePos[1] - rtData.screenOffset.y) * rtData.sizeResoRatio.y;
+    int hiresResult = (p->mouseState.y - rtData.screenOffset.y) * rtData.sizeResoRatio.y;
 
     if (shState->config().enableHires) {
         double framebufferScalingFactor = shState->config().framebufferScalingFactor;
