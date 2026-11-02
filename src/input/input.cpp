@@ -1233,26 +1233,6 @@ void Input::update()
     p->last_update = shState->runTime();
 }
 
-std::vector<std::string> Input::getBindings(ButtonCode code) {
-    std::vector<std::string> ret;
-    for (const auto &b : p->kbBindings) {
-        if (b.target != code) continue;
-        ret.push_back(SDL_GetScancodeName(b.source));
-    }
-    
-    for (const auto &b : p->ctrlBBindings) {
-        if (b.target != code) continue;
-        ret.push_back(std::string("CBUTTON") + std::to_string(b.source));
-    }
-    
-    for (const auto &b : p->ctrlABindings) {
-        if (b.target != code) continue;
-        ret.push_back(std::string("CAXIS") + std::to_string(b.source));
-    }
-    
-    return ret;
-}
-
 bool Input::isPressed(int button)
 {
     return p->getStateCheck(button).pressed;

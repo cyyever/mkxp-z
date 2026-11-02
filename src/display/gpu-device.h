@@ -96,7 +96,6 @@ public:
     Device(const Device &) = delete;
     Device &operator=(const Device &) = delete;
     SDL_GPUDevice *native() const { return device; }
-    SDL_GPUTextureFormat swapchainFormat() const;
     Texture createTexture(Uint32 width, Uint32 height,
         SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
         Uint32 mipLevels = 1);

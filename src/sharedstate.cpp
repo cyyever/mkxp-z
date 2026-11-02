@@ -182,11 +182,6 @@ void SharedState::finiInstance()
 	delete _globalIBO;
 }
 
-void SharedState::setScreen(Scene &screen)
-{
-	p->screen = &screen;
-}
-
 #define GSATT(type, lower) \
 	type SharedState :: lower() const \
 	{ \

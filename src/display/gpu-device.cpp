@@ -128,10 +128,6 @@ void Device::checkWindowThread() const {
     if (windowThread != std::this_thread::get_id())
         throw std::logic_error("GPU window operation requires the window creation thread");
 }
-SDL_GPUTextureFormat Device::swapchainFormat() const {
-    checkWindowThread();
-    return SDL_GetGPUSwapchainTextureFormat(device, window);
-}
 void Device::checkTexture(const Texture &texture) const {
     if (texture.device != device || !texture.native())
         throw std::invalid_argument("GPU texture belongs to a different device or was moved");

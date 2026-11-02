@@ -88,11 +88,6 @@ struct Vec2i
 		return x == other.x && y == other.y;
 	}
 
-	bool operator!=(const Vec2i &other) const
-	{
-		return !(*this == other);
-	}
-
 	Vec2i &operator+=(const Vec2i &value)
 	{
 		x += value.x;
@@ -184,11 +179,6 @@ struct IntRect : SDL_Rect
 	{
 		return (x == other.x && y == other.y &&
 		        w == other.w && h == other.h);
-	}
-
-	bool operator!=(const IntRect &other) const
-	{
-		return !(*this == other);
 	}
 
 	Vec2i pos() const
