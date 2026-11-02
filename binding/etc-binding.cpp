@@ -176,16 +176,6 @@ CLASS_ALLOCATE_PRE_INIT(Rect, RectInitialize);
     _rb_define_method(klass, "inspect", Klass##Stringify);                     \
   }
 
-#define MRB_ATTR_R(Class, attr)                                                \
-  mrb_define_method(mrb, klass, #attr, Class##Get_##attr, MRB_ARGS_NONE())
-#define MRB_ATTR_W(Class, attr)                                                \
-  mrb_define_method(mrb, klass, #attr "=", Class##Set_##attr, MRB_ARGS_REQ(1))
-#define MRB_ATTR_RW(Class, attr)                                               \
-  {                                                                            \
-    MRB_ATTR_R(Class, attr);                                                   \
-    MRB_ATTR_W(Class, attr);                                                   \
-  }
-
 #define RB_ATTR_R(Klass, Attr, attr)                                           \
   _rb_define_method(klass, #attr, Klass##Get##Attr)
 #define RB_ATTR_W(Klass, Attr, attr)                                           \

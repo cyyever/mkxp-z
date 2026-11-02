@@ -297,10 +297,7 @@ typedef struct {
 	short yMin;
 } Font_Container;
 
-#define BYTE uint8_t
-#define WORD uint16_t
 #define DWORD uint32_t
-#define UINT unsigned int
 #define SHORT short
 #define USHORT unsigned short
 #define GDI_ERROR ~0u
