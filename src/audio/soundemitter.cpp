@@ -162,7 +162,7 @@ struct SoundOpenHandler : FileSystem::OpenHandler
         }
 
         if (!isRuntimeAudio(sample.get())) {
-            error = "Audio assets must use WAV or FLAC decoding";
+            error = "Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding";
             return false;
         }
 

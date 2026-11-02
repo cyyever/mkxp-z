@@ -56,8 +56,8 @@ the resulting ordinary WAV through SDL_sound; the JSON decoder field explicitly
 identifies the fallback. A-law is expanded to its normative signed 16-bit PCM,
 without quantizing those decoded values.
 
-Default engine builds decode PNG images and WAV/FLAC audio. Enabling
-`asset_conversion_tools` additionally builds JPEG, MP3 and Vorbis decoding for
+Default engine builds decode PNG images and WAV, FLAC, MP3 and Ogg Vorbis
+audio. Enabling `asset_conversion_tools` additionally builds JPEG decoding for
 this offline tool; runtime Bitmap loading and saving still require PNG.
 The tool's stb_vorbis F32 output is not asserted to be bit-identical to older
 engine versions' libvorbis S16 path.

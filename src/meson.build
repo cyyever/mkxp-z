@@ -162,8 +162,8 @@ if not sdl3_sound.found()
         # File decoders only: SDL3's native audio playback backends stay enabled.
         'SDLSOUND_DECODER_WAV': true,
         'SDLSOUND_DECODER_FLAC': true,
-        'SDLSOUND_DECODER_VORBIS': get_option('asset_conversion_tools'),
-        'SDLSOUND_DECODER_MP3': get_option('asset_conversion_tools'),
+        'SDLSOUND_DECODER_VORBIS': true,
+        'SDLSOUND_DECODER_MP3': true,
         'SDLSOUND_DECODER_AIFF': false,
         'SDLSOUND_DECODER_AU': false,
         'SDLSOUND_DECODER_VOC': false,
