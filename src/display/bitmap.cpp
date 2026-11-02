@@ -1376,14 +1376,6 @@ static void bltFilter(enum Bitmap::BitmapBltMode mode, uint32_t &dst_pixel, uint
     }
 }
 
-static uint32_t &getPixelAt(SDL_Surface *surf, const SDL_PixelFormatDetails *form, int x, int y)
-{
-    size_t offset = x*form->bytes_per_pixel + y*surf->pitch;
-    uint8_t *bytes = (uint8_t*) surf->pixels + offset;
-
-    return *((uint32_t*) bytes);
-}
-
 void Bitmap::stretchBlt(IntRect destRect,
                         const Bitmap &source, IntRect sourceRect,
                         int opacity, bool smooth,
@@ -1401,7 +1393,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         destWidth = destRect.w * p->selfHires->width() / width();
         destHeight = destRect.h * p->selfHires->height() / height();
 
-        p->selfHires->stretchBlt(IntRect(destX, destY, destWidth, destHeight), source, sourceRect, opacity);
+        p->selfHires->stretchBlt(IntRect(destX, destY, destWidth, destHeight), source, sourceRect, opacity, smooth, mode);
         return;
     }
 
@@ -1412,7 +1404,7 @@ void Bitmap::stretchBlt(IntRect destRect,
         sourceWidth = sourceRect.w * source.getHires()->width() / source.width();
         sourceHeight = sourceRect.h * source.getHires()->height() / source.height();
 
-        stretchBlt(destRect, *source.getHires(), IntRect(sourceX, sourceY, sourceWidth, sourceHeight), opacity);
+        stretchBlt(destRect, *source.getHires(), IntRect(sourceX, sourceY, sourceWidth, sourceHeight), opacity, smooth, mode);
         return;
     }
 
@@ -2202,12 +2194,11 @@ Color Bitmap::getPixel(int x, int y) const
         surf = p->surface;
     }
 
-    uint32_t pixel = getPixelAt(surf, p->format, x, y);
+    Uint8 r = 0, g = 0, b = 0, a = 0;
+    if (!SDL_ReadSurfacePixel(surf, x, y, &r, &g, &b, &a))
+        throw Exception(Exception::SDLError, "%s", SDL_GetError());
 
-    return Color((pixel >> p->format->Rshift) & 0xFF,
-                 (pixel >> p->format->Gshift) & 0xFF,
-                 (pixel >> p->format->Bshift) & 0xFF,
-                 (pixel >> p->format->Ashift) & 0xFF);
+    return Color(r, g, b, a);
 }
 
 void Bitmap::setPixel(int x, int y, const Color &color)
@@ -2215,6 +2206,9 @@ void Bitmap::setPixel(int x, int y, const Color &color)
     guardDisposed();
 
     GUARD_ANIMATED;
+
+    if (x < 0 || y < 0 || x >= width() || y >= height())
+        return;
 
     if (hasHires()) {
 
@@ -2233,12 +2227,15 @@ void Bitmap::setPixel(int x, int y, const Color &color)
         }
     }
 
+    const auto channel = [](double value) {
+        return (uint8_t) std::lround(clamp<double>(value, 0, 255));
+    };
     uint8_t pixel[] =
     {
-        (uint8_t) clamp<double>(color.red,   0, 255),
-        (uint8_t) clamp<double>(color.green, 0, 255),
-        (uint8_t) clamp<double>(color.blue,  0, 255),
-        (uint8_t) clamp<double>(color.alpha, 0, 255)
+        channel(color.red),
+        channel(color.green),
+        channel(color.blue),
+        channel(color.alpha)
     };
 
     if (!p->megaSurface)
@@ -2263,8 +2260,8 @@ void Bitmap::setPixel(int x, int y, const Color &color)
 
     if (surf)
     {
-        uint32_t &surfPixel = getPixelAt(surf, p->format, x, y);
-        surfPixel = SDL_MapRGBA(p->format, nullptr, pixel[0], pixel[1], pixel[2], pixel[3]);
+        if (!SDL_WriteSurfacePixel(surf, x, y, pixel[0], pixel[1], pixel[2], pixel[3]))
+            throw Exception(Exception::SDLError, "%s", SDL_GetError());
     }
 
     p->onModified(false);
@@ -3089,17 +3086,18 @@ void Bitmap::kglCompressAlpha()
     GUARD_ANIMATED;
 
     if (hasHires()) {
-        p->selfHires->kglInvert();
+        p->selfHires->kglCompressAlpha();
         return;
     }
 
     if (isMega()) {
+        uint8_t *bytes = (uint8_t *)p->megaSurface->pixels;
         for (size_t i = 0; i < (size_t)p->megaSurface->w * (size_t)p->megaSurface->h; ++i) {
-            for (size_t j = 0; j < 3; ++j) {
-                ((uint8_t *)p->megaSurface->pixels)[4 * i + j] =
-                    std::round(((float)((uint8_t *)p->megaSurface->pixels)[4 * i + 3] / 255.0f) * ((uint8_t *)p->megaSurface->pixels)[4 * i + j]);
-            }
-            ((uint8_t *)p->megaSurface->pixels)[4 * i + 3] = 0;
+            uint8_t *px = bytes + 4 * i;
+            const unsigned alpha = px[3];
+            for (size_t j = 0; j < 3; ++j)
+                px[j] = (uint8_t)((px[j] * alpha + 127) / 255);
+            px[3] = 0;
         }
     } else {
         TEXFBO newTex = shState->texPool().request(width(), height());
