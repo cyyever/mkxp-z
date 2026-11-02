@@ -49,6 +49,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install pinned DXC
+        run: python3 .github/scripts/install-dxc.py "$RUNNER_TEMP/dxc"
+
       - name: Prepare tarball
         run: |
           meson subprojects download
@@ -149,6 +152,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Install pinned DXC
+        run: python3 .github/scripts/install-dxc.py "$RUNNER_TEMP/dxc"
 
       - name: Restore from cache
         if: false
