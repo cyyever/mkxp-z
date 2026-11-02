@@ -20,8 +20,10 @@ end
 end
 check(load_data('@empty', true) == ''.b, 'empty raw file should be an empty binary String')
 
-[['@error', IOError], ['@partialerror', IOError], ['@closeerror', IOError],
- ['@oversize', RangeError], ['@badmarshal', TypeError]].each do |kind, exception|
+failures = [['@error', IOError], ['@partialerror', IOError], ['@closeerror', IOError], ['@badmarshal', TypeError]]
+# Only reachable where long is narrower than SDL's Sint64 sizes (see file-io.cpp).
+failures << ['@oversize', RangeError] if fileint_test_can_oversize
+failures.each do |kind, exception|
   closed = fileint_test_closed
   expect_error(exception) { load_data(kind, kind != '@badmarshal') }
   GC.start
