@@ -23,7 +23,16 @@ SCRIPTS = [
     ('tilemap-batches.rb', True, True),
     ('bitmap-copy.rb', False, True),
     ('mega-surface-flip.rb', False, True),
+    ('pixel-access.rb', True, True),
 ]
+
+# KGL2 tests that cannot pass in HiRes yet. Each entry needs a reason.
+KGL2_HIRES_SKIP = {
+    # The shadow geometry (center, slopes, the y == h / 2 check) is recomputed
+    # from integer-scaled HiRes coordinates instead of scaling the logical
+    # geometry, so odd sizes shift the shadow and its status code.
+    'shadow.rb',
+}
 
 KGL2_WRAPPER = '''LOG = {log!r}
 module System
@@ -52,11 +61,12 @@ def run_harness(binary, script, hires):
         raise RuntimeError(f'{script.name} (hires={hires}) failed:\n{result.stdout}{result.stderr}')
 
 
-def run_kgl2(binary, test, scratch):
-    log = scratch / (test.stem + '.log')
-    wrapper = scratch / (test.stem + '-wrapper.rb')
+def run_kgl2(binary, test, scratch, hires=False):
+    tag = test.stem + ('-hires' if hires else '')
+    log = scratch / (tag + '.log')
+    wrapper = scratch / (tag + '-wrapper.rb')
     wrapper.write_text(KGL2_WRAPPER.format(log=log.as_posix(), test=test.as_posix()), encoding='utf-8')
-    run_harness(binary, wrapper, hires=False)
+    run_harness(binary, wrapper, hires=hires)
     output = log.read_text(encoding='utf-8') if log.exists() else ''
     lines = output.splitlines()
     failed = [line for line in lines if 'failed' in line or 'should be' in line or
@@ -80,11 +90,14 @@ def main():
                 failures.append(str(error))
     with tempfile.TemporaryDirectory(prefix='mkxp-kgl2-') as directory:
         for test in sorted((ROOT / 'tests' / 'kgl2').glob('*.rb')):
-            try:
-                count = run_kgl2(binary, test, Path(directory))
-                print(f'PASS: kgl2/{test.name} ({count} checks)')
-            except RuntimeError as error:
-                failures.append(str(error))
+            for hires in (False, True):
+                if hires and test.name in KGL2_HIRES_SKIP:
+                    continue
+                try:
+                    count = run_kgl2(binary, test, Path(directory), hires)
+                    print(f'PASS: kgl2/{test.name} (hires={hires}, {count} checks)')
+                except RuntimeError as error:
+                    failures.append(str(error))
     if failures:
         print('\n\n'.join(failures), file=sys.stderr)
         sys.exit(1)
