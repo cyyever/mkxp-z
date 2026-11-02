@@ -260,8 +260,7 @@ void del(ID id) {
     storage->target = {};
     storage->alive = false;
 }
-void setTarget(TEX::ID target, unsigned attachment) {
-    if (attachment != 0) invalid("RGSS render targets have one color attachment");
+void setTarget(TEX::ID target) {
     textureStorage(target);
     auto &storage = framebufferStorage(boundFramebufferID);
     checkedGpu([] { gpu::flushRenderCommands(); });
@@ -307,21 +306,21 @@ template<BufferKind Kind> void CpuBuffer<Kind>::del(ID id) {
     std::vector<std::byte>().swap(storage->data);
     storage->alive = false;
 }
-template<BufferKind Kind> void CpuBuffer<Kind>::uploadData(size_t size, const void *data, BufferUsage) {
+template<BufferKind Kind> void CpuBuffer<Kind>::replaceData(size_t size, const void *data) {
     auto &storage = bufferStorage(bound());
     if (size > storage.data.max_size()) invalid("Geometry buffer size is too large");
     std::vector<std::byte> replacement(size);
     if (size && data) std::memcpy(replacement.data(), data, size);
     storage.data.swap(replacement);
 }
-template<BufferKind Kind> void CpuBuffer<Kind>::uploadData(std::span<const std::byte> data) { uploadData(data.size(), data.data()); }
+template<BufferKind Kind> void CpuBuffer<Kind>::uploadData(std::span<const std::byte> data) { replaceData(data.size(), data.data()); }
 template<BufferKind Kind> void CpuBuffer<Kind>::uploadSubData(size_t offset, size_t size, const void *data) {
     auto &storage = bufferStorage(bound());
     if (offset > storage.data.size() || size > storage.data.size() - offset || (size && !data))
         invalid("Geometry buffer update is out of bounds");
     if (size) std::memmove(storage.data.data() + offset, data, size);
 }
-template<BufferKind Kind> void CpuBuffer<Kind>::allocEmpty(size_t size, BufferUsage usage) { uploadData(size, nullptr, usage); }
+template<BufferKind Kind> void CpuBuffer<Kind>::allocEmpty(size_t size) { replaceData(size, nullptr); }
 template class BufferID<BufferKind::Vertex>;
 template class BufferID<BufferKind::Index>;
 template struct CpuBuffer<BufferKind::Vertex>;

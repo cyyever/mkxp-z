@@ -23,7 +23,7 @@
 #define MKXP_RENDER_OPS_H
 
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "vertex.h"
 #include <cstring>
 #include <type_traits>

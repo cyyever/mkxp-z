@@ -59,6 +59,7 @@ geometry_tests = executable('gpu-geometry-tests',
 test('gpu-cpu-geometry', geometry_tests)
 
 subdir('shader-state')
+subdir('resources')
 
 if host_machine.system() == 'windows'
     primitive_benchmark = executable('gpu-primitives-bench',

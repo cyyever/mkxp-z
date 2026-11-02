@@ -31,7 +31,7 @@
 #include "etc-internal.h"
 #include "tilequad.h"
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "quad.h"
 #include "quadarray.h"
 #include "texpool.h"

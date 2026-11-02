@@ -22,7 +22,7 @@
 #ifndef TEXPOOL_H
 #define TEXPOOL_H
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 
 struct TexPoolPrivate;
 

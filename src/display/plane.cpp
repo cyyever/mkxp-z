@@ -26,7 +26,7 @@
 #include "etc.h"
 #include "util.h"
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "quad.h"
 #include "quadarray.h"
 #include "transform.h"

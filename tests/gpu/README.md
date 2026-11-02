@@ -32,6 +32,10 @@ meson setup build/gpu-tests tests/gpu
 meson test -C build/gpu-tests --print-errorlogs
 ```
 
+`gpu-native-resources` exercises the production texture/buffer/target adapter:
+shared-handle invalidation, overlapping buffer updates, pixel transfer and mipmap
+refresh after uploads and render-target clears.
+
 SDL API requirements:
 - https://wiki.libsdl.org/SDL3/SDL_WaitAndAcquireGPUSwapchainTexture
 - https://wiki.libsdl.org/SDL3/SDL_CancelGPUCommandBuffer

@@ -40,7 +40,7 @@
 
 #include <pixman.h>
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "render-ops.h"
 #include "gpu-render-context.h"
 #include "quad.h"

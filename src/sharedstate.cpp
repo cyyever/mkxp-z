@@ -31,7 +31,7 @@
 #include "texpool.h"
 #include "font.h"
 #include "eventthread.h"
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "global-ibo.h"
 #include "quad.h"
 #include "binding.h"
