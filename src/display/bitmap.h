@@ -245,6 +245,11 @@ public:
     void assumeRubyGC();
 
 private:
+	void kglShadowRasterH(int x1, int x2, int y, bool soft, int w, int h,
+	                      int x_center, int y_center, double slope1, double slope2);
+	void kglShadowRasterV(int y1, int y2, int x, bool wall, bool soft, int w, int h,
+	                      int x_center, int y_center, double slope1, double slope2);
+
 	void setLores(Bitmap *lores);
 	void createSurface() const;
 	void ensureAnimated() const;
