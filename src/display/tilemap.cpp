@@ -31,7 +31,7 @@
 #include "config.h"
 #include "debugwriter.h"
 #include "render-state.h"
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "render-ops.h"
 #include "global-ibo.h"
 #include "etc-internal.h"

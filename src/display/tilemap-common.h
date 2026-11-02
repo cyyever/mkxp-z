@@ -23,7 +23,7 @@
 #define TILEMAPCOMMON_H
 
 #include "table.h"
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "render-ops.h"
 #include "sharedstate.h"
 #include "global-ibo.h"

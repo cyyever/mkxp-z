@@ -35,7 +35,7 @@
 #include "filesystem.h"
 #include "display/gpu-render-context.h"
 #include "display/gpu-frame-handoff.h"
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "render-ops.h"
 #include "render-state.h"
 #include "intrulist.h"

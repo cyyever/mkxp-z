@@ -29,7 +29,7 @@
 #include "etc-internal.h"
 #include "util.h"
 
-#include "render-resources.h"
+#include "display/gpu-resources.h"
 #include "quad.h"
 #include "transform.h"
 #include "shader.h"

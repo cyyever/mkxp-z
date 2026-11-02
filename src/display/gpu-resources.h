@@ -71,14 +71,13 @@ ID gen();
 void del(ID);
 void bind(ID);
 void unbind();
-void setTarget(TEX::ID, unsigned colorAttachment = 0);
+void setTarget(TEX::ID);
 void clear();
 }
 
 namespace gpu_resources {
 void resetContextBindings() noexcept;
 enum class BufferKind { Vertex, Index };
-enum class BufferUsage { Static, Dynamic, Stream };
 template<BufferKind Kind> class BufferID {
 public:
     BufferID() = default;
@@ -99,10 +98,11 @@ template<BufferKind Kind> struct CpuBuffer {
     static void bind(ID);
     static void unbind();
     static const ID &bound();
-    static void uploadData(std::size_t size, const void *data, BufferUsage = BufferUsage::Static);
     static void uploadData(std::span<const std::byte> data);
     static void uploadSubData(std::size_t offset, std::size_t size, const void *data);
-    static void allocEmpty(std::size_t size, BufferUsage = BufferUsage::Static);
+    static void allocEmpty(std::size_t size);
+private:
+    static void replaceData(std::size_t size, const void *data);
 };
 }
 using VBO = gpu_resources::CpuBuffer<gpu_resources::BufferKind::Vertex>;

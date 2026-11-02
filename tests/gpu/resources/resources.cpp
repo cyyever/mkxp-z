@@ -1,4 +1,4 @@
-#include "display/render/render-resources.h"
+#include "display/gpu-resources.h"
 #include "display/gpu-device.h"
 #include "display/gpu-frame.h"
 #include "util/exception.h"
@@ -124,7 +124,6 @@ static void textures() {
     TEX::prepareSampling(alias);
     check(alias.mipmaps()&&activeDevice->downloadRGBA(id.resource(),1)==std::vector<Uint8>({0,255,0,255}),
           "mipmaps stale after render target clear");
-    rejects([&] { FBO::setTarget(id,1); });
     auto secondary = FBO::gen();FBO::bind(secondary);FBO::setTarget(id);FBO::bind(target);
     const int beforeNonbound = flushes;FBO::del(secondary);
     check(flushes>beforeNonbound,"nonbound target release did not flush queued references");
