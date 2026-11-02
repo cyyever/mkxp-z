@@ -176,12 +176,6 @@ void AudioStream::fadeOut(int duration)
 	fade.thread = std::jthread([this](std::stop_token stop) { fadeOutThread(stop); });
 }
 
-void AudioStream::seek(double offset)
-{
-	auto lock = lockStream();
-	stream.play(offset);
-}
-
 void AudioStream::setVolume(VolumeType type, float value)
 {
 	volumes[type] = value;

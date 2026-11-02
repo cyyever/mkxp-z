@@ -27,6 +27,7 @@
 #include "config.h"
 #include "util.h"
 
+#include <algorithm>
 #include <format>
 
 #define SE_CACHE_MEM (10*1024*1024) // 10 MB
@@ -39,24 +40,7 @@ struct SoundBuffer
 	/* Fully decoded audio; tracks still playing it hold their own reference */
 	MixAudioPtr audio;
 	size_t bytes = 0;
-
-	/* Link into the buffer cache priority list */
-	IntruListLink<SoundBuffer> link;
-
-	SoundBuffer() : link(this) {}
 };
-
-/* Before: [a][b][c][d], After (index=1): [a][c][d][b] */
-static void
-arrayPushBack(std::vector<size_t> &array, size_t size, size_t index)
-{
-	size_t v = array[index];
-
-	for (size_t t = index; t < size-1; ++t)
-		array[t] = array[t+1];
-
-	array[size-1] = v;
-}
 
 SoundEmitter::SoundEmitter(const Config &conf)
     : bufferBytes(0),
@@ -105,7 +89,7 @@ void SoundEmitter::play(const std::string &filename,
 	size_t srcIndex = srcPrio[i];
 
 	/* Push the used source to the back of the priority list */
-	arrayPushBack(srcPrio, srcCount, i);
+	std::rotate(srcPrio.begin() + i, srcPrio.begin() + i + 1, srcPrio.end());
 
 	MIX_Track *src = sources[srcIndex].get();
 	MIX_StopTrack(src, 0);
@@ -156,14 +140,13 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 {
 	const auto found = bufferHash.find(filename);
-	SoundBuffer *buffer = found == bufferHash.end() ? nullptr : found->second.get();
+	SoundBuffer *buffer = found == bufferHash.end() ? nullptr : found->second->get();
 
 	if (buffer)
 	{
-		/* Buffer still in cashe.
-		 * Move to front of priority list */
-		buffers.remove(buffer->link);
-		buffers.append(buffer->link);
+		/* Buffer still in cache.
+		 * Move to the back of the priority list */
+		buffers.splice(buffers.end(), buffers, found->second);
 
 		return buffer;
 	}
@@ -185,21 +168,18 @@ SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 
 		/* If memory limit is reached, delete lowest priority buffer
 		 * until there is room or no buffers left */
-		while (wouldBeBytes > SE_CACHE_MEM && !buffers.isEmpty())
+		while (wouldBeBytes > SE_CACHE_MEM && !buffers.empty())
 		{
-			SoundBuffer *last = buffers.tail();
-			buffers.remove(last->link);
-
-			wouldBeBytes -= last->bytes;
-
-			bufferHash.erase(last->key);
+			wouldBeBytes -= buffers.back()->bytes;
+			bufferHash.erase(buffers.back()->key);
+			buffers.pop_back();
 		}
 
-		bufferHash.insert_or_assign(filename, std::move(handler.buffer));
-		buffers.prepend(buffer->link);
+		buffers.push_front(std::move(handler.buffer));
+		bufferHash.emplace(filename, buffers.begin());
 
 		bufferBytes = wouldBeBytes;
 
-		return buffer;
+		return buffers.front().get();
 	}
 }

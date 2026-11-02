@@ -22,9 +22,10 @@
 #ifndef SOUNDEMITTER_H
 #define SOUNDEMITTER_H
 
-#include "intrulist.h"
 #include "audio-util.h"
-#include <map>
+#include <list>
+#include <memory>
+#include <unordered_map>
 
 #include <string>
 #include <vector>
@@ -34,10 +35,9 @@ struct Config;
 
 struct SoundEmitter
 {
-	typedef std::map<std::string, std::unique_ptr<SoundBuffer>> BufferHash;
-
-	IntruList<SoundBuffer> buffers;
-	BufferHash bufferHash;
+	using BufferList = std::list<std::unique_ptr<SoundBuffer>>;
+	BufferList buffers;
+	std::unordered_map<std::string, BufferList::iterator> bufferHash;
 
 	/* Byte count sum of cached decoded audio; playing tracks keep a reference */
 	size_t bufferBytes;
