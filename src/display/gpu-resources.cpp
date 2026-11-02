@@ -32,14 +32,11 @@ struct Storage { TEX::ID target; bool alive = true; };
 thread_local ID boundFramebufferID;
 }
 namespace gpu_resources {
-struct BufferStorage { std::vector<std::byte> data; bool alive = true; };
 struct Access {
     static auto &texture(TEX::ID &id) { return id.storage; }
     static const auto &texture(const TEX::ID &id) { return id.storage; }
     static auto &framebuffer(FBO::ID &id) { return id.storage; }
     static const auto &framebuffer(const FBO::ID &id) { return id.storage; }
-    template<BufferKind Kind> static auto &buffer(BufferID<Kind> &id) { return id.storage; }
-    template<BufferKind Kind> static const auto &buffer(const BufferID<Kind> &id) { return id.storage; }
 };
 }
 namespace {
@@ -135,15 +132,6 @@ void uploadRegion(const TEX::ID &id, int x, int y, int width, int height, std::s
         SDL_EndGPUCopyPass(pass);
         command.submitAndWait();
     });
-}
-template<gpu_resources::BufferKind Kind> auto &activeBuffer() {
-    static thread_local gpu_resources::BufferID<Kind> current;
-    return current;
-}
-template<gpu_resources::BufferKind Kind> auto &bufferStorage(const gpu_resources::BufferID<Kind> &id) {
-    const auto &storage = Access::buffer(id);
-    if (!storage || !storage->alive) invalid("Geometry buffer handle is empty or released");
-    return *storage;
 }
 }
 
@@ -280,51 +268,7 @@ namespace gpu_resources {
 void resetContextBindings() noexcept {
     activeTexture = {};
     FBO::boundFramebufferID = {};
-    VBO::unbind();
-    IBO::unbind();
 }
-template<BufferKind Kind> BufferID<Kind>::BufferID(int zero) { if (zero != 0) invalid("Buffer IDs are opaque"); }
-template<BufferKind Kind> bool BufferID<Kind>::valid() const { return storage && storage->alive; }
-template<BufferKind Kind> BufferID<Kind>::operator bool() const { return valid(); }
-template<BufferKind Kind> std::span<const std::byte> BufferID<Kind>::bytes() const {
-    if (empty()) return {};
-    return bufferStorage(*this).data;
-}
-template<BufferKind Kind> typename CpuBuffer<Kind>::ID CpuBuffer<Kind>::gen() {
-    ID id; Access::buffer(id) = std::make_shared<BufferStorage>(); return id;
-}
-template<BufferKind Kind> const typename CpuBuffer<Kind>::ID &CpuBuffer<Kind>::bound() { return activeBuffer<Kind>(); }
-template<BufferKind Kind> void CpuBuffer<Kind>::bind(ID id) {
-    if (!id.empty()) bufferStorage(id);
-    activeBuffer<Kind>() = std::move(id);
-}
-template<BufferKind Kind> void CpuBuffer<Kind>::unbind() { activeBuffer<Kind>() = {}; }
-template<BufferKind Kind> void CpuBuffer<Kind>::del(ID id) {
-    auto &storage = Access::buffer(id);
-    if (!storage || !storage->alive) return;
-    if (activeBuffer<Kind>() == id) unbind();
-    std::vector<std::byte>().swap(storage->data);
-    storage->alive = false;
-}
-template<BufferKind Kind> void CpuBuffer<Kind>::replaceData(size_t size, const void *data) {
-    auto &storage = bufferStorage(bound());
-    if (size > storage.data.max_size()) invalid("Geometry buffer size is too large");
-    std::vector<std::byte> replacement(size);
-    if (size && data) std::memcpy(replacement.data(), data, size);
-    storage.data.swap(replacement);
-}
-template<BufferKind Kind> void CpuBuffer<Kind>::uploadData(std::span<const std::byte> data) { replaceData(data.size(), data.data()); }
-template<BufferKind Kind> void CpuBuffer<Kind>::uploadSubData(size_t offset, size_t size, const void *data) {
-    auto &storage = bufferStorage(bound());
-    if (offset > storage.data.size() || size > storage.data.size() - offset || (size && !data))
-        invalid("Geometry buffer update is out of bounds");
-    if (size) std::memmove(storage.data.data() + offset, data, size);
-}
-template<BufferKind Kind> void CpuBuffer<Kind>::allocEmpty(size_t size) { replaceData(size, nullptr); }
-template class BufferID<BufferKind::Vertex>;
-template class BufferID<BufferKind::Index>;
-template struct CpuBuffer<BufferKind::Vertex>;
-template struct CpuBuffer<BufferKind::Index>;
 }
 
 void TEXFBO::init(TEXFBO &value) {

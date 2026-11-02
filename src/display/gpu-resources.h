@@ -8,7 +8,7 @@
 #include <span>
 
 namespace gpu { class Texture; }
-namespace gpu_resources { struct Access; struct BufferStorage; }
+namespace gpu_resources { struct Access; }
 
 // Handles share resource identity across copies. Mutation belongs to the active
 // render thread; the Device must outlive every allocated texture handle.
@@ -77,36 +77,7 @@ void clear();
 
 namespace gpu_resources {
 void resetContextBindings() noexcept;
-enum class BufferKind { Vertex, Index };
-template<BufferKind Kind> class BufferID {
-public:
-    BufferID() = default;
-    explicit BufferID(int zero);
-    bool empty() const { return !storage; }
-    bool valid() const;
-    std::span<const std::byte> bytes() const;
-    explicit operator bool() const;
-    bool operator==(const BufferID &) const = default;
-private:
-    friend struct Access;
-    std::shared_ptr<BufferStorage> storage;
-};
-template<BufferKind Kind> struct CpuBuffer {
-    using ID = BufferID<Kind>;
-    static ID gen();
-    static void del(ID);
-    static void bind(ID);
-    static void unbind();
-    static const ID &bound();
-    static void uploadData(std::span<const std::byte> data);
-    static void uploadSubData(std::size_t offset, std::size_t size, const void *data);
-    static void allocEmpty(std::size_t size);
-private:
-    static void replaceData(std::size_t size, const void *data);
-};
 }
-using VBO = gpu_resources::CpuBuffer<gpu_resources::BufferKind::Vertex>;
-using IBO = gpu_resources::CpuBuffer<gpu_resources::BufferKind::Index>;
 
 struct TEXFBO {
     TEX::ID tex;

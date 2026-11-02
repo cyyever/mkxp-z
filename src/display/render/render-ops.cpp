@@ -25,17 +25,14 @@
 #include "render-state.h"
 #include "quad.h"
 #include "shader.h"
-#include "global-ibo.h"
 #include "config.h"
 #include "etc.h"
 #include "util/exception.h"
-#include <memory>
 #include <cstdint>
-#include <vector>
 
 namespace RenderOps {
-void subRectImageUpload(int, int srcX, int srcY, int dstX, int dstY, int width, int height,
-                        SDL_Surface *surface, SDL_PixelFormat) {
+void subRectImageUpload(int srcX, int srcY, int dstX, int dstY, int width, int height,
+                        SDL_Surface *surface) {
     if(!surface || srcX<0 || srcY<0 || width<0 || height<0 ||
        std::int64_t(srcX)+width>surface->w || std::int64_t(srcY)+height>surface->h)
         throw Exception(Exception::ArgumentError,"Invalid surface upload rectangle");
@@ -44,33 +41,6 @@ void subRectImageUpload(int, int srcX, int srcY, int dstX, int dstY, int width, 
         std::size_t(srcY)*surface->pitch+std::size_t(srcX)*SDL_BYTESPERPIXEL(surface->format);
     TEX::uploadSubImage(dstX,dstY,width,height,pixels,surface->format,surface->pitch);
 }
-namespace { thread_local VAO *active = nullptr; }
-void vaoInit(VAO &vao,bool keepBound) {
-    if(!vao.convert || !vao.vertSize) throw Exception(Exception::ArgumentError,"Missing vertex layout");
-    if(keepBound) { VBO::bind(vao.vbo); IBO::bind(vao.ibo); active=&vao; }
-}
-void vaoFini(VAO &vao) { if(active==&vao) active=nullptr; }
-void vaoBind(VAO &vao) { active=&vao; VBO::bind(vao.vbo); IBO::bind(vao.ibo); }
-void vaoUnbind(VAO &) { active=nullptr; }
-void drawElements(std::size_t count,std::size_t byteOffset) {
-    if(!count) return;
-    if(!active || !active->convert || !active->vertSize || count%3)
-        throw Exception(Exception::ArgumentError,"Invalid indexed geometry");
-    const auto indices=active->ibo.bytes(), vertices=active->vbo.bytes();
-    if(byteOffset%sizeof(index_t) || byteOffset>indices.size() || count>(indices.size()-byteOffset)/sizeof(index_t))
-        throw Exception(Exception::ArgumentError,"Index buffer range exceeded");
-    thread_local std::vector<gpu::QuadVertex> converted;
-    converted.resize(count);
-    for(std::size_t i=0;i<count;++i) {
-        index_t index; std::memcpy(&index,indices.data()+byteOffset+i*sizeof(index_t),sizeof(index));
-        const auto offset=std::size_t(index)*active->vertSize;
-        if(offset>vertices.size() || active->vertSize>vertices.size()-offset)
-            throw Exception(Exception::ArgumentError,"Vertex buffer range exceeded");
-        converted[i]=active->convert(vertices.data()+offset);
-    }
-    gpu::drawVertices(converted);
-}
-
 int blitScaleIsSpecial(TEXFBO &target, bool targetPreferHires, const IntRect &targetRect, TEXFBO &source, const IntRect &sourceRect)
 {
 	int targetWidth = targetRect.w;

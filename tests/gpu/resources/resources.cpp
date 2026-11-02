@@ -48,33 +48,6 @@ void clearRenderTarget() {
 }
 }
 
-static void cpuBuffers() {
-    auto id = IBO::gen(); auto alias = id;
-    check(id.valid() && !id.empty() && id.bytes().empty(), "buffer identity before allocation");
-    IBO::bind(id);
-    std::array<Uint16,3> indices{0,1,2};
-    IBO::uploadData(std::as_bytes(std::span(indices)));
-    check(alias.bytes().size()==sizeof(indices) && !std::memcmp(alias.bytes().data(),indices.data(),sizeof(indices)),
-          "buffer upload through alias");
-    const Uint16 replacement = 42;
-    IBO::uploadSubData(sizeof(Uint16),sizeof(replacement),&replacement);
-    indices[1]=42;
-    check(!std::memcmp(alias.bytes().data(),indices.data(),sizeof(indices)),"buffer sub update");
-    IBO::uploadSubData(sizeof(Uint16),sizeof(Uint16)*2,alias.bytes().data());
-    indices={0,0,42};
-    check(!std::memcmp(alias.bytes().data(),indices.data(),sizeof(indices)),"overlapping buffer update");
-    rejects([&] { IBO::uploadSubData(std::numeric_limits<size_t>::max(),1,&replacement); });
-    rejects([&] { IBO::uploadSubData(0,1,nullptr); });
-    rejects([&] { IBO::allocEmpty(std::numeric_limits<size_t>::max()); });
-    IBO::del(id);
-    check(!alias.valid() && !alias.empty() && IBO::bound().empty(),"buffer aliases not invalidated");
-    rejects([&] { (void)alias.bytes(); });
-    rejects([&] { IBO::bind(alias); });
-    IBO::del(alias);
-    auto vertices=VBO::gen();VBO::bind(vertices);VBO::allocEmpty(0);
-    check(vertices.valid()&&vertices.bytes().empty(),"empty CPU vertex buffer");
-    VBO::del(vertices);
-}
 static void textures() {
     auto id=TEX::gen();auto alias=id;
     check(!id.empty() && bool(id) && !id.valid() && !id.native(),"texture identity before allocation");
@@ -145,7 +118,7 @@ int main(){SDL_Window *window=nullptr;try{
     {gpu::Device device(window,SDL_GPU_SHADERFORMAT_DXBC|SDL_GPU_SHADERFORMAT_DXIL|SDL_GPU_SHADERFORMAT_SPIRV|SDL_GPU_SHADERFORMAT_MSL);
      struct BindingCleanup { ~BindingCleanup(){onFlush={};gpu_resources::resetContextBindings();primary={};activeTarget.reset();} } cleanup;
      activeDevice=&device;std::cout<<"GPU driver: "<<SDL_GetGPUDeviceDriver(device.native())<<'\n';
-     cpuBuffers();textures();activeDevice=nullptr;}
-    SDL_DestroyWindow(window);SDL_Quit();std::cout<<"Native texture/buffer/target resource tests passed\n";return 0;
+     textures();activeDevice=nullptr;}
+    SDL_DestroyWindow(window);SDL_Quit();std::cout<<"Native texture/target resource tests passed\n";return 0;
 }catch(const Exception&e){std::cerr<<e.msg.c_str()<<'\n';}catch(const std::exception&e){std::cerr<<e.what()<<'\n';}
 if(window)SDL_DestroyWindow(window);SDL_Quit();return 1;}

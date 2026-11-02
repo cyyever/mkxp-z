@@ -77,15 +77,15 @@ static void testBatch() {
     check(batch.count() == 0 && submissions == before, "empty batch submits no geometry");
 
     SimpleQuadArray largest;
-    constexpr size_t limit = static_cast<size_t>(INDEX_T_MAX - 1) / 6;
+    constexpr size_t limit = static_cast<size_t>(std::numeric_limits<uint16_t>::max() - 1) / 6;
     largest.resize(limit);
     Quad::setPosRect(largest.vertices.data() + (limit - 1) * 4, FloatRect(7,8,9,10));
     largest.commit();
     largest.draw(limit - 1, 1);
     check(submitted[2].position[0] == 16 && submitted[2].position[1] == 18,
-          "last legal indexed quad retains all geometry");
+          "last supported quad retains all geometry");
     rejects([&] { largest.resize(limit + 1); });
-    check(largest.count() == limit, "rejected index range leaves existing batch intact");
+    check(largest.count() == limit, "rejected batch size leaves existing geometry intact");
 
     CVertex colored;
     colored.pos = Vec2(3,4);

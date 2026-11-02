@@ -1755,13 +1755,13 @@ void Bitmap::stretchBlt(IntRect destRect,
             {
                 if (scaleIsOne) {
                     TEX::bind(getRenderTarget().tex);
-                    RenderOps::subRectImageUpload(srcSurf->w, sourceRect.x, sourceRect.y,
-                        destRect.x, destRect.y, destRect.w, destRect.h, srcSurf, srcSurf->format);
+                    RenderOps::subRectImageUpload(sourceRect.x, sourceRect.y,
+                        destRect.x, destRect.y, destRect.w, destRect.h, srcSurf);
                 } else {
                     TEXFBO &temporary = shState->gpTexFBO(sourceRect.w, sourceRect.h);
                     TEX::bind(temporary.tex);
-                    RenderOps::subRectImageUpload(srcSurf->w, sourceRect.x, sourceRect.y,
-                        0, 0, sourceRect.w, sourceRect.h, srcSurf, srcSurf->format);
+                    RenderOps::subRectImageUpload(sourceRect.x, sourceRect.y,
+                        0, 0, sourceRect.w, sourceRect.h, srcSurf);
                     sourceRect.x = sourceRect.y = 0;
                     RenderOps::blitBegin(getRenderTarget());
                     RenderOps::blitSource(temporary);
@@ -1792,8 +1792,8 @@ void Bitmap::stretchBlt(IntRect destRect,
                 sourceWidth = gpTexSize.x;
                 sourceHeight = gpTexSize.y;
                 shState->bindTex();
-                RenderOps::subRectImageUpload(srcSurf->w, sourceRect.x, sourceRect.y,
-                    0, 0, sourceRect.w, sourceRect.h, srcSurf, srcSurf->format);
+                RenderOps::subRectImageUpload(sourceRect.x, sourceRect.y,
+                    0, 0, sourceRect.w, sourceRect.h, srcSurf);
                 sourceRect.x = sourceRect.y = 0;
             }
             else

@@ -23,10 +23,11 @@
 #define QUADARRAY_H
 
 #include "vertex.h"
-#include "global-ibo.h"
 #include "util/exception.h"
 
 #include <vector>
+#include <cstdint>
+#include <limits>
 
 template<class VertexType>
 struct QuadArray
@@ -38,7 +39,7 @@ struct QuadArray
 
 	void resize(size_t size)
 	{
-        if (size > static_cast<size_t>(INDEX_T_MAX - 1) / 6)
+        if (size > static_cast<size_t>(std::numeric_limits<uint16_t>::max() - 1) / 6)
             throw Exception(Exception::ArgumentError, "Quad batch exceeds index range");
         vertices.resize(size * 4);
 		quadCount = size;
@@ -55,7 +56,7 @@ struct QuadArray
 	 * and previous to the first 'draw()' call. */
 	void commit()
     {
-        if (quadCount > static_cast<size_t>(INDEX_T_MAX - 1) / 6 || vertices.size() != quadCount * 4)
+        if (quadCount > static_cast<size_t>(std::numeric_limits<uint16_t>::max() - 1) / 6 || vertices.size() != quadCount * 4)
             throw Exception(Exception::ArgumentError, "Invalid quad batch geometry");
         triangles.resize(quadCount * 6);
         for (size_t quad = 0; quad < quadCount; ++quad)
