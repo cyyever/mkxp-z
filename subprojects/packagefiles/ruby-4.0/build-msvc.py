@@ -65,8 +65,5 @@ if not (builddir / 'Makefile').is_file():
     )
 # The rubyspec C-API test extensions link against the DLL import library, which cannot work with our
 # dllimport-free headers; they are not needed, so point their target list at a placeholder.
-# The engine is UTF-8 only; skip Ruby's optional encodings and transcoders
-# (UTF-8, US-ASCII and ASCII-8BIT are built into the core).
-run('nmake', 'main', 'RUBYSPEC_CAPIEXT_EXTS=rubyspec-capiext-skipped',
-    'ENCS=--no-encs=* --no-transes=*')
+run('nmake', 'main', 'RUBYSPEC_CAPIEXT_EXTS=rubyspec-capiext-skipped')
 Path(stamp).write_text('')

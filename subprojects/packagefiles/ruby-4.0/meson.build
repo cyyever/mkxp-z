@@ -140,10 +140,6 @@ else
                 ],
                 env: {
                     'CONFIG_SITE': ' ',
-                    # RGSS data and the engine are UTF-8 only (default_external/internal are
-                    # forced to UTF-8), so build none of Ruby's optional encodings or
-                    # transcoders; UTF-8, US-ASCII and ASCII-8BIT are built into the core.
-                    'ENCS': '--no-encs=* --no-transes=*',
                     'MKXP_LIBGCC': cc.has_link_argument('-lgcc') ? '-lgcc' : '',
                     # Disable LTO while running link tests for Ruby extensions if the linker is LLD (LLVM linker) and we are building for 32-bit ARM.
                     # Otherwise, the link tests may fail due to https://github.com/llvm/llvm-project/issues/108262.

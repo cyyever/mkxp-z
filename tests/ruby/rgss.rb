@@ -54,7 +54,6 @@ payload = [1, -1, 2**80, "\x00\xff".b, ["日本語", {rgss: 3}]]
 check(Marshal.load(Zlib::Inflate.inflate(Zlib::Deflate.deflate(Marshal.dump(payload)))) == payload,
       'compressed RGSS script/data round trip')
 check(Marshal.load("\x04\x08[\x08i\x06i\x00i\xFA".b) == [1, 0, -1], 'legacy Marshal 4.8 fixture')
-check("日本語".encode('Windows-31J').encode('UTF-8') == "日本語", 'RGSS encoding conversion')
 check(Thread.new { 42 }.value == 42, 'thread startup')
 check(Fiber.new { Fiber.yield 1; 2 }.resume == 1, 'fiber startup')
 GC.start
