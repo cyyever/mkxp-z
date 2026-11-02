@@ -176,7 +176,11 @@ struct AudioPrivate
 
 				if (me.stream.queryState() != ALStream::Playing)
                 {
-                    /* ME has ended */
+                    /* ME has ended. Decide for all tracks together: one
+                     * stopped or unused track must not cancel the fade-in
+                     * of the paused ones */
+                    bool resumed = false;
+
                     for (const auto &track : bgmTracks) {
                         auto trackLock = track->lockStream();
                         track->extPaused = false;
@@ -186,18 +190,18 @@ struct AudioPrivate
                         if (sState == ALStream::Paused) {
                             /* BGM is paused. -> FadeInBGM */
                             track->stream.play();
-                            meWatch.state = BgmFadingIn;
+                            resumed = true;
                         }
                         else {
-                            /* BGM is stopped. -> MeNotPlaying */
+                            /* BGM is stopped: no fade-in for this track */
                             track->setVolume(AudioStream::External, 1.0f);
                             
                             if (!track->noResumeStop)
                                 track->stream.play();
-                            
-                            meWatch.state = MeNotPlaying;
                         }
                     }
+
+                    meWatch.state = resumed ? BgmFadingIn : MeNotPlaying;
 				}
 
 				break;
@@ -210,7 +214,12 @@ struct AudioPrivate
                 for (const auto &track : bgmTracks)
                     trackLocks.push_back(track->lockStream());
 
-				if (bgmTracks[0]->stream.queryState() == ALStream::Stopped)
+				bool anyPlaying = false;
+                for (const auto &track : bgmTracks)
+                    if (track->stream.queryState() == ALStream::Playing)
+                        anyPlaying = true;
+
+				if (!anyPlaying)
 				{
 					/* BGM stopped midway fade in. -> MeNotPlaying */
                     for (const auto &track : bgmTracks)
@@ -232,18 +241,27 @@ struct AudioPrivate
 					break;
 				}
 
-				float vol = bgmTracks[0]->getVolume(AudioStream::External);
-				vol += fadeInStep;
+				/* Each playing track fades in from its own level; a track
+				 * that is not playing has nothing to fade */
+				bool fading = false;
+                for (const auto &track : bgmTracks) {
+                    float vol = 1.0f;
+                    if (track->stream.queryState() == ALStream::Playing)
+                        vol = track->getVolume(AudioStream::External) + fadeInStep;
 
-				if (vol >= 1)
+                    if (vol < 1)
+                        fading = true;
+                    else
+                        vol = 1.0f;
+
+                    track->setVolume(AudioStream::External, vol);
+                }
+
+				if (!fading)
 				{
 					/* BGM fully faded in. -> MeNotPlaying */
-					vol = 1.0f;
 					meWatch.state = MeNotPlaying;
 				}
-
-                for (const auto &track : bgmTracks)
-                    track->setVolume(AudioStream::External, vol);
 
 				break;
 			}
