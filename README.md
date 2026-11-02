@@ -1,9 +1,12 @@
 # mkxp-z
 
-Supported desktop targets are Windows 11 releases from 2026 onward, macOS 27
-and newer on Apple silicon, Linux distributions released from 2026 onward,
-and the latest production FreeBSD RELEASE only. Mobile platforms are not
-supported. Shared filesystem/thread/timing code uses standard C++; native
+Supported desktop targets are Windows 11 releases from 2026 onward, Linux
+distributions released from 2026 onward, and the latest production FreeBSD
+RELEASE only. macOS is currently unsupported: engine builds need the offline
+DXC + SDL_shadercross shader toolchain, which has no packaged macOS release,
+so CI no longer builds the macOS app. The macOS platform code is kept, and the
+portable core and Ruby runtime are still tested with Apple Clang. Mobile
+platforms are not supported. Shared filesystem/thread/timing code uses standard C++; native
 platform code remains where desktop APIs differ. CI build hosts may be older
 than deployment targets; a successful cross-build is not a runtime OS test.
 

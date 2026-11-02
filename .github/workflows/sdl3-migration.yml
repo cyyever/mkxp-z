@@ -27,10 +27,6 @@ jobs:
             os: ubuntu-26.04
             cc: gcc
             cxx: g++
-          - name: Apple Clang / SDL3
-            os: xcode-27
-            cc: clang
-            cxx: clang++
           - name: Windows MSVC / SDL3
             os: windows-2025-vs2026
             cc: cl
