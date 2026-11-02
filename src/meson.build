@@ -437,7 +437,6 @@ main_source = files(
     'audio/alstream.cpp',
     'audio/audio.cpp',
     'audio/audiostream.cpp',
-    'audio/mixersource.cpp',
     'audio/soundemitter.cpp',
 
     'display/autotiles.cpp',

@@ -34,16 +34,6 @@
 
 /* Polling interval of the audio worker threads */
 inline constexpr std::chrono::milliseconds AUDIO_SLEEP{10};
-#define STREAM_BUF_SIZE 32768
-
-/* The playback device all audio streams are bound to; opened in main() */
-extern SDL_AudioDeviceID audioDevice;
-
-struct AudioStreamDeleter
-{
-	void operator()(SDL_AudioStream *stream) const { SDL_DestroyAudioStream(stream); }
-};
-using AudioStreamPtr = std::unique_ptr<SDL_AudioStream, AudioStreamDeleter>;
 
 /*
  * RPG Maker uses a -35 decibel scale for volume. 100% volume is 0 dB, 99%
@@ -66,7 +56,7 @@ inline float rgssVolumeToGain(float value)
 	return std::pow(10.0f, -(35.0f / 20.0f) * (1.0f - value));
 }
 
-/* The SDL_mixer mixer that SE tracks play through; created in main() */
+/* The SDL_mixer mixer every track plays through; created in main() */
 extern MIX_Mixer *audioMixer;
 
 struct MixAudioDeleter
@@ -81,12 +71,6 @@ struct MixTrackDeleter
 };
 using MixTrackPtr = std::unique_ptr<MIX_Track, MixTrackDeleter>;
 
-struct MixDecoderDeleter
-{
-	void operator()(MIX_AudioDecoder *decoder) const { MIX_DestroyAudioDecoder(decoder); }
-};
-using MixDecoderPtr = std::unique_ptr<MIX_AudioDecoder, MixDecoderDeleter>;
-
 /* SDL_mixer decoder names for WAV, FLAC, MP3 and Ogg Vorbis. The vendored
  * build has only the header-only ones; a system SDL_mixer may use the libraries.
  * Inspect the selected decoder, never the filename hint. */
@@ -98,32 +82,10 @@ inline bool isRuntimeDecoder(const char *decoder)
 	return false;
 }
 
-/* Open a runtime decoder on 'io', which the caller keeps owning. Loop tags such
- * as Ogg LOOPSTART are ignored: the engine always plays or loops the whole file.
- * Returns null with SDL's error set on failure. */
-inline MixDecoderPtr openRuntimeDecoder(SDL_IOStream *io)
-{
-	const SDL_PropertiesID props = SDL_CreateProperties();
-	SDL_SetBooleanProperty(props, MIX_PROP_AUDIO_LOAD_IGNORE_LOOPS_BOOLEAN, true);
-	MixDecoderPtr decoder(MIX_CreateAudioDecoder_IO(io, false, props));
-	SDL_DestroyProperties(props);
-	if (!decoder)
-		return {};
-
-	const char *name = SDL_GetStringProperty(MIX_GetAudioDecoderProperties(decoder.get()),
-	                                         MIX_PROP_AUDIO_DECODER_STRING, "");
-	if (!isRuntimeDecoder(name))
-	{
-		SDL_SetError("Audio assets must use WAV, FLAC, MP3 or Ogg Vorbis decoding, not %s", name);
-		return {};
-	}
-	return decoder;
-}
-
-/* Load 'ops' (always closed) for playback on audioMixer, with the same decoder
- * policy and loop-tag handling as openRuntimeDecoder(). 'predecode' decodes
- * everything now; otherwise the encoded file stays in memory and is decoded
- * while playing. */
+/* Load 'ops' (always closed) for playback on audioMixer. Loop tags such as
+ * Ogg LOOPSTART are ignored: the engine always plays or loops the whole file.
+ * 'predecode' decodes everything now; otherwise the encoded file stays in
+ * memory and is decoded while playing. */
 inline MixAudioPtr loadRuntimeAudio(SDL_IOStream *ops, bool predecode, std::string &error)
 {
 	const SDL_PropertiesID props = SDL_CreateProperties();

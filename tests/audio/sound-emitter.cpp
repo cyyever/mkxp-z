@@ -36,6 +36,7 @@ static void require(bool condition, const char *message) {
 
 static double render(int frames, size_t *loudFrames = nullptr) {
     std::vector<float> pcm(frames * 2);
+    // MIX_Generate always fills the buffer; it returns how much the tracks mixed.
     require(MIX_Generate(audioMixer, pcm.data(), int(pcm.size() * sizeof(float))) >= 0, SDL_GetError());
     double energy = 0;
     for (size_t i = 0; i < pcm.size(); i += 2) {

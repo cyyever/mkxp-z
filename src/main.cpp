@@ -70,7 +70,6 @@
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg);
 static void showInitError(const std::string &msg);
 
-SDL_AudioDeviceID audioDevice = 0;
 MIX_Mixer *audioMixer = nullptr;
 
 int rgssThreadFun(void *userdata) {
@@ -285,14 +284,10 @@ int main(int argc, char *argv[]) {
 #endif
 
     if (SDL_InitSubSystem(SDL_INIT_AUDIO))
-      audioDevice = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
-    if (audioDevice)
       audioMixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
 
     if (!audioMixer) {
       showInitError("Could not detect an available audio device.");
-      if (audioDevice)
-        SDL_CloseAudioDevice(audioDevice);
       SDL_DestroyWindow(win);
       MIX_Quit();
       TTF_Quit();
@@ -321,7 +316,6 @@ int main(int argc, char *argv[]) {
         showInitError(error.what());
         gpuDevice.reset();
         MIX_DestroyMixer(audioMixer);
-        SDL_CloseAudioDevice(audioDevice);
         SDL_DestroyWindow(win);
         MIX_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
@@ -400,7 +394,6 @@ int main(int argc, char *argv[]) {
     eventThread.cleanup();
 
     MIX_DestroyMixer(audioMixer);
-    SDL_CloseAudioDevice(audioDevice);
     SDL_DestroyWindow(win);
 
 

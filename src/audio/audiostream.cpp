@@ -195,6 +195,7 @@ float AudioStream::getVolume(VolumeType type)
 
 double AudioStream::playingOffset()
 {
+	auto lock = lockStream();
 	return stream.queryOffset();
 }
 
