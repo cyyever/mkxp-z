@@ -92,14 +92,9 @@ CONSTRUCTOR(KglCompressAlphaShader,CompressAlpha)
 CONSTRUCTOR(KglShadowShaderH,ShadowHorizontal)
 CONSTRUCTOR(KglShadowShaderV,ShadowVertical)
 #undef CONSTRUCTOR
-SimpleShader::SimpleShader(const ShaderNoConstructTag &) {}
-SimpleSpriteShader::SimpleSpriteShader(const ShaderNoConstructTag &) {}
-BltShader::BltShader(const ShaderNoConstructTag &) { state.program=gpu::Program::BitmapBlend; }
 Lanczos3Shader::Lanczos3Shader() { state.program=gpu::Program::Lanczos; }
-Lanczos3Shader::Lanczos3Shader(const ShaderNoConstructTag &) {}
 BicubicShader::BicubicShader() { state.program=gpu::Program::Bicubic; }
 Lanczos3SpriteShader::Lanczos3SpriteShader() { state.program=gpu::Program::Lanczos; }
-Lanczos3SpriteShader::Lanczos3SpriteShader(const ShaderNoConstructTag &) {}
 BicubicSpriteShader::BicubicSpriteShader() { state.program=gpu::Program::Bicubic; }
 #ifdef MKXPZ_HAVE_EXTRA_SHADERS
 XbrzShader::XbrzShader() { state.program=gpu::Program::Xbrz; }
@@ -157,7 +152,6 @@ void BltShader::setSubRect(const FloatRect &value) {
     state.fragment.subrect[0]=value.x;state.fragment.subrect[1]=value.y;
     state.fragment.subrect[2]=value.w;state.fragment.subrect[3]=value.h;
 }
-void BltShader::init() { state.textures[0]=TEX::ID{}; }
 bool GrayShader::framebufferScalingAllowed() { return false; }
 void TilemapShader::setAniIndex(int value) { state.tilemap.animation[0]=value; }
 void TilemapShader::setATFrames(int values[7]) {

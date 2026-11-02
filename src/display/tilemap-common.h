@@ -26,7 +26,7 @@
 #include "display/gpu-resources.h"
 #include "render-ops.h"
 #include "sharedstate.h"
-#include "global-ibo.h"
+#include "quadarray.h"
 #include "render-state.h"
 #include "shader.h"
 #include "vertex.h"
@@ -112,25 +112,6 @@ atSelectSubPos(FloatRect &pos, int i)
 
 struct FlashMap
 {
-	FlashMap()
-		: dirty(false),
-	      data(0),
-	      allocQuads(0)
-	{
-		vao.vbo = VBO::gen();
-		vao.ibo = shState->globalIBO().ibo;
-		RenderOps::vaoFillInVertexData<CVertex>(vao);
-
-		RenderOps::vaoInit(vao);
-	}
-
-	~FlashMap()
-	{
-		RenderOps::vaoFini(vao);
-		VBO::del(vao.vbo);
-		dataCon.disconnect();
-	}
-
 	Table *getData() const
 	{
 		return data;
@@ -170,12 +151,11 @@ struct FlashMap
 
 	void draw(float alpha, const Vec2i &trans)
 	{
-		const size_t count = quadCount();
+		const size_t count = geometry.count();
 
 		if (count == 0)
 			return;
 
-		RenderOps::vaoBind(vao);
 		renderState.blendMode.pushSet(BlendAddition);
 
 		FlashMapShader &shader = shState->shaders().flashMap;
@@ -184,22 +164,16 @@ struct FlashMap
 		shader.setAlpha(alpha);
 		shader.setTranslation(trans);
 
-		RenderOps::drawElements(count * 6);
+		geometry.draw();
 
 		renderState.blendMode.pop();
 
-		RenderOps::vaoUnbind(vao);
 	}
 
 private:
 	void setDirty()
 	{
 		dirty = true;
-	}
-
-	size_t quadCount() const
-	{
-		return vertices.size() / 4;
 	}
 
 	bool sampleFlashColor(Vec4 &out, int x, int y) const
@@ -222,7 +196,7 @@ private:
 
 	void rebuildBuffer()
 	{
-		vertices.clear();
+		geometry.clear();
 
 		if (!data)
 			return;
@@ -242,38 +216,21 @@ private:
 				Quad::setColor(v, color);
 
 				for (size_t i = 0; i < 4; ++i)
-					vertices.push_back(v[i]);
+					geometry.vertices.push_back(v[i]);
 			}
 
-		if (vertices.size() == 0)
-			return;
-
-		VBO::bind(vao.vbo);
-
-		if (quadCount() > allocQuads)
-		{
-			allocQuads = quadCount();
-			VBO::allocEmpty(sizeof(CVertex) * vertices.size());
-		}
-
-		VBO::uploadSubData(0, sizeof(CVertex) * vertices.size(), vertices.data());
-
-		VBO::unbind();
-
-		/* Ensure global IBO size */
-		shState->ensureQuadIBO(quadCount());
+		geometry.resize(geometry.vertices.size() / 4);
+		geometry.commit();
 	}
 
-	bool dirty;
+	bool dirty = false;
 
-	Table *data;
+	Table *data = nullptr;
 	SignalConnection dataCon;
 
 	IntRect viewp;
 
-	RenderOps::VAO vao;
-	size_t allocQuads;
-	std::vector<CVertex> vertices;
+	QuadArray<CVertex> geometry;
 };
 
 #endif // TILEMAPCOMMON_H

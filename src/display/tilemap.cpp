@@ -33,7 +33,6 @@
 #include "render-state.h"
 #include "display/gpu-resources.h"
 #include "render-ops.h"
-#include "global-ibo.h"
 #include "etc-internal.h"
 #include "quadarray.h"
 #include "texpool.h"
@@ -189,12 +188,12 @@ static constexpr auto flashAlphaN = std::size(flashAlpha);
 
 struct GroundLayer : public ViewportElement
 {
-	int vboCount;
+	size_t quadCount;
 	TilemapPrivate *p;
 
 	GroundLayer(TilemapPrivate *p, Viewport *viewport);
 
-	void updateVboCount();
+	void updateQuadCount();
 
 	void draw();
 	void drawInt();
@@ -207,8 +206,8 @@ struct GroundLayer : public ViewportElement
 struct ZLayer : public ViewportElement
 {
 	size_t index;
-	std::ptrdiff_t vboOffset;
-	int vboCount;
+	size_t quadOffset;
+	size_t quadCount;
 	TilemapPrivate *p;
 
 	/* If this layer is part of a batch and not
@@ -217,7 +216,7 @@ struct ZLayer : public ViewportElement
 
 	/* If this layer is a batch head, this variable
 	 * holds the element count of the entire batch */
-	int vboBatchCount;
+	size_t quadBatchCount;
 
 	ZLayer(TilemapPrivate *p, Viewport *viewport);
 
@@ -294,8 +293,7 @@ struct TilemapPrivate
 	/* Shared buffers for all tiles */
 	struct
 	{
-		RenderOps::VAO vao;
-		VBO::ID vbo;
+		SimpleQuadArray geometry;
 		bool animated;
 
 		/* Animation state */
@@ -377,15 +375,6 @@ struct TilemapPrivate
 		tiles.animated = false;
 		tiles.aniIdx = 0;
 
-		/* Init tile buffers */
-		tiles.vbo = VBO::gen();
-
-		RenderOps::vaoFillInVertexData<SVertex>(tiles.vao);
-		tiles.vao.vbo = tiles.vbo;
-		tiles.vao.ibo = shState->globalIBO().ibo;
-
-		RenderOps::vaoInit(tiles.vao);
-
 		elem.ground = new GroundLayer(this, viewport);
 
 		for (size_t i = 0; i < zlayersMax; ++i)
@@ -406,10 +395,6 @@ struct TilemapPrivate
 
 		shState->releaseAtlasTex(atlas.gl);
 		releaseHiresAtlas();
-
-		/* Destroy tile buffers */
-		RenderOps::vaoFini(tiles.vao);
-		VBO::del(tiles.vbo);
 
 		/* Disconnect signal handlers */
 		tilesetCon.disconnect();
@@ -604,8 +589,8 @@ struct TilemapPrivate
 					Vec2i texSize;
 					shState->ensureTexSize(tsLaneW, blitOp.h, texSize);
 					shState->bindTex();
-					RenderOps::subRectImageUpload(tsSurf->w, blitOp.src.x, blitOp.src.y,
-					                           0, 0, tsLaneW, blitOp.h, tsSurf, SDL_PIXELFORMAT_RGBA32);
+					RenderOps::subRectImageUpload(blitOp.src.x, blitOp.src.y,
+					                           0, 0, tsLaneW, blitOp.h, tsSurf);
 
 					shader.setTexSize(texSize);
 					quad.setTexRect(FloatRect(0, 0, tsLaneW, blitOp.h));
@@ -627,8 +612,8 @@ struct TilemapPrivate
 				{
 					const TileAtlas::Blit &blitOp = blits[i];
 
-					RenderOps::subRectImageUpload(tsSurf->w, blitOp.src.x, blitOp.src.y,
-					                           blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h, tsSurf, SDL_PIXELFORMAT_RGBA32);
+					RenderOps::subRectImageUpload(blitOp.src.x, blitOp.src.y,
+					                           blitOp.dst.x, blitOp.dst.y, tsLaneW, blitOp.h, tsSurf);
 				}
 
 
@@ -957,11 +942,6 @@ struct TilemapPrivate
 					handleTile(x, y, z);
 	}
 
-	static size_t quadDataSize(size_t quadCount)
-	{
-		return quadCount * sizeof(SVertex) * 4;
-	}
-
 	size_t zlayerSize(size_t index)
 	{
 		return zlayerBases[index+1] - zlayerBases[index];
@@ -981,24 +961,11 @@ struct TilemapPrivate
 
 		zlayerBases[zlayersMax] = quadCount;
 
-		VBO::bind(tiles.vbo);
-		VBO::allocEmpty(quadDataSize(quadCount));
-
-		VBO::uploadSubData(0, quadDataSize(groundQuadCount), groundVert.data());
-
+		tiles.geometry.resize(quadCount);
+		std::ranges::copy(groundVert, tiles.geometry.vertices.begin());
 		for (size_t i = 0; i < zlayersMax; ++i)
-		{
-			if (zlayerVert[i].empty())
-				continue;
-
-			VBO::uploadSubData(quadDataSize(zlayerBases[i]),
-			                   quadDataSize(zlayerSize(i)), zlayerVert[i].data());
-		}
-
-		VBO::unbind();
-
-		/* Ensure global IBO size */
-		shState->ensureQuadIBO(quadCount);
+			std::ranges::copy(zlayerVert[i], tiles.geometry.vertices.begin() + zlayerBases[i] * 4);
+		tiles.geometry.commit();
 	}
 
 	void bindShader(ShaderBase *&shaderVar)
@@ -1034,7 +1001,7 @@ struct TilemapPrivate
 
 	void updateActiveElements(std::vector<int> &zlayerInd)
 	{
-		elem.ground->updateVboCount();
+		elem.ground->updateQuadCount();
 
 		for (size_t i = 0; i < zlayersMax; ++i)
 		{
@@ -1111,7 +1078,7 @@ struct TilemapPrivate
 			ZLayer *batchHead = zlayers[i];
 			batchHead->batchedFlag = false;
 
-			int vboBatchCount = batchHead->vboCount;
+			size_t quadBatchCount = batchHead->quadCount;
 			IntruListLink<SceneElement> *iter = &batchHead->link;
 
 			for (i = i+1; i < elem.activeLayers; ++i)
@@ -1125,11 +1092,11 @@ struct TilemapPrivate
 				if (iter != &layer->link)
 					break;
 
-				vboBatchCount += layer->vboCount;
+				quadBatchCount += layer->quadCount;
 				layer->batchedFlag = true;
 			}
 
-			batchHead->vboBatchCount = vboBatchCount;
+			batchHead->quadBatchCount = quadBatchCount;
 			--i;
 		}
 	}
@@ -1202,15 +1169,15 @@ struct TilemapPrivate
 
 GroundLayer::GroundLayer(TilemapPrivate *p, Viewport *viewport)
     : ViewportElement(viewport, 0),
-      vboCount(0),
+      quadCount(0),
       p(p)
 {
 	onGeometryChange(scene->getGeometry());
 }
 
-void GroundLayer::updateVboCount()
+void GroundLayer::updateQuadCount()
 {
-	vboCount = p->zlayerBases[0] * 6;
+	quadCount = p->zlayerBases[0];
 }
 
 void GroundLayer::draw()
@@ -1228,12 +1195,8 @@ void GroundLayer::draw()
 
 	renderState.blendMode.pushSet(p->blendType);
 
-	RenderOps::vaoBind(p->tiles.vao);
-
 	shader->setTranslation(p->dispPos);
 	drawInt();
-
-	RenderOps::vaoUnbind(p->tiles.vao);
 
 	p->flashMap.draw(flashAlpha[p->flashAlphaIdx] / 255.f, p->dispPos);
 
@@ -1242,7 +1205,7 @@ void GroundLayer::draw()
 
 void GroundLayer::drawInt()
 {
-	RenderOps::drawElements(vboCount);
+	p->tiles.geometry.draw(0, quadCount);
 }
 
 void GroundLayer::onGeometryChange(const Scene::Geometry &geo)
@@ -1253,10 +1216,10 @@ void GroundLayer::onGeometryChange(const Scene::Geometry &geo)
 ZLayer::ZLayer(TilemapPrivate *p, Viewport *viewport)
     : ViewportElement(viewport, 0),
       index(0),
-      vboOffset(0),
-      vboCount(0),
+      quadOffset(0),
+      quadCount(0),
       p(p),
-      vboBatchCount(0)
+      quadBatchCount(0)
 {}
 
 void ZLayer::setIndex(int value)
@@ -1266,8 +1229,8 @@ void ZLayer::setIndex(int value)
 	z = calculateZ(p, index);
 	scene->reinsert(*this);
 
-	vboOffset = p->zlayerBases[index] * sizeof(index_t) * 6;
-	vboCount = p->zlayerSize(index) * 6;
+	quadOffset = p->zlayerBases[index];
+	quadCount = p->zlayerSize(index);
 }
 
 void ZLayer::draw()
@@ -1282,19 +1245,15 @@ void ZLayer::draw()
 
 	renderState.blendMode.pushSet(p->blendType);
 
-	RenderOps::vaoBind(p->tiles.vao);
-
 	shader->setTranslation(p->dispPos);
 	drawInt();
-
-	RenderOps::vaoUnbind(p->tiles.vao);
 
 	renderState.blendMode.pop();
 }
 
 void ZLayer::drawInt()
 {
-	RenderOps::drawElements(vboBatchCount, vboOffset);
+	p->tiles.geometry.draw(quadOffset, quadBatchCount);
 }
 
 int ZLayer::calculateZ(TilemapPrivate *p, int index)

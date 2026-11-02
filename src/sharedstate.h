@@ -29,7 +29,6 @@
 
 struct SharedStatePrivate;
 struct RGSSThreadData;
-struct GlobalIBO;
 struct SDL_Window;
 struct TEXFBO;
 struct Quad;
@@ -45,7 +44,6 @@ class RenderState;
 class TexPool;
 class Font;
 class SharedFontState;
-struct GlobalIBO;
 struct Config;
 struct Vec2i;
 
@@ -83,11 +81,6 @@ struct SharedState
     
     // Returns time since SharedState was constructed in microseconds
     double runTime();
-
-	/* Returns global quad IBO, and ensures it has indices
-	 * for at least minSize quads */
-	void ensureQuadIBO(size_t minSize);
-	GlobalIBO &globalIBO();
 
 	/* Global general purpose texture */
 	void bindTex();

@@ -26,13 +26,10 @@
 #include "gpu-shader-state.h"
 
 
-class ShaderNoConstructTag {};
-
 class Shader {
 public:
     void bind();
     static void unbind();
-    enum Attribute { Position = 0, TexCoord = 1, Color = 2 };
     const gpu::ShaderState &gpuState() const { return state; }
     Shader(const Shader &) = delete;
     Shader &operator=(const Shader &) = delete;
@@ -74,7 +71,6 @@ class SimpleShader : public ShaderBase
 {
 public:
 	SimpleShader();
-	SimpleShader(const ShaderNoConstructTag &);
 
 };
 
@@ -94,7 +90,6 @@ class SimpleSpriteShader : public ShaderBase
 {
 public:
 	SimpleSpriteShader();
-	SimpleSpriteShader(const ShaderNoConstructTag &);
 
 	void setSpriteMat(const float value[16]);
 
@@ -251,9 +246,6 @@ class BltShader : public ShaderBase
 {
 public:
 	BltShader();
-	BltShader(const ShaderNoConstructTag &);
-
-	void init();
 
 	void setSource();
 	void setDestination(const TEX::ID &value);
@@ -302,7 +294,6 @@ class Lanczos3Shader : public SimpleShader
 {
 public:
 	Lanczos3Shader();
-	Lanczos3Shader(const ShaderNoConstructTag &);
 
 	void setTexSize(const Vec2i &value);
 
@@ -332,7 +323,6 @@ class Lanczos3SpriteShader : public SimpleSpriteShader
 {
 public:
 	Lanczos3SpriteShader();
-	Lanczos3SpriteShader(const ShaderNoConstructTag &);
 
 	void setTexSize(const Vec2i &value);
 

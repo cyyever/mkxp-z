@@ -24,9 +24,7 @@
 
 
 #include "display/gpu-resources.h"
-#include "vertex.h"
-#include <cstring>
-#include <type_traits>
+#include "etc-internal.h"
 
 #include <SDL3/SDL_surface.h>
 
@@ -34,37 +32,10 @@ namespace RenderOps
 {
 
 /* EXT_unpack_subimage */
-void subRectImageUpload(int srcW, int srcX, int srcY,
+void subRectImageUpload(int srcX, int srcY,
                         int dstX, int dstY, int dstW, int dstH,
-                        SDL_Surface *src, SDL_PixelFormat format);
+                        SDL_Surface *src);
 
-
-/* ARB_vertex_array_object */
-struct VAO
-{
-    std::size_t vertSize = 0;
-    VBO::ID vbo;
-    IBO::ID ibo;
-    gpu::QuadVertex (*convert)(const void *) = nullptr;
-};
-
-template<class VertexType>
-inline void vaoFillInVertexData(VAO &vao)
-{
-    static_assert(std::is_trivially_copyable_v<VertexType>);
-    vao.vertSize = sizeof(VertexType);
-    vao.convert = [](const void *bytes) {
-        VertexType vertex;
-        std::memcpy(&vertex, bytes, sizeof(vertex));
-        return VertexTraits<VertexType>::convert(vertex);
-    };
-}
-
-void vaoInit(VAO &vao, bool keepBound = false);
-void vaoFini(VAO &vao);
-void vaoBind(VAO &vao);
-void vaoUnbind(VAO &vao);
-void drawElements(std::size_t count, std::size_t byteOffset = 0);
 
 /* EXT_framebuffer_blit */
 int blitScaleIsSpecial(TEXFBO &target, bool targetPreferHires, const IntRect &targetRect, TEXFBO &source, const IntRect &sourceRect);
