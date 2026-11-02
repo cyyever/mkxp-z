@@ -78,15 +78,6 @@ RB_METHOD(audio_##entity##Fade) \
 	return Qnil; \
 }
 
-#define DEF_POS(entity) \
-	RB_METHOD(audio_##entity##Pos) \
-	{ \
-		RB_UNUSED_PARAM; \
-		return rb_float_new(shState->audio().entity##Pos()); \
-	}
-
-// DEF_PLAY_STOP_POS( bgm )
-
 #define MAYBE_NIL_TRACK(t) t == Qnil ? -127 : NUM2INT(t)
 
 RB_METHOD_GUARD(audio_bgmPlay)

@@ -31,11 +31,6 @@
 #error "mkxp-z requires Ruby 4.0 or newer"
 #endif
 
-#define RAPI_MAJOR RUBY_API_VERSION_MAJOR
-#define RAPI_MINOR RUBY_API_VERSION_MINOR
-#define RAPI_TEENY RUBY_API_VERSION_TEENY
-#define RAPI_FULL ((RAPI_MAJOR * 100) + (RAPI_MINOR * 10) + RAPI_TEENY)
-
 enum RbException {
     RGSS = 0,
     Reset,
@@ -355,26 +350,6 @@ RB_METHOD_GUARD_END
 // --------------
 // Do not wait for Graphics.update
 // --------------
-#define DEF_PROP_OBJ_REF(Klass, PropKlass, PropName, prop_iv)                  \
-RB_METHOD(Klass##Get##PropName) {                                            \
-RB_UNUSED_PARAM;                                                           \
-return rb_iv_get(self, prop_iv);                                           \
-}                                                                            \
-RB_METHOD_GUARD(Klass##Set##PropName) {                                    \
-RB_UNUSED_PARAM;                                                           \
-rb_check_argc(argc, 1);                                                    \
-Klass *k = getPrivateData<Klass>(self);                                    \
-VALUE propObj = *argv;                                                     \
-PropKlass *prop;                                                           \
-if (NIL_P(propObj))                                                        \
-prop = 0;                                                                \
-else                                                                       \
-prop = getPrivateDataCheck<PropKlass>(propObj, PropKlass##Type);         \
-k->set##PropName(prop)                                                     \
-rb_iv_set(self, prop_iv, propObj);                                         \
-return propObj;                                                            \
-}                                                                          \
-RB_METHOD_GUARD_END
 
 /* Object property which is copied by value, not reference */
 #define DEF_PROP_OBJ_VAL(Klass, PropKlass, PropName, prop_iv)                  \
@@ -415,9 +390,6 @@ RB_METHOD_GUARD_END
 
 #define DEF_PROP_I(Klass, PropName)                                            \
 DEF_PROP(Klass, int, PropName, int, rb_fix_new)
-
-#define DEF_PROP_F(Klass, PropName)                                            \
-DEF_PROP(Klass, double, PropName, float, rb_float_new)
 
 #define DEF_PROP_B(Klass, PropName)                                            \
 DEF_PROP(Klass, bool, PropName, bool, rb_bool_new)
