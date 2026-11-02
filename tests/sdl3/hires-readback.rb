@@ -25,6 +25,21 @@ begin
   assert_equal([0.0, 0.0, 0.0, 0.0], [pixel.red, pixel.green, pixel.blue, pixel.alpha], 'transparent get_pixel')
   pixel = target.get_pixel(target.width, 0)
   assert_equal([0.0, 0.0, 0.0, 0.0], [pixel.red, pixel.green, pixel.blue, pixel.alpha], 'out-of-range get_pixel')
+  # dup/clone must carry the HiRes companion, not just the logical texture.
+  painted = Bitmap.new(4, 4)
+  painted.hires.fill_rect(0, 0, 12, 12, Color.new(40, 50, 60, 255))
+  painted.hires.fill_rect(1, 1, 1, 1, Color.new(200, 100, 50, 255)) # detail only HiRes can hold
+  copy = painted.dup
+  raise 'dup lost its HiRes companion' unless copy.hires
+  # Ruby's dup copies the @hires ivar; it must be replaced by the copy's own.
+  raise 'dup shares the original HiRes bitmap' if copy.hires.equal?(painted.hires)
+  original = painted.hires.raw_data
+  assert_equal(original, copy.hires.raw_data, 'dup HiRes pixels')
+  copy.hires.fill_rect(0, 0, 12, 12, Color.new(1, 2, 3, 255))
+  assert_equal(original, painted.hires.raw_data, 'original HiRes untouched by copy')
+  assert_equal([1, 2, 3, 255], copy.raw_data.bytes.first(4), 'copy reads its own HiRes')
+  copy.dispose
+  painted.dispose
   target.hires.fill_rect(0, 0, 12, 12, Color.new(255, 0, 0, 255))
   target.hue_change(120)
   check(target, [0, 255, 0, 255], 'hue')
