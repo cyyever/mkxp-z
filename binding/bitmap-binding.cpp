@@ -21,6 +21,7 @@
 
 #include "binding-types.h"
 #include "binding-util.h"
+#include "binding-init.h"
 #include "bitmap.h"
 #include "disposable-binding.h"
 #include "exception.h"

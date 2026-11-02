@@ -52,6 +52,7 @@ static float fwrap(float value, float range)
     return res < 0 ? res + range : res;
 }
 
+namespace {
 class WeatherSpriteShader final : public ShaderBase {
 public:
     WeatherSpriteShader() : ShaderBase(gpu::Program::Weather) {}
@@ -64,6 +65,7 @@ public:
         state.fragment.color[3]=opacity;
     }
 };
+} // namespace
 
 struct SpritePrivate
 {

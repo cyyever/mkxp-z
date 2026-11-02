@@ -52,7 +52,6 @@
 
 uint8_t EventThread::keyStates[];
 EventThread::ControllerState EventThread::controllerState;
-EventThread::TouchState EventThread::touchState;
 std::atomic<int> EventThread::verticalScrollDistance;
 
 /* User event codes */
@@ -95,8 +94,8 @@ showCursor(false)
 {
 }
 
-SDL_TimerID hideCursorTimerID = 0;
-Uint32 cursorTimerCallback(void *param, SDL_TimerID, Uint32 interval)
+static SDL_TimerID hideCursorTimerID = 0;
+static Uint32 cursorTimerCallback(void *param, SDL_TimerID, Uint32 interval)
 {
 	EventThread *ethread = static_cast<EventThread*>(param);
 	hideCursorTimerID = 0;
@@ -151,7 +150,6 @@ void EventThread::process(RGSSThreadData &rtData)
     bool resetting = false;
     
     int winW, winH;
-    int i, rc;
     
 
     
@@ -260,9 +258,8 @@ void EventThread::process(RGSSThreadData &rtData)
             case SDL_EVENT_FINGER_DOWN :
             case SDL_EVENT_FINGER_UP :
             case SDL_EVENT_FINGER_MOTION :
-                if (event.tfinger.fingerID >= MAX_FINGERS)
-                    continue;
-                break;
+                /* RGSS has no touch input */
+                continue;
         }
         
         /* Now process the rest */
@@ -467,21 +464,6 @@ void EventThread::process(RGSSThreadData &rtData)
                 verticalScrollDistance += event.wheel.integer_y;
                 break;
                 
-            case SDL_EVENT_FINGER_DOWN :
-                i = event.tfinger.fingerID;
-                touchState.fingers[i].down = true;
-                
-            case SDL_EVENT_FINGER_MOTION :
-                i = event.tfinger.fingerID;
-                touchState.fingers[i].x = event.tfinger.x * winW;
-                touchState.fingers[i].y = event.tfinger.y * winH;
-                break;
-                
-            case SDL_EVENT_FINGER_UP :
-                i = event.tfinger.fingerID;
-                memset(&touchState.fingers[i], 0, sizeof(touchState.fingers[0]));
-                break;
-                
             default :
                 /* Handle user events */
                 switch(event.type - usrIdStart)
@@ -610,7 +592,6 @@ void EventThread::resetInputStates()
 {
     memset(&keyStates, 0, sizeof(keyStates));
     memset(&controllerState, 0, sizeof(controllerState));
-    memset(&touchState, 0, sizeof(touchState));
 }
 
 void EventThread::setFullscreen(SDL_Window *win, bool mode)

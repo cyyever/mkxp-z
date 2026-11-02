@@ -39,6 +39,7 @@
 
 #include "util/engine-signal.h"
 
+namespace {
 template<typename T>
 struct Sides
 {
@@ -50,6 +51,7 @@ struct Corners
 {
 	T tl, tr, bl, br;
 };
+} // namespace
 
 static const IntRect backgroundSrc(0, 0, 128, 128);
 
@@ -124,6 +126,7 @@ static constexpr auto pauseAniAlphaN = std::size(pauseAniAlpha);
 /* Points to an array of quads which it doesn't own.
  * Useful for setting alpha of quads stored inside
  * bigger arrays */
+namespace {
 struct QuadChunk
 {
 	Vertex *vert;
@@ -139,6 +142,7 @@ struct QuadChunk
 			vert[i].color.w = value;
 	}
 };
+} // namespace
 
 /* Vocabulary:
  *

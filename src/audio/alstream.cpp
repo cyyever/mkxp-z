@@ -58,6 +58,7 @@ void ALStream::close()
 	}
 }
 
+namespace {
 struct ALStreamOpenHandler : FileSystem::OpenHandler
 {
 	MixAudioPtr audio;
@@ -70,6 +71,7 @@ struct ALStreamOpenHandler : FileSystem::OpenHandler
 		return bool(audio);
 	}
 };
+} // namespace
 
 void ALStream::open(const std::string &filename)
 {

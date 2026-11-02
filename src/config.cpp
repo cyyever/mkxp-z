@@ -31,12 +31,12 @@
 
 namespace json = json5pp;
 
-std::string prefPath(const char *org, const char *app) {
+static std::string prefPath(const char *org, const char *app) {
     std::unique_ptr<char, decltype(&SDL_free)> path(SDL_GetPrefPath(org, app), SDL_free);
     return path ? path.get() : "";
 }
 
-void fillStringVec(json::value &item, std::vector<std::string> &vector) {
+static void fillStringVec(json::value &item, std::vector<std::string> &vector) {
     if (!item.is_array()) {
         if (item.is_string()) {
             vector.push_back(item.as_string());
@@ -50,7 +50,7 @@ void fillStringVec(json::value &item, std::vector<std::string> &vector) {
     }
 }
 
-bool copyObject(json::value &dest, json::value src, const char *objectName = "") {
+static bool copyObject(json::value &dest, json::value src, const char *objectName = "") {
     assert(dest.is_object());
     if (src.is_null())
         return false;
@@ -81,7 +81,7 @@ bool copyObject(json::value &dest, json::value src, const char *objectName = "")
     return true;
 }
 
-bool getEnvironmentBool(const char *env, bool defaultValue) {
+static bool getEnvironmentBool(const char *env, bool defaultValue) {
     const char *e = SDL_getenv(env);
     if (!e)
         return defaultValue;
@@ -94,7 +94,7 @@ bool getEnvironmentBool(const char *env, bool defaultValue) {
     return defaultValue;
 }
 
-json::value readConfFile(const char *path) {
+static json::value readConfFile(const char *path) {
     
     json::value ret(0);
     std::error_code error;

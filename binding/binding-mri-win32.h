@@ -7,7 +7,7 @@
 // Attempts to set $stdout and $stdin accordingly on Windows. Only
 // called when debug mode is on, since that's when the console
 // should be active.
-void configureWindowsStreams() {
+static void configureWindowsStreams() {
     const int stdoutFD = getStdFD(STD_OUTPUT_HANDLE);
 
     // Configure $stdout

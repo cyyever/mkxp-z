@@ -67,6 +67,7 @@
 
 #define DEF_FRAMERATE 40
 
+namespace {
 struct PingPong {
     TEXFBO rt[2];
     uint8_t srcInd, dstInd;
@@ -285,8 +286,10 @@ private:
     Quad brightnessQuad;
     bool brightEffect;
 };
+} // namespace
 
 /* All timestamps and durations are SDL_GetTicksNS() nanoseconds. */
+namespace {
 struct FPSLimiter {
     Uint64 lastTickCount;
     
@@ -358,6 +361,7 @@ struct FPSLimiter {
         return adj.idealDiff > tpf;
     }
 };
+} // namespace
 
 struct GraphicsPrivate {
     /* Screen resolution, ie. the resolution at which
@@ -579,7 +583,7 @@ struct GraphicsPrivate {
         }
     }
     
-    void checkShutDownReset() {
+    static void checkShutDownReset() {
         shState->checkShutdown();
         shState->checkReset();
     }

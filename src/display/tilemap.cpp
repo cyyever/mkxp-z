@@ -186,6 +186,7 @@ static const uint8_t flashAlpha[] =
 
 static constexpr auto flashAlphaN = std::size(flashAlpha);
 
+namespace {
 struct GroundLayer : public ViewportElement
 {
 	size_t quadCount;
@@ -202,6 +203,7 @@ struct GroundLayer : public ViewportElement
 
 	ABOUT_TO_ACCESS_NOOP
 };
+} // namespace
 
 struct ZLayer : public ViewportElement
 {

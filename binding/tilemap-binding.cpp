@@ -26,9 +26,10 @@
 
 #include "binding-types.h"
 #include "binding-util.h"
+#include "binding-init.h"
 #include "disposable-binding.h"
 
-DEF_TYPE_CUSTOMFREE(TilemapAutotiles, RUBY_TYPED_NEVER_FREE);
+static DEF_TYPE_CUSTOMFREE(TilemapAutotiles, RUBY_TYPED_NEVER_FREE);
 
 RB_METHOD(tilemapAutotilesSet) {
     Tilemap::Autotiles *a = getPrivateDataNoRaise<Tilemap::Autotiles>(self);

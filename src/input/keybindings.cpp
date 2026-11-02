@@ -32,6 +32,7 @@
 #include "paths.h"
 #include <SDL3/SDL_iostream.h>
 
+namespace {
 struct KbBindingData
 {
 	SDL_Scancode source;
@@ -69,6 +70,7 @@ struct CtrlBindingData
         d.push_back(desc);
     }
 };
+} // namespace
 
 /* Common */
 static const KbBindingData defaultKbBindings[] =
@@ -164,12 +166,14 @@ BDescVec genDefaultBindings(const Config &conf)
 
 static constexpr uint32_t FormatVersion = 3;
 
+namespace {
 struct Header
 {
 	uint32_t formVer;
 	uint32_t rgssVer;
 	uint32_t count;
 };
+} // namespace
 
 static_assert(std::is_trivially_copyable_v<Header> && std::is_trivially_copyable_v<BindingDesc>);
 

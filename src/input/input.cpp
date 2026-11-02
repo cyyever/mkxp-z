@@ -438,6 +438,7 @@ std::unordered_map<std::string, SDL_GamepadButton> strToGCButton {
 
 #undef m
 
+namespace {
 struct ButtonState
 {
     bool pressed;
@@ -470,8 +471,10 @@ struct Binding
     
     Input::ButtonCode target;
 };
+} // namespace
 
 /* Keyboard binding */
+namespace {
 struct KbBinding : public Binding
 {
     KbBinding() = default;
@@ -549,8 +552,10 @@ struct CtrlAxisBinding : public Binding
     uint8_t source;
     AxisDir dir;
 };
+} // namespace
 
 /* Mouse button binding */
+namespace {
 struct MsBinding : public Binding
 {
     MsBinding(int buttonIndex,
@@ -572,6 +577,7 @@ struct MsBinding : public Binding
     int index;
     const EventThread::MouseState &mouse;
 };
+} // namespace
 
 /* Not rebindable */
 static const KbBindingData staticKbBindings[] =
