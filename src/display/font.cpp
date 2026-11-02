@@ -70,6 +70,7 @@
 
 // SDL_ttf's font handle is opaque. Read metrics through an independent
 // FreeType face backed by the same bytes, without relying on its struct layout.
+namespace {
 struct FontMetrics {
     FT_Library library = nullptr;
     FT_Face face = nullptr;
@@ -79,6 +80,7 @@ struct FontMetrics {
         if (library) FT_Done_FreeType(library);
     }
 };
+} // namespace
 
 static std::unique_ptr<FontMetrics> loadFontMetrics(SDL_IOStream *stream) {
     auto metrics = std::make_unique<FontMetrics>();
@@ -109,6 +111,7 @@ typedef std::pair<std::string, int> FontSizeKey;
 /* <name, ppem> */
 typedef std::pair<std::string, int> FontPPEMKey;
 
+namespace {
 struct FontSet
 {
 	/* 'Regular' style */
@@ -134,6 +137,7 @@ struct FontSet
 		return &other;
 	}
 };
+} // namespace
 
 struct SharedFontStatePrivate
 {
@@ -286,12 +290,14 @@ void SharedFontState::initFontSetCB(SDL_IOStream *ops,
  
 /* We're not currently using yMax and yMin for anything,
  * but it could be useful later. */
+namespace {
 typedef struct {
 	FT_Face face;
 	int ppem;
 	short yMax;
 	short yMin;
 } Font_Container;
+} // namespace
 
 #define DWORD uint32_t
 #define SHORT short
@@ -344,6 +350,7 @@ static unsigned int freetype_get_font_data( Font_Container *font, uint32_t table
 	return (int)len;
 }
 
+namespace {
 typedef struct {
 	uint16_t version;
 	uint16_t numRecs;
@@ -368,6 +375,7 @@ typedef struct {
 	uint16_t yMax;
 	uint16_t yMin;
 } VDMX_vTable;
+} // namespace
 
 static int load_VDMX(Font_Container *font, int height)
 {

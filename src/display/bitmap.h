@@ -121,7 +121,6 @@ public:
 	int height() const;
 	bool hasHires() const;
 	DECL_ATTR(Hires, Bitmap*)
-	void setLores(Bitmap *lores);
 	bool isMega() const;
     bool isAnimated() const;
 
@@ -164,7 +163,6 @@ public:
 	void clear();
 
 	/* Creates a surface and assigns it to p->surface */
-	void createSurface() const;
 
 	Color getPixel(int x, int y) const;
 	void setPixel(int x, int y, const Color &color);
@@ -203,7 +201,6 @@ public:
 	SDL_Surface *megaSurface() const;
 	void ensureNonMega() const;
     void ensureNonAnimated() const;
-    void ensureAnimated() const;
     
     // Animation functions
     void stop();
@@ -240,7 +237,6 @@ public:
 	void bindTex(ShaderBase &shader, bool substituteLoresSize = true);
 
 	/* Adds 'rect' to tainted area */
-	void taintArea(const IntRect &rect);
 
 	Signal modified;
 
@@ -249,6 +245,11 @@ public:
     void assumeRubyGC();
 
 private:
+	void setLores(Bitmap *lores);
+	void createSurface() const;
+	void ensureAnimated() const;
+	void taintArea(const IntRect &rect);
+
 	void releaseResources();
 	SignalConnection loresDispCon;
 	const char *klassName() const { return "bitmap"; }

@@ -100,16 +100,16 @@ public:
     int scrollV();
     bool mouseInWindow();
     
-    bool getControllerConnected();
-    const char *getControllerName();
+    static bool getControllerConnected();
+    static const char *getControllerName();
     
-    bool getTextInputMode();
-    void setTextInputMode(bool mode);
-    const char *getText();
-    void clearText();
+    static bool getTextInputMode();
+    static void setTextInputMode(bool mode);
+    static const char *getText();
+    static void clearText();
     
-    char *getClipboardText();
-    void setClipboardText(char *text);
+    static char *getClipboardText();
+    static void setClipboardText(char *text);
     
 
 private:

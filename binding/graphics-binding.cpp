@@ -23,6 +23,7 @@
 #include "graphics.h"
 #include "sharedstate.h"
 #include "binding-util.h"
+#include "binding-init.h"
 #include "binding-types.h"
 #include "exception.h"
 
@@ -67,11 +68,13 @@ RB_METHOD_GUARD(graphicsFreeze)
 }
 RB_METHOD_GUARD_END
 
+namespace {
 typedef struct {
     int duration;
     const char *filename;
     int vague;
 } TransitionArgs;
+} // namespace
 
 RB_METHOD_GUARD(graphicsTransition)
 {
@@ -234,7 +237,6 @@ RB_METHOD_GUARD(graphicsFadein)
 }
 RB_METHOD_GUARD_END
 
-void bitmapInitProps(Bitmap *b, VALUE self);
 
 RB_METHOD_GUARD(graphicsSnapToBitmap)
 {
@@ -299,7 +301,7 @@ RB_METHOD(graphicsCenter)
     return Qnil;
 }
 
-void graphicsScreenshotInternal(const char *filename)
+static void graphicsScreenshotInternal(const char *filename)
 {
     GFX_GUARD_EXC(shState->graphics().screenshot(filename););
 }

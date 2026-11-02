@@ -360,11 +360,13 @@ int rb_get_args(int argc, VALUE *argv, const char *format, ...) {
 
 #include <ruby/thread.h>
 
+namespace {
 typedef struct gvl_guard_args {
 	std::exception_ptr exc;
 	void *(*func)(void *);
 	void *args;
 } gvl_guard_args;
+} // namespace
 
 static void *gvl_guard(void *args) {
 	gvl_guard_args *gvl_args = (gvl_guard_args*)args;

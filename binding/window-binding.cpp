@@ -20,6 +20,7 @@
  */
 
 #include "binding-util.h"
+#include "binding-init.h"
 #include "disposable-binding.h"
 #include "viewportelement-binding.h"
 #include "window.h"

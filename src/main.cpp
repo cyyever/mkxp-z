@@ -74,7 +74,7 @@ static void showInitError(const std::string &msg);
 
 MIX_Mixer *audioMixer = nullptr;
 
-int rgssThreadFun(void *userdata) {
+static int rgssThreadFun(void *userdata) {
     auto *threadData = static_cast<RGSSThreadData *>(userdata);
     struct Completion {
         std::atomic<bool> &exited;

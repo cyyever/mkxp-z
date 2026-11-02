@@ -42,8 +42,6 @@ struct RGSSThreadData;
 struct SDL_Window;
 union SDL_Event;
 
-#define MAX_FINGERS 4
-
 class EventThread
 {
 public:
@@ -60,20 +58,8 @@ public:
 		SDL_MouseButtonFlags buttons = 0;
 	};
 
-	struct FingerState
-	{
-		bool down;
-		int x, y;
-	};
-
-	struct TouchState
-	{
-		FingerState fingers[MAX_FINGERS];
-	};
-
 	static uint8_t keyStates[SDL_SCANCODE_COUNT];
     static ControllerState controllerState;
-	static TouchState touchState;
     static std::atomic<int> verticalScrollDistance;
     
     std::string textInputBuffer;
@@ -85,20 +71,20 @@ public:
 	EventThread();
 
 	void process(RGSSThreadData &rtData);
-	void cleanup();
+	static void cleanup();
 
 	/* Called from RGSS thread */
 	void requestFullscreenMode(bool mode);
-	void requestWindowResize(int width, int height);
-    void requestWindowCenter();
-    void requestWindowRename(const char *title);
-	void requestShowCursor(bool mode);
+	static void requestWindowResize(int width, int height);
+    static void requestWindowCenter();
+    static void requestWindowRename(const char *title);
+	static void requestShowCursor(bool mode);
     
-    void requestTextInputMode(bool mode);
+    static void requestTextInputMode(bool mode);
     
-    void requestSettingsMenu();
+    static void requestSettingsMenu();
 
-	void requestTerminate();
+	static void requestTerminate();
     bool requestGpuPresent();
 
 	bool getFullscreen() const;
@@ -113,11 +99,11 @@ public:
 	void notifyFrame();
 
 	/* Called on game screen (size / offset) changes */
-	void notifyGameScreenChange(const SDL_Rect &screen);
+	static void notifyGameScreenChange(const SDL_Rect &screen);
 
 private:
 
-	void resetInputStates();
+	static void resetInputStates();
 	void setFullscreen(SDL_Window *, bool mode);
 	void updateCursorState(bool inWindow,
 	                       const SDL_Rect &screen);

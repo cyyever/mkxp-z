@@ -77,30 +77,12 @@ static void mriBindingExecute();
 static void mriBindingTerminate();
 static void mriBindingReset();
 
-ScriptBinding scriptBindingImpl = {mriBindingExecute, mriBindingTerminate,
+static ScriptBinding scriptBindingImpl = {mriBindingExecute, mriBindingTerminate,
     mriBindingReset};
 
 ScriptBinding *scriptBinding = &scriptBindingImpl;
 
-void tableBindingInit();
-void etcBindingInit();
-void fontBindingInit();
-void bitmapBindingInit();
-void spriteBindingInit();
-void viewportBindingInit();
-void planeBindingInit();
-void windowBindingInit();
-void tilemapBindingInit();
-
-void inputBindingInit();
-void audioBindingInit();
-void graphicsBindingInit();
-
-void fileIntBindingInit();
-
-#ifdef MKXPZ_MINIFFI
-void MiniFFIBindingInit();
-#endif
+#include "binding-init.h"
 
 RB_METHOD(mkxpDelta);
 RB_METHOD(mriPrint);
@@ -723,10 +705,12 @@ static VALUE newStringUTF8(const char *string, long length) {
     return rb_enc_str_new(string, length, rb_utf8_encoding());
 }
 
+namespace {
 struct evalArg {
     VALUE string;
     VALUE filename;
 };
+} // namespace
 
 static VALUE evalHelper(evalArg *arg) {
     VALUE argv[] = {arg->string, Qnil, arg->filename};
@@ -782,20 +766,13 @@ RB_METHOD(_kernelCaller) {
     return trace;
 }
 
-VALUE kernelLoadDataInt(const char *filename, bool rubyExc, bool raw);
 
+namespace {
 struct BacktraceData {
     /* Maps: Ruby visible filename, To: Actual script name */
     std::map<std::string, std::string> scriptNames;
 };
-
-bool evalScript(VALUE string, const char *filename)
-{
-    int state;
-    evalString(string, rb_utf8_str_new_cstr(filename), &state);
-    if (state) return false;
-    return true;
-}
+} // namespace
 
 
 static void runRMXPScripts(BacktraceData &btData) {

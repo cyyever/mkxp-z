@@ -110,6 +110,7 @@ void SoundEmitter::stop()
 		MIX_StopTrack(sources[i].get(), 0);
 }
 
+namespace {
 struct SoundOpenHandler : FileSystem::OpenHandler
 {
 	std::unique_ptr<SoundBuffer> buffer;
@@ -136,6 +137,7 @@ struct SoundOpenHandler : FileSystem::OpenHandler
 		return true;
 	}
 };
+} // namespace
 
 SoundBuffer *SoundEmitter::allocateBuffer(const std::string &filename)
 {

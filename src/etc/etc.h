@@ -70,10 +70,6 @@ struct Color : public Serializable
 	void serialize(char *buffer) const;
 	static Color *deserialize(const char *data, int len);
 
-	/* Internal */
-	void updateInternal();
-	void updateExternal();
-
 	bool hasEffect() const
 	{
 		return (alpha != 0);
@@ -89,6 +85,10 @@ struct Color : public Serializable
 
 	/* Normalized (0.0 ~ 1.0) */
 	Vec4 norm;
+
+private:
+	void updateInternal();
+	void updateExternal();
 };
 
 struct Tone : public Serializable
@@ -122,9 +122,6 @@ struct Tone : public Serializable
 	void serialize(char *buffer) const;
 	static Tone *deserialize(const char *data, int len);
 
-	/* Internal */
-	void updateInternal();
-
 	bool hasEffect() const
 	{
 		return ((int)red   != 0 ||
@@ -144,6 +141,9 @@ struct Tone : public Serializable
 	Vec4 norm;
 
     Signal valueChanged;
+
+private:
+	void updateInternal();
 };
 
 struct Rect : public Serializable

@@ -29,6 +29,7 @@
 #include "eventthread.h"
 
 #include "binding-util.h"
+#include "binding-init.h"
 #include "util/exception.h"
 #include "input/input.h"
 #include "sharedstate.h"

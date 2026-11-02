@@ -26,6 +26,7 @@ namespace TileAtlas
 
 /* A Column represents a Rect
  * with undefined width */
+namespace {
 struct Column
 {
 	int x, y, h;
@@ -34,6 +35,7 @@ struct Column
 	    : x(x), y(y), h(h)
 	{}
 };
+} // namespace
 
 typedef std::vector<Column> ColumnVec;
 

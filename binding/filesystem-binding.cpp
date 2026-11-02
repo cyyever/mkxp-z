@@ -24,6 +24,7 @@
 #include <utility>
 
 #include "binding-util.h"
+#include "binding-init.h"
 
 #include "filesystem.h"
 #include <SDL3/SDL_iostream.h>
@@ -34,6 +35,7 @@
 
 #include <ruby/thread.h>
 
+namespace {
 struct LoadDataArgs {
     SDL_IOStream *stream;
     bool raw;
@@ -43,6 +45,7 @@ struct LoadDataArgs {
     const char *failure = nullptr;
     char error[256]{};
 };
+} // namespace
 
 static void *loadDataWithoutGVL(void *opaque) {
     auto &args = *static_cast<LoadDataArgs *>(opaque);

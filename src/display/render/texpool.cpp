@@ -38,6 +38,7 @@ static uint32_t byteCount(Size &s)
 	return s.first * s.second * 4;
 }
 
+namespace {
 struct CacheNode
 {
 	TEXFBO obj;
@@ -48,6 +49,7 @@ struct CacheNode
 		return obj == o.obj;
 	}
 };
+} // namespace
 
 typedef std::list<CacheNode> CNodeList;
 

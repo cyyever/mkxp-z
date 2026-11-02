@@ -21,6 +21,7 @@
 
 #include "binding-types.h"
 #include "binding-util.h"
+#include "binding-init.h"
 #include "exception.h"
 #include "font.h"
 #include "sharedstate.h"

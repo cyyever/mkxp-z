@@ -388,12 +388,12 @@ struct BitmapPrivate
         shader.applyViewportProj();
     }
 
-    void popViewport() const
+    static void popViewport()
     {
         renderState.viewport.pop();
     }
 
-    void blitQuad(Quad &quad)
+    static void blitQuad(Quad &quad)
     {
         renderState.blend.pushSet(false);
         quad.draw();
@@ -453,6 +453,7 @@ struct BitmapPrivate
     }
 };
 
+namespace {
 struct BitmapOpenHandler : FileSystem::OpenHandler
 {
     SDL_Surface *surface = nullptr;
@@ -463,6 +464,7 @@ struct BitmapOpenHandler : FileSystem::OpenHandler
         return surface != nullptr;
     }
 };
+} // namespace
 
 Bitmap::Bitmap(const char *filename)
 {

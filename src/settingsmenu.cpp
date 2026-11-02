@@ -59,11 +59,15 @@ typedef SettingsMenuPrivate SMP;
 
 #define BTN_STRING_CUSTOM(btn, name) { Input:: btn, name }
 #define BTN_STRING(btn) BTN_STRING_CUSTOM(btn, #btn)
+namespace {
 struct VButton
 {
 	Input::ButtonCode code;
 	const char *str;
-} static vButtons[] =
+};
+} // namespace
+
+static VButton vButtons[] =
 {
 	BTN_STRING(Up),
 	BTN_STRING(Down),
@@ -82,7 +86,7 @@ struct VButton
 static constexpr auto vButtonsN = std::size(vButtons);
 
 /* Human readable string representation */
-std::string sourceDescString(const SourceDesc src)
+static std::string sourceDescString(const SourceDesc src)
 {
 
 	switch (src.type)
@@ -120,6 +124,7 @@ std::string sourceDescString(const SourceDesc src)
 	return "";
 }
 
+namespace {
 struct Widget
 {
 	/* Widgets have a static size and position,
@@ -243,6 +248,7 @@ enum Justification
 	Left,
 	Center
 };
+} // namespace
 
 struct SettingsMenuPrivate
 {
@@ -281,7 +287,7 @@ struct SettingsMenuPrivate
 	    : rtData(rtData)
 	{}
 
-	SDL_Surface *createSurface(int w, int h)
+	static SDL_Surface *createSurface(int w, int h)
 	{
 		int bpp;
 		Uint32 rMask, gMask, bMask, aMask;

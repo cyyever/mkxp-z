@@ -9,6 +9,8 @@
 #include "filesystem/filesystem.h"
 #include "miniffi.h"
 #include "binding-util.h"
+#include "binding-init.h"
+#include "binding-types.h"
 
 #include <ruby/thread.h>
 
@@ -118,13 +120,15 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
 }
 RB_METHOD_GUARD_END
 
+namespace {
 typedef struct {
     MINIFFI_FUNC function;
     MiniFFIFuncArgs *args;
     int nparams;
 } MFFICallCBArgs;
+} // namespace
 
-void* miniffi_call_cb(void *args) {
+static void* miniffi_call_cb(void *args) {
     MFFICallCBArgs *a = (MFFICallCBArgs*)args;
     return (void*)miniffi_call_intern(a->function, a->args, a->nparams);
     }

@@ -1,4 +1,4 @@
-struct StaticRect { float x, y, w, h; };
+#include "etc-internal.h"
 
 extern const StaticRect autotileRects[] =
 {

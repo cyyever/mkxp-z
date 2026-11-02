@@ -20,6 +20,8 @@
 */
 
 #include "binding-util.h"
+#include "binding-init.h"
+#include "binding-types.h"
 #include "serializable-binding.h"
 #include "table.h"
 #include <algorithm>
