@@ -77,6 +77,29 @@ sizeof = {'void*': compilers['cpp'].sizeof('void*'),
          }
 win64 = (sizeof['void*'] != sizeof['long'])
 
+# libc++ before LLVM 20 (e.g. FreeBSD 15's base clang 19) ships std::jthread and
+# std::stop_token only behind -fexperimental-library. Probe the feature rather than
+# the platform, and fall back to that flag only when the plain build cannot link it.
+jthread_probe = '''#include <stop_token>
+#include <thread>
+int main() { std::jthread t([](std::stop_token) {}); }
+'''
+threads = dependency('threads')
+jthread_args = []
+if not compilers['cpp'].links(jthread_probe, dependencies: threads, name: 'std::jthread')
+    if compilers['cpp'].get_argument_syntax() == 'gcc' and compilers['cpp'].links(jthread_probe,
+            args: '-fexperimental-library', dependencies: threads,
+            name: 'std::jthread with -fexperimental-library')
+        jthread_args = ['-fexperimental-library']
+    else
+        error('The C++ standard library does not provide std::jthread.')
+    endif
+endif
+global_cpp_args += jthread_args
+global_objcpp_args += jthread_args
+global_link_args += jthread_args
+global_dependencies += threads
+
 global_args += '-DMKXPZ_VERSION="@0@"'.format(meson.project_version())
 
 
