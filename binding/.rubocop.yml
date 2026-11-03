@@ -1,0 +1,27 @@
+AllCops:
+  TargetRubyVersion: 4.0
+  NewCops: enable
+  SuggestExtensions: false
+Naming/PredicatePrefix:
+  Enabled: false
+Naming/PredicateMethod:
+  Enabled: false
+Style/Documentation:
+  Enabled: false
+Style/FrozenStringLiteralComment:
+  Enabled: false
+Metrics:
+  Enabled: false
+Layout/LineLength:
+  Max: 110
+Style/OneClassPerFile:
+  Enabled: false
+# Evaluated from a C string by rb_eval_string, whose source encoding is not
+# UTF-8: the magic comment is what makes the Chinese literals UTF-8.
+Style/Encoding:
+  Enabled: false
+# warn is silenced by $VERBOSE = nil; System.puts must always write.
+Style/StderrPuts:
+  Enabled: false
+Style/FormatStringToken:
+  Enabled: false

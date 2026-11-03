@@ -212,6 +212,15 @@ RB_METHOD(FontSetDefaultColor) {
     rb_define_class_method(klass, prop_name_s "=", Klass##Set##PropName);      \
   }
 
+RB_METHOD(fontRegisterFile) {
+  RB_UNUSED_PARAM;
+  VALUE pathObj;
+  rb_scan_args(argc, argv, "1", &pathObj);
+  SafeStringValue(pathObj);
+  const std::string path(RSTRING_PTR(pathObj), RSTRING_LEN(pathObj));
+  return rb_bool_new(shState->fontState().registerFontFile(path));
+}
+
 void fontBindingInit() {
   VALUE klass = rb_define_class("Font", rb_cObject);
   rb_define_alloc_func(klass, classAllocate<&FontType>);
@@ -241,6 +250,8 @@ void fontBindingInit() {
   INIT_KLASS_PROP_BIND(Font, DefaultColor, "default_color");
 
   rb_define_class_method(klass, "exist?", fontDoesExist);
+  // System font lookup and CJK aliases are implemented in prelude.rb.
+  rb_define_class_method(klass, "register_file", fontRegisterFile);
 
   _rb_define_method(klass, "initialize", fontInitialize);
   _rb_define_method(klass, "initialize_copy", fontInitializeCopy);

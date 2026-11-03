@@ -29,6 +29,7 @@
 #include "config.h"
 #include "encoding.h"
 #include "util/font-encoding.h"
+#include "util/paths.h"
 
 #include "debugwriter.h"
 
@@ -490,7 +491,14 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 		const char *path = req->c_str();
 
 		try{
-			ops = shState->fileSystem().openReadRaw(path);
+			/* Registered system fonts carry absolute paths outside the game file system */
+			if (paths::fromUtf8(path).is_absolute()) {
+				ops = SDL_IOFromFile(path, "rb");
+				if (!ops)
+					throw Exception(Exception::SDLError, "%s", SDL_GetError());
+			} else {
+				ops = shState->fileSystem().openReadRaw(path);
+			}
 		} catch (const Exception &e) {
 			p->size_to_ppem.erase(key);
 			throw e;
@@ -560,6 +568,15 @@ MKXPZ_TTF_FONT *SharedFontState::getFont(std::string family,
 		TTF_SetFontKerning(font, 0);
 	
 	return font;
+}
+
+bool SharedFontState::registerFontFile(const std::string &path)
+{
+	std::unique_ptr<SDL_IOStream, decltype(&SDL_CloseIO)> stream(SDL_IOFromFile(path.c_str(), "rb"), SDL_CloseIO);
+	if (!stream)
+		return false;
+	initFontSetCB(stream.get(), path);
+	return true;
 }
 
 bool SharedFontState::fontPresent(std::string family) const
