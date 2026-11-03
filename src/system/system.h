@@ -38,7 +38,6 @@ enum WineHostType {
     Bsd,
 };
 std::string getSystemLanguage();
-std::string getUserName();
 std::string getDefaultGameRoot();
 // Startup-only: main thread; an empty string means cancellation.
 std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);

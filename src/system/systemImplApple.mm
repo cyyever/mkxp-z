@@ -11,23 +11,8 @@
 #import "system.h"
 #import "SettingsMenuController.h"
 
-std::string systemImpl::getSystemLanguage() {
-    @autoreleasepool {
-        NSString *languageCode = NSLocale.currentLocale.languageCode;
-        NSString *countryCode = NSLocale.currentLocale.countryCode;
-        return std::string([NSString stringWithFormat:@"%@_%@", languageCode, countryCode].UTF8String);
-    }
-}
-
-std::string systemImpl::getUserName() {
-    @autoreleasepool {
-        return std::string(NSUserName().UTF8String);
-    }
-}
-
-bool systemImpl::isWine() {
-    return false;
-}
+// Language and Wine detection are shared with the other platforms
+// (systemImpl.cpp); only what SDL3 has no API for stays here.
 
 bool systemImpl::isRosetta() {
     int translated = 0;
@@ -39,11 +24,6 @@ bool systemImpl::isRosetta() {
 
     return translated;
 }
-
-systemImpl::WineHostType systemImpl::getRealHostType() {
-    return WineHostType::Mac;
-}
-
 
 // constant, if it's not nil then just raise the menu instead
 SettingsMenu *smenu = nil;

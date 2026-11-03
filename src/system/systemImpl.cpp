@@ -8,59 +8,29 @@
 #include "system.h"
 #include "util/exception.h"
 #include <SDL3/SDL_filesystem.h>
-#include <memory>
-
-#if defined(SDL_PLATFORM_WIN32)
-#include <cstdlib>
-#include <windows.h>
-#else
-#include <locale>
-#endif
-
 #include <SDL3/SDL_loadso.h>
+#include <SDL3/SDL_locale.h>
+#include <SDL3/SDL_stdinc.h>
 #include <cstring>
+#include <memory>
 #include <string>
 
+// The user's most preferred locale as "language_COUNTRY" (e.g. zh_CN), or
+// just the language when no country is set; empty if unknown.
 std::string systemImpl::getSystemLanguage() {
-    static char buf[50] = {0};
-#if defined(SDL_PLATFORM_WIN32)
-    wchar_t wbuf[50] = {0};
-    LANGID lid = GetUserDefaultLangID();
-    LCIDToLocaleName(lid, wbuf, sizeof(wbuf), 0);
-    wcstombs(buf, wbuf, sizeof(buf));
-#else
-    strncpy(buf, std::locale("").name().c_str(), sizeof(buf));
-#endif
-    
-    for (int i = 0; (size_t)i < strlen(buf); i++) {
-#ifdef SDL_PLATFORM_WIN32
-        if (buf[i] == '-') {
-            buf[i] = '_';
-#else
-        if (buf[i] == '.') {
-            buf[i] = 0;
-#endif
-            break;
-        }
+    int count = 0;
+    std::unique_ptr<SDL_Locale *, decltype(&SDL_free)> locales(SDL_GetPreferredLocales(&count), SDL_free);
+    if (!locales || count < 1 || !locales.get()[0] || !locales.get()[0]->language)
+        return {};
+    const SDL_Locale &locale = *locales.get()[0];
+    std::string result = locale.language;
+    if (locale.country && *locale.country) {
+        result += '_';
+        result += locale.country;
     }
-    return std::string(buf);
+    return result;
 }
 
-std::string systemImpl::getUserName() {
-    
-#ifdef SDL_PLATFORM_WIN32
-    // The Ruby binding gets the username from the environment loaded
-    // with Ruby instead, should fix getting it from WinAPI at some point
-    return std::string("unused");
-#else
-    char ret[30];
-    char *username = getenv("USER");
-    if (username)
-        strncpy(ret, username, sizeof(ret));
-    return std::string(ret);
-#endif
-    
-}
     
 bool systemImpl::isWine() {
 #if MKXPZ_PLATFORM != MKXPZ_PLATFORM_WINDOWS
@@ -72,9 +42,12 @@ bool systemImpl::isWine() {
 #endif
 }
 
+#ifndef SDL_PLATFORM_APPLE
+// Apple builds implement these in systemImplApple.mm.
 bool systemImpl::isRosetta() {
     return false;
 }
+#endif
 
 systemImpl::WineHostType systemImpl::getRealHostType() {
 #if MKXPZ_PLATFORM == MKXPZ_PLATFORM_WINDOWS
@@ -105,9 +78,11 @@ systemImpl::WineHostType systemImpl::getRealHostType() {
 #endif
 }
 
+#ifndef SDL_PLATFORM_APPLE
 std::string systemImpl::getDefaultGameRoot() {
     const char *path = SDL_GetBasePath();
     if (!path)
         throw Exception(Exception::MKXPError, "Failed to retrieve executable path");
     return path;
 }
+#endif

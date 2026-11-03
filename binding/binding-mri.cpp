@@ -48,6 +48,9 @@
 
 #include <vector>
 
+#include <SDL3/SDL_misc.h>
+#include <SDL3/SDL_process.h>
+
 extern "C" {
 #include <ruby.h>
 
@@ -70,6 +73,7 @@ extern "C" {
 #include "git-hash.h"
 
 extern const char module_rpg1[];
+#include "system-prelude.rb.xxd"
 
 static VALUE topSelf;
 
@@ -84,20 +88,14 @@ ScriptBinding *scriptBinding = &scriptBindingImpl;
 
 #include "binding-init.h"
 
-RB_METHOD(mkxpDelta);
 RB_METHOD(mriPrint);
 RB_METHOD(mriP);
 RB_METHOD(mkxpDataDirectory);
 RB_METHOD(mkxpSetTitle);
 RB_METHOD(mkxpGetTitle);
 RB_METHOD(mkxpDesensitize);
-RB_METHOD(mkxpPuts);
 
 RB_METHOD(mkxpPlatform);
-RB_METHOD(mkxpIsMacHost);
-RB_METHOD(mkxpIsWindowsHost);
-RB_METHOD(mkxpIsLinuxHost);
-RB_METHOD(mkxpIsBSDHost);
 RB_METHOD(mkxpIsUsingRosetta);
 RB_METHOD(mkxpIsUsingWine);
 RB_METHOD(mkxpIsReallyMacHost);
@@ -106,7 +104,6 @@ RB_METHOD(mkxpIsReallyWindowsHost);
 RB_METHOD(mkxpIsReallyBSDHost);
 
 RB_METHOD(mkxpUserLanguage);
-RB_METHOD(mkxpUserName);
 RB_METHOD(mkxpGameTitle);
 RB_METHOD(mkxpPowerState);
 RB_METHOD(mkxpSettingsMenu);
@@ -163,23 +160,16 @@ static void mriBindingInit() {
     rb_eval_string(module_rpg1);
     
     VALUE mod = rb_define_module("System");
-    _rb_define_module_function(mod, "delta", mkxpDelta);
-    _rb_define_module_function(mod, "uptime", mkxpDelta);
     _rb_define_module_function(mod, "data_directory", mkxpDataDirectory);
     _rb_define_module_function(mod, "set_window_title", mkxpSetTitle);
     _rb_define_module_function(mod, "window_title", mkxpGetTitle);
     _rb_define_module_function(mod, "window_title=", mkxpSetTitle);
     _rb_define_module_function(mod, "show_settings", mkxpSettingsMenu);
-    _rb_define_module_function(mod, "puts", mkxpPuts);
     _rb_define_module_function(mod, "desensitize", mkxpDesensitize);
     _rb_define_module_function(mod, "platform", mkxpPlatform);
     
-    _rb_define_module_function(mod, "is_mac?", mkxpIsMacHost);
     _rb_define_module_function(mod, "is_rosetta?", mkxpIsUsingRosetta);
-    _rb_define_module_function(mod, "is_linux?", mkxpIsLinuxHost);
-    _rb_define_module_function(mod, "is_windows?", mkxpIsWindowsHost);
     _rb_define_module_function(mod, "is_wine?", mkxpIsUsingWine);
-    _rb_define_module_function(mod, "is_bsd?", mkxpIsBSDHost);
     _rb_define_module_function(mod, "is_really_mac?", mkxpIsReallyMacHost);
     _rb_define_module_function(mod, "is_really_linux?", mkxpIsReallyLinuxHost);
     _rb_define_module_function(mod, "is_really_windows?", mkxpIsReallyWindowsHost);
@@ -187,7 +177,6 @@ static void mriBindingInit() {
     
     
     _rb_define_module_function(mod, "user_language", mkxpUserLanguage);
-    _rb_define_module_function(mod, "user_name", mkxpUserName);
     _rb_define_module_function(mod, "game_title", mkxpGameTitle);
     _rb_define_module_function(mod, "power_state", mkxpPowerState);
     _rb_define_module_function(mod, "nproc", mkxpCpuCount);
@@ -199,6 +188,10 @@ static void mriBindingInit() {
     _rb_define_module_function(mod, "launch", mkxpLaunch);
     
     _rb_define_module_function(mod, "default_font_family=", mkxpSetDefaultFontFamily);
+    // Everything plain Ruby already provides (uptime, puts, platform
+    // predicates, user_name) is implemented in system-prelude.rb.
+    rb_eval_string(std::string(reinterpret_cast<const char *>(mkxp_system_prelude_rb),
+                               mkxp_system_prelude_rb_len).c_str());
     
     
     _rb_define_method(rb_cString, "to_utf8", mkxpStringToUTF8);
@@ -283,11 +276,6 @@ RB_METHOD_GUARD(mriP) {
 }
 RB_METHOD_GUARD_END
 
-RB_METHOD(mkxpDelta) {
-    RB_UNUSED_PARAM;
-    return rb_float_new(shState->runTime());
-}
-
 RB_METHOD(mkxpDataDirectory) {
     RB_UNUSED_PARAM;
     
@@ -330,17 +318,6 @@ RB_METHOD(mkxpDesensitize) {
                                 shState->fileSystem().desensitize(RSTRING_PTR(filename)));
 }
 
-RB_METHOD(mkxpPuts) {
-    RB_UNUSED_PARAM;
-    
-    const char *str;
-    rb_get_args(argc, argv, "z", &str RB_ARG_END);
-    
-    Debug() << str;
-    
-    return Qnil;
-}
-
 RB_METHOD(mkxpPlatform) {
     RB_UNUSED_PARAM;
     
@@ -371,38 +348,15 @@ RB_METHOD(mkxpPlatform) {
     return rb_utf8_str_new_cstr(platform.c_str());
 }
 
-RB_METHOD(mkxpIsMacHost) {
-    RB_UNUSED_PARAM;
-    
-    return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_MACOS);
-}
-
 RB_METHOD(mkxpIsUsingRosetta) {
     RB_UNUSED_PARAM;
     
     return rb_bool_new(mkxp_sys::isRosetta());
 }
 
-RB_METHOD(mkxpIsLinuxHost) {
-    RB_UNUSED_PARAM;
-    
-    return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_LINUX);
-}
-
-RB_METHOD(mkxpIsWindowsHost) {
-    RB_UNUSED_PARAM;
-    
-    return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_WINDOWS);
-}
-
 RB_METHOD(mkxpIsUsingWine) {
     RB_UNUSED_PARAM;
     return rb_bool_new(mkxp_sys::isWine());
-}
-
-RB_METHOD(mkxpIsBSDHost) {
-    RB_UNUSED_PARAM;
-    return rb_bool_new(MKXPZ_PLATFORM == MKXPZ_PLATFORM_BSD);
 }
 
 RB_METHOD(mkxpIsReallyMacHost) {
@@ -429,19 +383,6 @@ RB_METHOD(mkxpUserLanguage) {
     RB_UNUSED_PARAM;
     
     return rb_utf8_str_new_cstr(mkxp_sys::getSystemLanguage().c_str());
-}
-
-RB_METHOD(mkxpUserName) {
-    RB_UNUSED_PARAM;
-    
-    // Using the Windows API isn't working with usernames that involve Unicode
-    // characters for some dumb reason
-#ifdef SDL_PLATFORM_WIN32
-    VALUE env = rb_const_get(rb_mKernel, rb_intern("ENV"));
-    return rb_funcall(env, rb_intern("[]"), 1, rb_str_new_cstr("USERNAME"));
-#else
-    return rb_utf8_str_new_cstr(mkxp_sys::getUserName().c_str());
-#endif
 }
 
 RB_METHOD(mkxpGameTitle) {
@@ -589,53 +530,51 @@ RB_METHOD_GUARD(mkxpStringToUTF8Bang) {
 }
 RB_METHOD_GUARD_END
 
-#ifdef SDL_PLATFORM_APPLE
-#define OPENCMD "open "
-#define OPENARGS "--args"
-#elif defined(_WIN32)
-#define OPENCMD "start /b \"launch\" "
-#define OPENARGS ""
-#else
-#define OPENCMD "xdg-open "
-#define OPENARGS ""
-#endif
-
+// Opens a file, URL or program the way the platform would, without a shell:
+// the name and arguments are passed verbatim, so they cannot inject commands.
 RB_METHOD_GUARD(mkxpLaunch) {
-    RB_UNUSED_PARAM;
-    
     VALUE cmdname, args;
-    
     rb_scan_args(argc, argv, "11", &cmdname, &args);
     SafeStringValue(cmdname);
-    
-    std::string command(OPENCMD);
-    command += '"'; command += RSTRING_PTR(cmdname); command += '"';
-    
+    const std::string target(RSTRING_PTR(cmdname), RSTRING_LEN(cmdname));
+
+    std::vector<std::string> extra;
     if (args != RUBY_Qnil) {
-#if defined(SDL_PLATFORM_APPLE) || defined(_WIN32)
-        command += ' ';
-        command += OPENARGS;
         Check_Type(args, T_ARRAY);
-        
-        for (int i = 0; i < RARRAY_LEN(args); i++) {
+        for (long i = 0; i < RARRAY_LEN(args); i++) {
             VALUE arg = rb_ary_entry(args, i);
             SafeStringValue(arg);
-            
-            if (RSTRING_LEN(arg) <= 0)
-                continue;
-            
-            command += ' ';
-            command += RSTRING_PTR(arg);
+            if (RSTRING_LEN(arg) > 0)
+                extra.emplace_back(RSTRING_PTR(arg), RSTRING_LEN(arg));
         }
+    }
+
+    bool launched;
+#ifdef SDL_PLATFORM_APPLE
+    // NSURL rejects plain paths, so keep using open(1).
+    std::vector<const char *> command = {"open", target.c_str()};
+    if (!extra.empty())
+        command.push_back("--args");
 #else
-        Debug() << command << ":" << "Arguments are not supported with xdg-open. Ignoring.";
+    std::vector<const char *> command = {target.c_str()};
 #endif
+    if (command.size() == 1 && extra.empty()) {
+        // ShellExecuteW / xdg-open: files, URLs and programs alike.
+        launched = SDL_OpenURL(target.c_str());
+    } else {
+        for (const std::string &arg : extra)
+            command.push_back(arg.c_str());
+        command.push_back(nullptr);
+        // Destroying the handle does not stop the launched process.
+        SDL_Process *process = SDL_CreateProcess(command.data(), false);
+        launched = process != nullptr;
+        if (process)
+            SDL_DestroyProcess(process);
     }
-    
-    if (std::system(command.c_str()) != 0) {
-        throw Exception(Exception::MKXPError, "Failed to launch \"%s\"", RSTRING_PTR(cmdname));
-    }
-    
+
+    if (!launched)
+        throw Exception(Exception::MKXPError, "Failed to launch \"%s\": %s", target.c_str(), SDL_GetError());
+
     return RUBY_Qnil;
 }
 RB_METHOD_GUARD_END

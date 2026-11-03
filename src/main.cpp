@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
 #ifndef WORKDIR_CURRENT
     std::string dataDir;
 #if defined(__linux__)
-    if (const char *sourceDir = std::getenv("SRCDIR"))
+    if (const char *sourceDir = SDL_getenv("SRCDIR"))
         dataDir = sourceDir;
 #endif
     if (dataDir.empty())
