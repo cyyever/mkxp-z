@@ -4,6 +4,26 @@
 # startup, right after its native classes and modules are defined, so these
 # stay part of the public scripting API without native code.
 
+# Selection highlights keep their original 40 Hz timing when game logic is
+# accelerated. Action animations, damage flashes and visibility stay untouched.
+module MKXPBlinkTiming
+  def blink_on
+    @_mkxp_blink_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) unless @_blink
+    super
+  end
+
+  def update
+    if @_blink
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @_mkxp_blink_started_at ||= now
+      @_blink_count = ((now - @_mkxp_blink_started_at) * 40).to_i % 32
+    end
+    super
+  end
+end
+
+RPG::Sprite.prepend(MKXPBlinkTiming)
+
 module System
   @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
