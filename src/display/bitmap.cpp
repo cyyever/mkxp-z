@@ -1824,34 +1824,6 @@ void Bitmap::gradientFillRect(const IntRect &rect,
     p->onModified();
 }
 
-void Bitmap::clearRect(int x, int y, int width, int height)
-{
-    clearRect(IntRect(x, y, width, height));
-}
-
-void Bitmap::clearRect(const IntRect &rect)
-{
-    guardDisposed();
-
-    GUARD_ANIMATED;
-
-    if (hasHires()) {
-        int destX, destY, destWidth, destHeight;
-        destX = rect.x * p->selfHires->width() / width();
-        destY = rect.y * p->selfHires->height() / height();
-        destWidth = rect.w * p->selfHires->width() / width();
-        destHeight = rect.h * p->selfHires->height() / height();
-
-        p->selfHires->clearRect(IntRect(destX, destY, destWidth, destHeight));
-    }
-
-    p->fillRect(rect, Vec4());
-
-    p->substractTaintedArea(rect);
-
-    p->onModified();
-}
-
 void Bitmap::blur()
 {
     guardDisposed();

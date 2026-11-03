@@ -191,20 +191,6 @@ RB_METHOD(graphicsDisplayHeight)
     return rb_fix_new(shState->graphics().displayHeight());
 }
 
-RB_METHOD_GUARD(graphicsWait)
-{
-    RB_UNUSED_PARAM;
-    
-    int duration;
-    rb_get_args(argc, argv, "i", &duration RB_ARG_END);
-    drop_gvl_guard([](void* d) -> void* {
-        GFX_GUARD_EXC( shState->graphics().wait(*(int*)d); );
-        return nullptr;
-    }, &duration, nullptr, nullptr);
-    return Qnil;
-}
-RB_METHOD_GUARD_END
-
 RB_METHOD_GUARD(graphicsFadeout)
 {
     RB_UNUSED_PARAM;
@@ -363,7 +349,6 @@ void graphicsBindingInit()
     _rb_define_module_function(module, "height", graphicsHeight);
     _rb_define_module_function(module, "display_width", graphicsDisplayWidth);
     _rb_define_module_function(module, "display_height", graphicsDisplayHeight);
-    _rb_define_module_function(module, "wait", graphicsWait);
     _rb_define_module_function(module, "fadeout", graphicsFadeout);
     _rb_define_module_function(module, "fadein", graphicsFadein);
     _rb_define_module_function(module, "snap_to_bitmap", graphicsSnapToBitmap);

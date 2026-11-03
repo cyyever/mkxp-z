@@ -327,15 +327,6 @@ const Rect &Rect::operator=(const Rect &o)
 	return o;
 }
 
-void Rect::empty()
-{
-	if (!(x || y || width || height))
-		return;
-
-	x = y = width = height = 0;
-	valueChanged();
-}
-
 bool Rect::isEmpty() const
 {
 	return !(width && height);

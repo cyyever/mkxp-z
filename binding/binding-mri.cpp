@@ -73,7 +73,7 @@ extern "C" {
 #include "git-hash.h"
 
 extern const char module_rpg1[];
-#include "system-prelude.rb.xxd"
+#include "prelude.rb.xxd"
 
 static VALUE topSelf;
 
@@ -123,8 +123,6 @@ RB_METHOD(mkxpSetDefaultFontFamily);
 
 RB_METHOD(_kernelCaller);
 
-RB_METHOD(mkxpStringToUTF8);
-RB_METHOD(mkxpStringToUTF8Bang);
 
 
 
@@ -188,14 +186,11 @@ static void mriBindingInit() {
     _rb_define_module_function(mod, "launch", mkxpLaunch);
     
     _rb_define_module_function(mod, "default_font_family=", mkxpSetDefaultFontFamily);
-    // Everything plain Ruby already provides (uptime, puts, platform
-    // predicates, user_name) is implemented in system-prelude.rb.
-    rb_eval_string(std::string(reinterpret_cast<const char *>(mkxp_system_prelude_rb),
-                               mkxp_system_prelude_rb_len).c_str());
+    // APIs plain Ruby already expresses are implemented in prelude.rb.
+    rb_eval_string(std::string(reinterpret_cast<const char *>(mkxp_prelude_rb),
+                               mkxp_prelude_rb_len).c_str());
     
     
-    _rb_define_method(rb_cString, "to_utf8", mkxpStringToUTF8);
-    _rb_define_method(rb_cString, "to_utf8!", mkxpStringToUTF8Bang);
     
     VALUE cmod = rb_define_module("CFG");
     _rb_define_module_function(cmod, "[]", mkxpGetJSONSetting);
@@ -500,35 +495,6 @@ RB_METHOD(mkxpSetDefaultFontFamily) {
     
     return Qnil;
 }
-
-RB_METHOD_GUARD(mkxpStringToUTF8) {
-    RB_UNUSED_PARAM;
-    
-    rb_check_argc(argc, 0);
-    
-    std::string ret(RSTRING_PTR(self), RSTRING_LEN(self));
-    ret = Encoding::convertString(ret);
-    
-    return rb_utf8_str_new(ret.c_str(), ret.length());
-}
-RB_METHOD_GUARD_END
-
-RB_METHOD_GUARD(mkxpStringToUTF8Bang) {
-    RB_UNUSED_PARAM;
-    
-    rb_check_argc(argc, 0);
-    
-    std::string ret(RSTRING_PTR(self), RSTRING_LEN(self));
-    ret = Encoding::convertString(ret);
-    
-    rb_str_resize(self, ret.length());
-    memcpy(RSTRING_PTR(self), ret.c_str(), RSTRING_LEN(self));
-    
-    rb_funcall(self, rb_intern("force_encoding"), 1, rb_enc_from_encoding(rb_utf8_encoding()));
-    
-    return self;
-}
-RB_METHOD_GUARD_END
 
 // Opens a file, URL or program the way the platform would, without a shell:
 // the name and arguments are passed verbatim, so they cannot inject commands.

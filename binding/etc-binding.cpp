@@ -120,36 +120,6 @@ SET_FUN(Color, double, "fff|f", 255)
 SET_FUN(Tone, double, "fff|f", 0)
 SET_FUN(Rect, int, "iiii", 0)
 
-RB_METHOD(rectEmpty) {
-  RB_UNUSED_PARAM;
-  Rect *r = getPrivateData<Rect>(self);
-  r->empty();
-  return self;
-}
-
-RB_METHOD(ColorStringify) {
-  RB_UNUSED_PARAM;
-
-  Color *c = getPrivateData<Color>(self);
-  return rb_sprintf("(%f, %f, %f, %f)", c->red, c->green, c->blue, c->alpha);
-}
-
-RB_METHOD(ToneStringify) {
-  RB_UNUSED_PARAM;
-
-  Tone *t = getPrivateData<Tone>(self);
-
-  return rb_sprintf("(%f, %f, %f, %f)", t->red, t->green, t->blue, t->gray);
-}
-
-RB_METHOD(RectStringify) {
-  RB_UNUSED_PARAM;
-
-  Rect *r = getPrivateData<Rect>(self);
-
-  return rb_sprintf("(%d, %d, %d, %d)", r->x, r->y, r->width, r->height);
-}
-
 MARSH_LOAD_FUN(Color)
 MARSH_LOAD_FUN(Tone)
 MARSH_LOAD_FUN(Rect)
@@ -172,10 +142,6 @@ CLASS_ALLOCATE_PRE_INIT(Rect, RectInitialize);
     _rb_define_method(klass, "initialize_copy", Klass##InitializeCopy);        \
     _rb_define_method(klass, "set", Klass##Set);                               \
     _rb_define_method(klass, "==", Klass##Equal);                              \
-    _rb_define_method(klass, "===", Klass##Equal);                             \
-    _rb_define_method(klass, "eql?", Klass##Equal);                            \
-    _rb_define_method(klass, "to_s", Klass##Stringify);                        \
-    _rb_define_method(klass, "inspect", Klass##Stringify);                     \
   }
 
 #define RB_ATTR_R(Klass, Attr, attr)                                           \
@@ -211,5 +177,4 @@ void etcBindingInit() {
   RB_ATTR_RW(Rect, Y, y);
   RB_ATTR_RW(Rect, Width, width);
   RB_ATTR_RW(Rect, Height, height);
-  _rb_define_method(klass, "empty", rectEmpty);
 }
