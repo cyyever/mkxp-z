@@ -29,7 +29,9 @@
 void RenderScissorBox::setIntersect(const IntRect &value) {
     const auto &current=get();
     SDL_Rect a{current.x,current.y,current.w,current.h}, b{value.x,value.y,value.w,value.h}, result{};
-    SDL_GetRectIntersection(&a,&b,&result);
+    // SDL may leave negative dimensions when separated rectangles do not
+    // intersect. Empty clips must stay empty, not reach GPU draw validation.
+    if (!SDL_GetRectIntersection(&a, &b, &result)) result = {};
     set(IntRect(result.x,result.y,result.w,result.h));
 }
 void RenderState::updateScissor() {

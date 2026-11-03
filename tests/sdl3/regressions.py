@@ -25,6 +25,7 @@ SCRIPTS = [
     ('mega-surface-flip.rb', False, True),
     ('pixel-access.rb', True, True),
     ('selection-timing.rb', True, True),
+    ('window-clipping.rb', True, True),
 ]
 
 # KGL2 tests that cannot pass in HiRes yet. Each entry needs a reason.
