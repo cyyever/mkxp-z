@@ -250,6 +250,7 @@ struct WindowPrivate
 	QuadChunk pauseAniVert;
 	QuadChunk cursorVert;
 
+	double cursorAniStartedAt;
 	uint8_t cursorAniAlphaIdx;
 	uint8_t pauseAniAlphaIdx;
 	uint8_t pauseAniQuadIdx;
@@ -277,6 +278,7 @@ struct WindowPrivate
 	      opacityDirty(true),
 	      baseTexDirty(true),
 	      controlsElement(this, viewport),
+	      cursorAniStartedAt(shState->runTime()),
 	      cursorAniAlphaIdx(0),
 	      pauseAniAlphaIdx(0),
 	      pauseAniQuadIdx(0),
@@ -732,8 +734,8 @@ struct WindowPrivate
 
 	void stepAnimations()
 	{
-		if (++cursorAniAlphaIdx == cursorAniAlphaN)
-			cursorAniAlphaIdx = 0;
+		// RGSS1 selection feedback uses real time, independent of game speed.
+		cursorAniAlphaIdx = static_cast<uint64_t>((shState->runTime() - cursorAniStartedAt) * 40) % cursorAniAlphaN;
 
 		if (pauseAniAlphaIdx < pauseAniAlphaN-1)
 			++pauseAniAlphaIdx;
@@ -852,6 +854,7 @@ void Window::setActive(bool value)
 		return;
 
 	p->active = value;
+	p->cursorAniStartedAt = shState->runTime();
 	p->cursorAniAlphaIdx = 0;
 }
 
