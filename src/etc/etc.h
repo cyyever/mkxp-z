@@ -163,7 +163,6 @@ struct Rect : public Serializable
 	void set(int x, int y, int w, int h);
 	const Rect &operator=(const Rect &o);
 
-	void empty();
 	bool isEmpty() const;
 
 	void setX(int value);

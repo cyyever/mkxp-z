@@ -108,20 +108,6 @@ RB_METHOD_GUARD_END
 
 DEF_GFX_PROP_OBJ_REF(Bitmap, Bitmap, Hires, "hires")
 
-RB_METHOD_GUARD(bitmapRect) {
-    RB_UNUSED_PARAM;
-    
-    Bitmap *b = getPrivateData<Bitmap>(self);
-    
-    IntRect rect;
-   rect = b->rect();
-    
-    Rect *r = new Rect(rect);
-    
-    return wrapObject(r, RectType);
-}
-RB_METHOD_GUARD_END
-
 RB_METHOD_GUARD(bitmapBlt) {
     Bitmap *b = getPrivateData<Bitmap>(self);
     
@@ -368,30 +354,6 @@ RB_METHOD_GUARD(bitmapGradientFillRect) {
         
         GFX_GUARD_EXC(b->gradientFillRect(x, y, width, height, color1->norm,
                                       color2->norm, vertical););
-    }
-    
-    return self;
-}
-RB_METHOD_GUARD_END
-
-RB_METHOD_GUARD(bitmapClearRect) {
-    Bitmap *b = getPrivateData<Bitmap>(self);
-    
-    if (argc == 1) {
-        VALUE rectObj;
-        Rect *rect;
-        
-        rb_get_args(argc, argv, "o", &rectObj RB_ARG_END);
-        
-        rect = getPrivateDataCheck<Rect>(rectObj, RectType);
-        
-        GFX_GUARD_EXC(b->clearRect(rect->toIntRect()););
-    } else {
-        int x, y, width, height;
-        
-        rb_get_args(argc, argv, "iiii", &x, &y, &width, &height RB_ARG_END);
-        
-        GFX_GUARD_EXC(b->clearRect(x, y, width, height););
     }
     
     return self;
@@ -892,7 +854,6 @@ void bitmapBindingInit() {
 
     INIT_PROP_BIND(Bitmap, Hires, "hires");
 
-    _rb_define_method(klass, "rect", bitmapRect);
     _rb_define_method(klass, "blt", bitmapBlt);
     _rb_define_method(klass, "stretch_blt", bitmapStretchBlt);
     _rb_define_method(klass, "fill_rect", bitmapFillRect);
@@ -908,7 +869,6 @@ void bitmapBindingInit() {
     _rb_define_method(klass, "to_file", bitmapSaveToFile);
     
     _rb_define_method(klass, "gradient_fill_rect", bitmapGradientFillRect);
-    _rb_define_method(klass, "clear_rect", bitmapClearRect);
     _rb_define_method(klass, "blur", bitmapBlur);
     _rb_define_method(klass, "radial_blur", bitmapRadialBlur);
     

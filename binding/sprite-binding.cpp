@@ -82,30 +82,6 @@ DEF_GFX_PROP_B(Sprite, Mirror)
 DEF_GFX_PROP_B(Sprite, PatternTile)
 DEF_GFX_PROP_B(Sprite, Invert)
 
-RB_METHOD_GUARD(spriteWidth) {
-    RB_UNUSED_PARAM;
-    
-    Sprite *s = getPrivateData<Sprite>(self);
-    
-    int value = 0;
-    value = s->getWidth();
-    
-    return rb_fix_new(value);
-}
-RB_METHOD_GUARD_END
-
-RB_METHOD_GUARD(spriteHeight) {
-    RB_UNUSED_PARAM;
-    
-    Sprite *s = getPrivateData<Sprite>(self);
-    
-    int value = 0;
-    value = s->getHeight();
-    
-    return rb_fix_new(value);
-}
-RB_METHOD_GUARD_END
-
 void spriteBindingInit() {
     VALUE klass = rb_define_class("Sprite", rb_cObject);
     rb_define_alloc_func(klass, classAllocate<&SpriteType>);
@@ -132,8 +108,6 @@ void spriteBindingInit() {
     INIT_PROP_BIND(Sprite, Color, "color");
     INIT_PROP_BIND(Sprite, Tone, "tone");
     
-    _rb_define_method(klass, "width", spriteWidth);
-    _rb_define_method(klass, "height", spriteHeight);
     
     INIT_PROP_BIND(Sprite, BushOpacity, "bush_opacity");
     INIT_PROP_BIND(Sprite, WeatherType, "weather_type");

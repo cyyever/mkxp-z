@@ -41,8 +41,6 @@ public:
 	Sprite(Viewport *viewport = nullptr);
 	~Sprite() override;
 
-	int getWidth()  const;
-	int getHeight() const;
 
 	void update() override;
 

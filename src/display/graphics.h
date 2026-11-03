@@ -48,7 +48,6 @@ public:
 	DECL_ATTR( FrameCount, int )
 	DECL_ATTR( Brightness, int )
 
-	void wait(int duration);
 	void fadeout(int duration);
 	void fadein(int duration);
 
