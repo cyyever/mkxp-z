@@ -53,6 +53,10 @@ public:
 
 	bool fontPresent(std::string family) const;
 
+	/* Register a font file outside the game file system (absolute path),
+	 * after the game's own Fonts/; returns false if it cannot be opened. */
+	bool registerFontFile(const std::string &path);
+
 	static MKXPZ_TTF_FONT *openBundled(int size);
     void setDefaultFontFamily(const std::string &family);
 
