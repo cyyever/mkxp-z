@@ -799,13 +799,31 @@ void Graphics::freeze() {
 }
 
 void Graphics::transition(int duration, const char *filename, int vague) {
-    
+
     if (!p->frozen)
         return;
-    
+
+    transition(duration, *filename ? new Bitmap(filename) : nullptr, vague, true);
+}
+
+void Graphics::transition(int duration, Bitmap *transMap, int vague, bool ownsMask) {
+
+    /* Release a mask loaded by the filename overload on every exit path;
+     * a script-owned bitmap is only borrowed. */
+    struct MaskGuard {
+        Bitmap *mask;
+        bool owns;
+        ~MaskGuard() { if (owns) delete mask; }
+    } guard{transMap, ownsMask};
+
+    if (!p->frozen)
+        return;
+
+    if (transMap && transMap->isDisposed())
+        throw Exception(Exception::RGSSError, "disposed bitmap");
+
     vague = clamp(vague, 1, 256);
-    Bitmap *transMap = *filename ? new Bitmap(filename) : nullptr;
-    
+
     setBrightness(255);
     
     /* Capture new scene */
@@ -856,14 +874,12 @@ void Graphics::transition(int duration, const char *filename, int vague) {
          * shutdown/reset here */
         if (p->threadData->rqTerm) {
             renderState.blend.pop();
-            delete transMap;
             p->shutdown();
             return;
         }
         
         if (p->threadData->rqReset) {
             renderState.blend.pop();
-            delete transMap;
             scriptBinding->reset();
             return;
         }
@@ -899,7 +915,6 @@ void Graphics::transition(int duration, const char *filename, int vague) {
     
     renderState.blend.pop();
     
-    delete transMap;
     
     p->frozen = false;
 }

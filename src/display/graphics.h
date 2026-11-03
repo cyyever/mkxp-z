@@ -42,6 +42,10 @@ public:
 	void transition(int duration = 8,
 	                const char *filename = "",
 	                int vague = 40);
+	/* Mask supplied by a script Bitmap; ownsMask is only true for a mask
+	 * this class loaded itself, never for a script-owned bitmap. */
+	void transition(int duration, Bitmap *mask, int vague,
+	                bool ownsMask = false);
 	void frameReset();
 
 	DECL_ATTR( FrameRate,  int )

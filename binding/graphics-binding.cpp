@@ -72,28 +72,47 @@ namespace {
 struct TransitionArgs {
     int duration;
     const char *filename;
+    Bitmap *mask;
     int vague;
 };
 } // namespace
 
+/* Graphics.transition(duration = 8, filename_or_bitmap = "", vague = 40).
+ * A Bitmap mask is borrowed for the call; a HiRes layer, when present, is
+ * sampled just as for a Hires/ mask file. */
 RB_METHOD_GUARD(graphicsTransition)
 {
     RB_UNUSED_PARAM;
     
     int duration = 8;
     const char *filename = "";
+    Bitmap *mask = nullptr;
     int vague = 40;
     
-    rb_get_args(argc, argv, "|izi", &duration, &filename, &vague RB_ARG_END);
+    if (argc >= 2 && rb_typeddata_is_kind_of(argv[1], &BitmapType)) {
+        VALUE rest[] = {argv[0], argc >= 3 ? argv[2] : INT2FIX(40)};
+        rb_get_args(argc >= 3 ? 2 : 1, rest, "i|i", &duration, &vague RB_ARG_END);
+        if (argc > 3)
+            rb_raise(rb_eArgError, "wrong number of arguments (given %d, expected 0..3)", argc);
+        mask = getPrivateData<Bitmap>(argv[1]);
+    } else {
+        rb_get_args(argc, argv, "|izi", &duration, &filename, &vague RB_ARG_END);
+    }
     
-    TransitionArgs args = {duration, filename, vague};
+    TransitionArgs args = {duration, filename, mask, vague};
     
     drop_gvl_guard([](void *args) -> void* {
         TransitionArgs &a = *((TransitionArgs*)args);
-        GFX_GUARD_EXC( shState->graphics().transition(a.duration,
-                                                      a.filename,
-                                                      a.vague
-                                                     ); );
+        if (a.mask) {
+            GFX_GUARD_EXC( shState->graphics().transition(a.duration,
+                                                          a.mask,
+                                                          a.vague); );
+        } else {
+            GFX_GUARD_EXC( shState->graphics().transition(a.duration,
+                                                          a.filename,
+                                                          a.vague
+                                                         ); );
+        }
         return nullptr;
     }, &args, nullptr, nullptr);
     
