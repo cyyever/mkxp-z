@@ -294,11 +294,11 @@ main_source = files(
 
 
     'system/folder-dialog.cpp',
-    host_system == 'darwin' ? 'system/systemImplApple.mm' : 'system/systemImpl.cpp',
+    'system/systemImpl.cpp',
 )
 
 if host_system == 'darwin'
-    main_source += files('filesystem/filename-normalization.mm')
+    main_source += files('filesystem/filename-normalization.mm', 'system/systemImplApple.mm')
 endif
 
 global_sources += main_source

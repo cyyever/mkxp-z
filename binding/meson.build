@@ -30,3 +30,9 @@ if miniffi == true
 endif
 
 global_sources += binding_source
+
+global_dependencies += declare_dependency(sources: custom_target(
+    'system-prelude.rb.xxd',
+    output: 'system-prelude.rb.xxd',
+    command: [embedtool, files('system-prelude.rb'), '@OUTPUT@', 'mkxp_system_prelude_rb'],
+))
